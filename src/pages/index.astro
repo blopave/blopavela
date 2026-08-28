@@ -350,6 +350,8 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       const body = document.body;
       const panes = Array.from(document.querySelectorAll('.pane')) as HTMLElement[];
       const rows = Array.from(document.querySelectorAll('[data-row]')) as HTMLElement[];
+      // hooks para controlar el cristal desde afuera (pausa de rAF, tilt por giroscopio)
+      let pauseCrystal = () => {}, resumeCrystal = () => {}, enableTilt = () => {};
 
       // reloj de Buenos Aires, en vivo
       const clock = document.querySelector('[data-clock]');
@@ -448,9 +450,11 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 
       // objeto cristalino (icosaedro wireframe) con aberración cromática cyan/rojo — el vacío del centro, tipo Resn
       const shard = document.querySelector('[data-shard]') as HTMLCanvasElement | null;
-      if (shard && !reduceMotion) {
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      if (shard) {
         const ctx = shard.getContext('2d')!;
-        const DPR = Math.min(2, window.devicePixelRatio || 1);
+        // clamp de DPR: en mobile la aberración se paga 3× por píxel, así que bajamos la resolución interna
+        const DPR = Math.min(coarse ? 1.5 : 2, window.devicePixelRatio || 1);
         let W = 0, H = 0;
         const resize = () => {
           W = window.innerWidth; H = window.innerHeight;
@@ -466,11 +470,31 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) {
           if (Math.hypot(V[i][0]-V[j][0], V[i][1]-V[j][1], V[i][2]-V[j][2]) < 1.2) E.push([i, j]);
         }
+        // vector de entrada compartido: mouse en desktop, giroscopio + drag en mobile
         let smx = 0, smy = 0;
         window.addEventListener('mousemove', (e) => { smx = e.clientX / window.innerWidth - 0.5; smy = e.clientY / window.innerHeight - 0.5; }, { passive: true });
-        let a = 0, rmx = 0, rmy = 0, cox = W * 0.5, cR = Math.min(W, H) * 0.34;
-        const frame = () => {
-          a += 0.0021; rmx += (smx - rmx) * 0.05; rmy += (smy - rmy) * 0.05;
+        const clamp = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+        const onOrient = (e: DeviceOrientationEvent) => {
+          smx = clamp((e.gamma || 0) / 45 * 0.5, 0.5);      // izq-der
+          smy = clamp(((e.beta || 0) - 40) / 45 * 0.5, 0.5); // adelante-atrás
+        };
+        let tiltOn = false;
+        enableTilt = () => {
+          if (tiltOn || !('DeviceOrientationEvent' in window)) return;
+          const DOE = (window as any).DeviceOrientationEvent;
+          const add = () => { tiltOn = true; window.addEventListener('deviceorientation', onOrient, { passive: true }); };
+          if (typeof DOE.requestPermission === 'function') { DOE.requestPermission().then((s: string) => { if (s === 'granted') add(); }).catch(() => {}); }
+          else add();
+        };
+        // drag táctil como respaldo si no hay/permite giroscopio
+        shard.parentElement && addEventListener('touchmove', (e) => {
+          const tch = (e as TouchEvent).touches[0]; if (!tch) return;
+          smx = tch.clientX / window.innerWidth - 0.5; smy = tch.clientY / window.innerHeight - 0.5;
+        }, { passive: true });
+
+        let a = 0, rmx = 0, rmy = 0, prmx = 0, prmy = 0, cox = W * 0.5, cR = Math.min(W, H) * 0.34, offBase = 1.4;
+        const draw = () => {
+          rmx += (smx - rmx) * 0.05; rmy += (smy - rmy) * 0.05;
           // el cristal se desliza: centrado y grande en el landing, al costado y chico en proyectos
           const inProj = body.classList.contains('in-projects');
           const tox = inProj ? W * 0.68 : W * 0.5;
@@ -485,17 +509,21 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             const s = F / (F - Z);
             return { x: ox + X * s * R, y: oy + Y * s * R, z: Z };
           });
+          // aberración transitoria y óptica: crece con la velocidad de entrada, con offsets DESIGUALES por canal
+          const vel = Math.hypot(rmx - prmx, rmy - prmy); prmx = rmx; prmy = rmy;
+          offBase += (Math.min(1, vel * 90) * 4.2 - offBase) * 0.08; // ease hacia el pico y de vuelta al reposo
+          const rest = 1.4, off = rest + offBase;      // reposo mínimo (identidad) + bloom por movimiento
+          const offR = off * 1.18, offC = off * 0.82;  // canales desiguales = lente, no filtro
           ctx.clearRect(0, 0, W, H);
           ctx.globalCompositeOperation = 'lighter';
           ctx.lineWidth = 1.1;
-          const off = 2.7;
           for (const [i, j] of E) {
             const p = P[i], q = P[j];
             const al = 0.24 + ((p.z + q.z) / 2 + 1) * 0.2;
             ctx.strokeStyle = `rgba(255,58,84,${al * 0.9})`;
-            ctx.beginPath(); ctx.moveTo(p.x - off, p.y); ctx.lineTo(q.x - off, q.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(p.x - offR, p.y); ctx.lineTo(q.x - offR, q.y); ctx.stroke();
             ctx.strokeStyle = `rgba(36,226,232,${al * 0.9})`;
-            ctx.beginPath(); ctx.moveTo(p.x + off, p.y); ctx.lineTo(q.x + off, q.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(p.x + offC, p.y); ctx.lineTo(q.x + offC, q.y); ctx.stroke();
             ctx.strokeStyle = `rgba(228,232,238,${al})`;
             ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
           }
@@ -505,16 +533,29 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill();
           }
           ctx.globalCompositeOperation = 'source-over';
-          requestAnimationFrame(frame);
         };
-        requestAnimationFrame(frame);
+
+        if (reduceMotion) {
+          // sin movimiento: un solo cuadro fijo del cristal (no queda en blanco, no consume rAF)
+          a = 0.6; draw();
+          window.addEventListener('resize', draw);
+        } else {
+          // ciclo de vida del rAF: se pausa con la pestaña oculta y cuando el case tapa el cristal ("no calienta el teléfono")
+          let rafId = 0, running = false;
+          const loop = () => { a += 0.0021; draw(); rafId = requestAnimationFrame(loop); };
+          const start = () => { if (running) return; running = true; rafId = requestAnimationFrame(loop); };
+          const stop = () => { running = false; cancelAnimationFrame(rafId); };
+          pauseCrystal = stop; resumeCrystal = () => { if (!document.hidden) start(); };
+          document.addEventListener('visibilitychange', () => { document.hidden ? stop() : (body.classList.contains('in-case') ? null : start()); });
+          start();
+        }
       }
 
       // landing ↔ proyectos: el cristal es el hilo (se desliza del centro al costado)
       requestAnimationFrame(() => body.classList.add('ready'));
       const landingEl = document.querySelector('[data-enter]');
       const homeLink = document.querySelector('[data-home]');
-      const goProjects = () => body.classList.add('in-projects');
+      const goProjects = () => { enableTilt(); body.classList.add('in-projects'); };
       landingEl?.addEventListener('click', goProjects);
       landingEl?.addEventListener('keydown', (e) => {
         if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); goProjects(); }
@@ -542,11 +583,13 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         body.classList.add('in-case');
         caseEl?.setAttribute('aria-hidden', 'false');
         if (caseEl) caseEl.scrollTop = 0;
+        pauseCrystal(); // el case tapa el cristal: no gastamos rAF detrás del overlay
         return true;
       }
       function hideCase() {
         body.classList.remove('in-case');
         caseEl?.setAttribute('aria-hidden', 'true');
+        resumeCrystal();
       }
       function openCase(slug: string) {
         if (showCase(slug)) history.pushState({ case: slug }, '', '?p=' + slug);
