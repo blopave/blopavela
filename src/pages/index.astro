@@ -82,7 +82,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 
       /* objeto cristalino con aberración cromática en el centro (se desvanece al enfocar un proyecto) */
       .shard { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 1; transition: opacity 0.6s var(--ease); }
-      body.lit .shard { opacity: 0; }
+      body.lit .shard { opacity: 1; } /* la gema NO desaparece: es la vitrina donde se muestra el proyecto */
 
       /* ── Landing (comienzo tipo Resn: cristal + wordmark centrados) ── */
       .landing { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer;
@@ -94,6 +94,8 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         text-shadow: -2px 0 var(--red), 2px 0 var(--aqua); transition: text-shadow 0.4s var(--ease); }
       body.ready .landing__mark { animation: glitch 1.5s steps(1, end) 1; }
       .landing:hover .landing__mark { text-shadow: -3.5px 0 var(--red), 3.5px 0 var(--aqua); }
+      /* cuando el WebGL dibuja "blopa" DENTRO del vidrio, se oculta el wordmark DOM (queda de fallback) */
+      body.gl-word .landing__mark { opacity: 0; }
       /* landing limpio: SÓLO blopa + cristal. La barra superior y el pie aparecen recién en proyectos */
       .top, .foot { transition: opacity 0.6s var(--ease), visibility 0.6s, border-color 0.55s var(--ease); }
       body:not(.in-projects) .top, body:not(.in-projects) .foot { opacity: 0 !important; visibility: hidden; pointer-events: none; }
@@ -130,9 +132,12 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       }
 
       /* grano: textura tipo Resn sobre toda la página */
-      .grain { position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0.055; mix-blend-mode: overlay;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        background-size: 140px 140px; }
+      .grain { position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0.045; mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 100px 100px; }
+      /* viñeta sutil: acabado cinematográfico */
+      .vignette { position: fixed; inset: 0; z-index: 39; pointer-events: none;
+        background: radial-gradient(ellipse 75% 75% at 50% 46%, transparent 52%, rgba(0,0,0,0.42) 100%); }
       .top__right { display: flex; gap: clamp(0.8rem, 2vw, 1.8rem); align-items: baseline; font-size: 0.72rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); transition: color 0.55s var(--ease); }
       body.lit .top__right { color: var(--lite-soft); }
       .clock { font-variant-numeric: tabular-nums; min-width: 9.5ch; }
@@ -271,6 +276,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       </div>
     </div>
     <canvas class="shard" data-shard aria-hidden="true"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
     <div class="grain" aria-hidden="true"></div>
 
     <div class="frame">
@@ -339,8 +345,9 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       const body = document.body;
       const panes = Array.from(document.querySelectorAll('.pane')) as HTMLElement[];
       const rows = Array.from(document.querySelectorAll('[data-row]')) as HTMLElement[];
-      // hooks para controlar el cristal desde afuera (pausa de rAF, tilt por giroscopio)
+      // hooks para controlar el cristal desde afuera (pausa de rAF, tilt, y "vitrina": el proyecto adentro de la gema)
       let pauseCrystal = () => {}, resumeCrystal = () => {}, enableTilt = () => {};
+      let setGemProject = (_shots: string[] | null) => {};
 
       // reloj de Buenos Aires, en vivo
       const clock = document.querySelector('[data-clock]');
@@ -380,27 +387,15 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         const acc = row.dataset.acc || '#efece3';
         body.style.setProperty('--acc', acc);
         body.style.setProperty('--pacc', acc);
-        const assign = () => panes.forEach((pane) => {
-          const idx = Number(pane.dataset.pane || 0);
-          const src = shots[idx] || shots[shots.length - 1];
-          if (src) pane.style.backgroundImage = `url("${src}")`;
-        });
         rows.forEach((r) => r.classList.toggle('active', r === row));
-        if (!wasLit) {
-          // primera entrada: componer y revelar escalonado
-          assign();
-          body.classList.add('lit');
-          requestAnimationFrame(() => panes.forEach((p) => p.classList.add('on')));
-        } else {
-          // cambio de proyecto: swap directo (las láminas ya están puestas)
-          assign();
-        }
+        body.classList.add('lit');            // ahonda la página (el índice se atenúa)
+        setGemProject(shots.length ? shots : null); // la GEMA se llena de este proyecto (paneo de sus tomas)
       }
       function clearFocus() {
         current = null;
         body.classList.remove('lit');
-        panes.forEach((p) => p.classList.remove('on'));
         rows.forEach((r) => r.classList.remove('active'));
+        setGemProject(null);
       }
       rows.forEach((row) => {
         row.addEventListener('mouseenter', () => focusRow(row));
@@ -496,6 +491,8 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
           const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
           const FRAG = `precision highp float;
             uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform float uAber; uniform mat3 uRot;
+            uniform sampler2D uWord; uniform float uWordAmt;
+            uniform sampler2D uProj; uniform float uProjAmt; uniform float uScroll;
             #define PHI 1.61803398875
             float smax(float a, float b, float k){ float h=clamp(0.5+0.5*(a-b)/k, 0., 1.); return mix(b,a,h)+k*h*(1.0-h); }
             float sdIco(vec3 p){ p=abs(p); float k=0.055; // k = redondeo de aristas (normales suaves = sin punteo)
@@ -506,10 +503,14 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               return d-1.0; }
             vec3 nrm(vec3 p){ vec2 e=vec2(0.004,0.);
               return normalize(vec3(sdIco(p+e.xyy)-sdIco(p-e.xyy),sdIco(p+e.yxy)-sdIco(p-e.yxy),sdIco(p+e.yyx)-sdIco(p-e.yyx))); }
-            vec3 env(vec3 d){ vec3 c=vec3(0.03,0.032,0.041);
-              c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*(0.8+uAber*1.6);
-              c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*(0.8+uAber*1.6);
-              c+=vec3(0.9,0.95,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),24.0)*0.6; return c; }
+            vec3 env(vec3 d){ vec3 c=vec3(0.042,0.045,0.058); // base un poco más luminosa: vidrio, no roca
+              c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*(0.85+uAber*1.6);
+              c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*(0.85+uAber*1.6);
+              c+=vec3(0.9,0.95,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),24.0)*0.7;
+              // destellos ANCHOS (joya, sin puntear): luces suaves, no agudas
+              c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),34.0)*0.65;
+              c+=vec3(0.75,0.88,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.35,-0.5,0.8)))),22.0)*0.32;
+              return c; }
             void main(){
               vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
               vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
@@ -517,12 +518,14 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdIco(q); md=min(md,d);
                 if(d<0.0008){hit=t;break;} t+=d*0.85; if(t>7.)break; }
               if(hit<0.){
-                // anti-alias analítico de la silueta: si el rayo pasó muy cerca, rellenar el borde
-                // (evita que las aristas finas se vean punteadas al girar)
+                // borde nítido (anti-alias de la silueta) + halo/bloom suave alrededor de la gema
                 float e=smoothstep(0.014, 0.0, md);
-                if(e<=0.001){ gl_FragColor=vec4(0.); return; }
+                float glow=smoothstep(0.17, 0.0, md);
+                if(e<=0.001 && glow<=0.001){ gl_FragColor=vec4(0.); return; }
                 vec3 hc=mix(vec3(0.13,0.85,1.0), vec3(1.0,0.22,0.35), step(0., uv.x));
-                gl_FragColor=vec4(hc*e*0.55, e*0.6); return;
+                vec3 outc=hc*e*0.55 + vec3(0.12,0.15,0.22)*glow*glow*0.55;
+                float outa=max(e*0.6, glow*glow*0.32);
+                gl_FragColor=vec4(outc, outa); return;
               }
               vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
               float ci=clamp(dot(-rd,nw),0.,1.);
@@ -543,6 +546,23 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               float rim=pow(1.0-ci,2.2);
               vec3 rimC=mix(vec3(0.13,0.85,1.0), vec3(1.0,0.22,0.35), smoothstep(-0.28, 0.28, nw.x));
               col+=rim*(0.42+uAber*1.2)*rimC;
+              // "blopa" suspendido DENTRO del vidrio, refractado + con dispersión cromática (la firma)
+              if(uWordAmt>0.001){
+                vec2 wuv=uv*vec2(1.0,2.7)+rin.xy*0.05+vec2(0.5,0.5);
+                float so=0.005+uAber*0.012; // split por canal (crece con la velocidad, como la aberración)
+                float wr=texture2D(uWord, wuv+vec2(so,0.0)).r;
+                float wg=texture2D(uWord, wuv).r;
+                float wb=texture2D(uWord, wuv-vec2(so,0.0)).r;
+                col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
+              }
+              // VITRINA: paneo del proyecto (3 tomas apiladas) refractado DENTRO de la gema
+              if(uProjAmt>0.001){
+                float win=0.34;                       // porción visible del composite (≈ una toma)
+                float top=uScroll*(1.0-win);           // la ventana panea de arriba a abajo
+                vec2 puv=vec2(uv.x*0.6+0.5, top+(uv.y*0.9+0.5)*win)+rin.xy*0.05;
+                vec3 pc=texture2D(uProj, clamp(puv,0.0,1.0)).rgb;
+                col=mix(col, pc*1.08+col*0.16, uProjAmt*0.9);
+              }
               float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.0);
               gl_FragColor=vec4(col,al);
             }`;
@@ -560,23 +580,82 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
             const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
             const uRes = gl.getUniformLocation(prog, 'uRes'), uCenter = gl.getUniformLocation(prog, 'uCenter'),
-              uScale = gl.getUniformLocation(prog, 'uScale'), uAber = gl.getUniformLocation(prog, 'uAber'), uRot = gl.getUniformLocation(prog, 'uRot');
+              uScale = gl.getUniformLocation(prog, 'uScale'), uAber = gl.getUniformLocation(prog, 'uAber'), uRot = gl.getUniformLocation(prog, 'uRot'),
+              uWord = gl.getUniformLocation(prog, 'uWord'), uWordAmt = gl.getUniformLocation(prog, 'uWordAmt'),
+              uProj = gl.getUniformLocation(prog, 'uProj'), uProjAmt = gl.getUniformLocation(prog, 'uProjAmt'),
+              uScroll = gl.getUniformLocation(prog, 'uScroll');
             gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
+            // ── "blopa" como textura, para renderizarlo DENTRO del vidrio ──
+            const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.uniform1i(uWord, 0);
+            let wordReady = false, wordAmt = 0, wordTarget = 0;
+            const drawWord = () => {
+              const c = document.createElement('canvas'); c.width = 1024; c.height = 384;
+              const x = c.getContext('2d')!; x.clearRect(0, 0, 1024, 384);
+              x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+              x.font = '600 280px "Clash Display", sans-serif';
+              (x as any).letterSpacing = '20px'; // más tracking = más editorial/elegante
+              x.fillText('blopa', 512, 200);
+              gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
+              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+              wordReady = true;
+              if (!reduceMotion) body.classList.add('gl-word'); // oculta el wordmark DOM; en reduced-motion queda el DOM
+            };
+            if ((document as any).fonts && (document as any).fonts.load) (document as any).fonts.load('600 300px "Clash Display"').then(drawWord).catch(drawWord);
+            else drawWord();
+            // ── VITRINA: textura del proyecto enfocado, para refractarlo DENTRO de la gema (unidad 1) ──
+            const projTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([12, 12, 16, 255]));
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.uniform1i(uProj, 1);
+            let projAmt = 0, projTarget = 0, projPhase = 0, curKey = '';
+            // dibuja una imagen "cover" (recorta para llenar el slot sin deformar)
+            const drawCover = (x: CanvasRenderingContext2D, im: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
+              const ir = im.width / im.height, sr = dw / dh; let sw, sh, sx, sy;
+              if (ir > sr) { sh = im.height; sw = sh * sr; sx = (im.width - sw) / 2; sy = 0; }
+              else { sw = im.width; sh = sw / sr; sx = 0; sy = (im.height - sh) / 2; }
+              x.drawImage(im, sx, sy, sw, sh, dx, dy, dw, dh);
+            };
+            // compone las 3 tomas apiladas en un composite alto y lo sube como textura
+            const loadProj = (shots: string[]) => {
+              const key = shots.join('|');
+              const imgs = shots.map((s) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.src = s; return im; });
+              Promise.all(imgs.map((im) => (im.decode ? im.decode().catch(() => {}) : new Promise((r) => { im.onload = r; im.onerror = r; })))).then(() => {
+                if (curKey !== key) return;
+                const CW = 1024, slotH = Math.round(CW * 0.62);
+                const c = document.createElement('canvas'); c.width = CW; c.height = slotH * imgs.length;
+                const x = c.getContext('2d')!;
+                imgs.forEach((im, i) => { if (im.width) drawCover(x, im, 0, i * slotH, CW, slotH); });
+                gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
+                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+                projTarget = 1;
+              });
+            };
+            setGemProject = (shots) => {
+              if (shots && shots.length) { const key = shots.join('|'); if (key !== curKey) { curKey = key; loadProj(shots); } else projTarget = 1; }
+              else { projTarget = 0; }
+            };
             let W = 0, H = 0;
             // supersampling: renderizamos a más resolución y el navegador baja la escala → anti-alias real de las aristas
             const SS = coarse ? 1 : 1.5;
             const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS); shard.style.width = W + 'px'; shard.style.height = H + 'px'; gl.viewport(0, 0, shard.width, shard.height); };
             resize(); addEventListener('resize', resize);
-            let a = 0, rmx = 0, rmy = 0, prmx = 0, prmy = 0, cx = 0, cy = 0.03, sc = 1.75, aber = 0;
+            let a = 0, rmx = 0, rmy = 0, prmx = 0, prmy = 0, cx = 0, cy = 0.03, sc = 1.95, aber = 0;
             const render = () => {
               rmx += (smx - rmx) * 0.05; rmy += (smy - rmy) * 0.05;
               const inProj = body.classList.contains('in-projects');
               // spread mayor = cristal más chico; en pantallas verticales (mobile) se achica para no desbordar
               const fit = W < H ? 0.42 + 0.58 * (H / W) : 1;
-              const tcx = inProj ? 0.42 : 0.0, tcy = inProj ? 0.0 : 0.02, tsc = (inProj ? 2.7 : 1.75) * fit;
+              const tcx = inProj ? 0.32 : 0.0, tcy = inProj ? 0.0 : 0.02, tsc = (inProj ? 2.15 : 1.95) * fit;
               cx += (tcx - cx) * 0.055; cy += (tcy - cy) * 0.055; sc += (tsc - sc) * 0.055;
               const vel = Math.hypot(rmx - prmx, rmy - prmy); prmx = rmx; prmy = rmy;
               aber += (Math.min(1, vel * 110) - aber) * 0.08;
+              wordTarget = (wordReady && !inProj) ? 1 : 0; wordAmt += (wordTarget - wordAmt) * 0.07;
+              projAmt += (projTarget - projAmt) * 0.09; projPhase += 0.006; // scroll del proyecto (ping-pong)
               const ay = a + rmx * 0.9, ax = a * 0.42 + rmy * 0.8;
               const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
               // R = Rx(ax)*Ry(ay), en column-major para uniformMatrix3fv
@@ -587,14 +666,17 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               ]);
               gl.uniform2f(uRes, shard.width, shard.height);
               const pulse = inProj ? 1 : (1 + Math.sin(a * 2.2) * 0.02); // latido sutil: señala que el cristal es clickeable
-              gl.uniform2f(uCenter, cx, cy); gl.uniform1f(uScale, sc * pulse); gl.uniform1f(uAber, aber);
+              const bob = inProj ? 0 : Math.sin(a * 1.1) * 0.014; // flote sutil en el landing
+              gl.uniform2f(uCenter, cx, cy + bob); gl.uniform1f(uScale, sc * pulse); gl.uniform1f(uAber, aber);
+              gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uProjAmt, projAmt);
+              gl.uniform1f(uScroll, 0.5 - 0.5 * Math.cos(projPhase));
               gl.uniformMatrix3fv(uRot, false, m);
               gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
             };
             if (reduceMotion) { a = 0.7; render(); addEventListener('resize', render); }
             else {
               let rafId = 0, running = false;
-              const loop = () => { a += 0.0021; render(); rafId = requestAnimationFrame(loop); };
+              const loop = () => { a += 0.0016; render(); rafId = requestAnimationFrame(loop); };
               const start = () => { if (running) return; running = true; rafId = requestAnimationFrame(loop); };
               const stop = () => { running = false; cancelAnimationFrame(rafId); };
               pauseCrystal = stop; resumeCrystal = () => { if (!document.hidden) start(); };
