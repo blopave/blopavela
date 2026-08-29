@@ -145,7 +145,12 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 
       /* índice */
       .index { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: clamp(0.4rem, 1.4vh, 1.1rem) 0; max-width: min(40vw, 35rem); }
-      @media (max-width: 820px) { .index { max-width: 100%; } }
+      @media (max-width: 820px) {
+        /* mobile: gema centrada-arriba, la lista se va ABAJO y se compacta */
+        .index { max-width: 100%; flex: 0 1 auto; justify-content: flex-end; margin-top: auto; padding-bottom: 1.2rem; }
+        .row { padding: clamp(0.3rem, 0.9vh, 0.6rem) 0; }
+        .row__name { font-size: clamp(1.2rem, 6.4vw, 1.9rem); }
+      }
       .row { position: relative; display: block; width: 100%; text-align: left; appearance: none; background: none; border: 0;
         font: inherit; color: inherit; cursor: pointer;
         padding: clamp(0.5rem, 1.4vh, 1rem) 0; transition: border-color 0.55s var(--ease); }
@@ -328,7 +333,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               <div class="case__actions">
                 {p.url
                   ? <a class="case__live" href={p.url} target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
-                  : <span class="case__proto">Prototipo — sin deploy público</span>}
+                  : <span class="case__proto">En construcción</span>}
               </div>
             </header>
             <div class="case__shots">
@@ -345,9 +350,11 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       const body = document.body;
       const panes = Array.from(document.querySelectorAll('.pane')) as HTMLElement[];
       const rows = Array.from(document.querySelectorAll('[data-row]')) as HTMLElement[];
+      const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches; // desktop con hover
+      let lastTap = ''; // mobile: para el patrón toque→vitrina, toque de nuevo→case
       // hooks para controlar el cristal desde afuera (pausa de rAF, tilt, y "vitrina": el proyecto adentro de la gema)
       let pauseCrystal = () => {}, resumeCrystal = () => {}, enableTilt = () => {};
-      let setGemProject = (_shots: string[] | null) => {};
+      let setGemProject = (_slug: string | null, _shots: string[] | null, _name?: string) => {};
 
       // reloj de Buenos Aires, en vivo
       const clock = document.querySelector('[data-clock]');
@@ -389,17 +396,17 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         body.style.setProperty('--pacc', acc);
         rows.forEach((r) => r.classList.toggle('active', r === row));
         body.classList.add('lit');            // ahonda la página (el índice se atenúa)
-        setGemProject(shots.length ? shots : null); // la GEMA se llena de este proyecto (paneo de sus tomas)
+        setGemProject(row.dataset.slug || '', shots.length ? shots : null, row.querySelector('.row__name')?.textContent || ''); // la gema: tour en video / paneo / "en construcción"
       }
       function clearFocus() {
         current = null;
         body.classList.remove('lit');
         rows.forEach((r) => r.classList.remove('active'));
-        setGemProject(null);
+        setGemProject(null, null);
       }
       rows.forEach((row) => {
-        row.addEventListener('mouseenter', () => focusRow(row));
-        row.addEventListener('focus', () => focusRow(row));
+        // el hover que llena la gema es sólo en desktop; en mobile se activa por toque (más abajo)
+        if (finePointer) { row.addEventListener('mouseenter', () => focusRow(row)); row.addEventListener('focus', () => focusRow(row)); }
       });
       const index = document.querySelector('[data-index]');
       index?.addEventListener('mouseleave', clearFocus);
@@ -412,7 +419,6 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       // profundidad: parallax — el collage se inclina siguiendo el cursor, las láminas cercanas se mueven más
       const collage = document.querySelector('[data-collage]') as HTMLElement;
       const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
       if (collage && finePointer && !reduceMotion) {
         let tx = 0, ty = 0, rx = 0, ry = 0;
         addEventListener('mousemove', (e) => {
@@ -492,7 +498,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
           const FRAG = `precision highp float;
             uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform float uAber; uniform mat3 uRot;
             uniform sampler2D uWord; uniform float uWordAmt;
-            uniform sampler2D uProj; uniform float uProjAmt; uniform float uScroll;
+            uniform sampler2D uProj; uniform float uProjAmt; uniform float uScroll; uniform float uVideo;
             #define PHI 1.61803398875
             float smax(float a, float b, float k){ float h=clamp(0.5+0.5*(a-b)/k, 0., 1.); return mix(b,a,h)+k*h*(1.0-h); }
             float sdIco(vec3 p){ p=abs(p); float k=0.055; // k = redondeo de aristas (normales suaves = sin punteo)
@@ -555,11 +561,15 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
                 float wb=texture2D(uWord, wuv-vec2(so,0.0)).r;
                 col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
               }
-              // VITRINA: paneo del proyecto (3 tomas apiladas) refractado DENTRO de la gema
+              // VITRINA: el proyecto refractado DENTRO de la gema — TOUR en video o paneo de capturas
               if(uProjAmt>0.001){
-                float win=0.34;                       // porción visible del composite (≈ una toma)
-                float top=uScroll*(1.0-win);           // la ventana panea de arriba a abajo
-                vec2 puv=vec2(uv.x*0.6+0.5, top+(uv.y*0.9+0.5)*win)+rin.xy*0.05;
+                vec2 puv;
+                if(uVideo>0.5){
+                  puv=vec2(uv.x*0.62+0.5, uv.y*1.05+0.5)+rin.xy*0.05;   // video: llena la gema
+                } else {
+                  float win=0.34; float top=uScroll*(1.0-win);          // capturas: ventana que panea
+                  puv=vec2(uv.x*0.6+0.5, top+(uv.y*0.9+0.5)*win)+rin.xy*0.05;
+                }
                 vec3 pc=texture2D(uProj, clamp(puv,0.0,1.0)).rgb;
                 col=mix(col, pc*1.08+col*0.16, uProjAmt*0.9);
               }
@@ -583,7 +593,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               uScale = gl.getUniformLocation(prog, 'uScale'), uAber = gl.getUniformLocation(prog, 'uAber'), uRot = gl.getUniformLocation(prog, 'uRot'),
               uWord = gl.getUniformLocation(prog, 'uWord'), uWordAmt = gl.getUniformLocation(prog, 'uWordAmt'),
               uProj = gl.getUniformLocation(prog, 'uProj'), uProjAmt = gl.getUniformLocation(prog, 'uProjAmt'),
-              uScroll = gl.getUniformLocation(prog, 'uScroll');
+              uScroll = gl.getUniformLocation(prog, 'uScroll'), uVideo = gl.getUniformLocation(prog, 'uVideo');
             gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
             // ── "blopa" como textura, para renderizarlo DENTRO del vidrio ──
             const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
@@ -612,7 +622,12 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.uniform1i(uProj, 1);
-            let projAmt = 0, projTarget = 0, projPhase = 0, curKey = '';
+            let projAmt = 0, projTarget = 0, projPhase = 0, curKey = '', videoMode = 0, constructMode = 0;
+            // proyectos ONLINE con TOUR en video; los EN CONSTRUCCIÓN muestran un estado propio en la gema
+            const TOUR = new Set(['valecasenave', 'indoyoga', 'beokey', 'basslayer', 'pulz']);
+            const CONSTRUCTION = new Set(['lucid', 'fini']);
+            const vid = document.createElement('video'); vid.muted = true; vid.loop = true; (vid as any).playsInline = true; vid.crossOrigin = 'anonymous'; vid.preload = 'auto';
+            vid.style.cssText = 'position:fixed;left:-8px;top:-8px;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-99'; document.body.appendChild(vid);
             // dibuja una imagen "cover" (recorta para llenar el slot sin deformar)
             const drawCover = (x: CanvasRenderingContext2D, im: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
               const ir = im.width / im.height, sr = dw / dh; let sw, sh, sx, sy;
@@ -635,9 +650,27 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
                 projTarget = 1;
               });
             };
-            setGemProject = (shots) => {
-              if (shots && shots.length) { const key = shots.join('|'); if (key !== curKey) { curKey = key; loadProj(shots); } else projTarget = 1; }
-              else { projTarget = 0; }
+            // textura "EN CONSTRUCCIÓN" (nombre del proyecto + subtítulo) para los WIP
+            const buildConstructTex = (name: string) => {
+              const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d')!;
+              x.clearRect(0, 0, 1024, 512); x.textAlign = 'center'; x.textBaseline = 'middle';
+              x.fillStyle = '#eceef2'; x.font = '600 150px "Clash Display", sans-serif'; x.fillText(name, 512, 210);
+              x.fillStyle = 'rgba(236,238,242,0.62)'; x.font = '500 40px ui-monospace, Menlo, monospace'; (x as any).letterSpacing = '14px';
+              x.fillText('EN CONSTRUCCIÓN', 512, 322);
+              gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
+              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+              projTarget = 1;
+            };
+            setGemProject = (slug, shots, name) => {
+              if (slug && TOUR.has(slug)) { // TOUR en video (proyecto online)
+                videoMode = 1; constructMode = 0; curKey = 'vid:' + slug;
+                if (!vid.src || !vid.src.endsWith('/' + slug + '.mp4')) { vid.src = '/img/tours/' + slug + '.mp4'; }
+                vid.play().catch(() => {}); projTarget = 1;
+              } else if (slug && CONSTRUCTION.has(slug)) { // en construcción
+                videoMode = 0; constructMode = 1; if (curKey !== 'wip:' + slug) { curKey = 'wip:' + slug; buildConstructTex(name || slug); } else projTarget = 1;
+              } else if (shots && shots.length) { // panorama de capturas (fallback)
+                videoMode = 0; constructMode = 0; const key = shots.join('|'); if (key !== curKey) { curKey = key; loadProj(shots); } else projTarget = 1;
+              } else { projTarget = 0; vid.pause(); }
             };
             let W = 0, H = 0;
             // supersampling: renderizamos a más resolución y el navegador baja la escala → anti-alias real de las aristas
@@ -648,14 +681,19 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             const render = () => {
               rmx += (smx - rmx) * 0.05; rmy += (smy - rmy) * 0.05;
               const inProj = body.classList.contains('in-projects');
-              // spread mayor = cristal más chico; en pantallas verticales (mobile) se achica para no desbordar
-              const fit = W < H ? 0.42 + 0.58 * (H / W) : 1;
-              const tcx = inProj ? 0.32 : 0.0, tcy = inProj ? 0.0 : 0.02, tsc = (inProj ? 2.15 : 1.95) * fit;
+              // spread mayor = cristal (y "blopa" adentro) más chicos; en mobile (vertical) se achican más
+              const mob = W < H;
+              const fit = mob ? 0.52 + 0.75 * (H / W) : 1;
+              // en mobile la gema va CENTRADA y arriba (la lista queda abajo); en desktop, al costado derecho
+              const tcx = inProj ? (mob ? 0.0 : 0.32) : 0.0;
+              const tcy = inProj ? (mob ? 0.26 : 0.0) : 0.02;
+              const tsc = (inProj ? 2.15 : 1.95) * fit;
               cx += (tcx - cx) * 0.055; cy += (tcy - cy) * 0.055; sc += (tsc - sc) * 0.055;
               const vel = Math.hypot(rmx - prmx, rmy - prmy); prmx = rmx; prmy = rmy;
               aber += (Math.min(1, vel * 110) - aber) * 0.08;
               wordTarget = (wordReady && !inProj) ? 1 : 0; wordAmt += (wordTarget - wordAmt) * 0.07;
               projAmt += (projTarget - projAmt) * 0.09; projPhase += 0.006; // scroll del proyecto (ping-pong)
+              if (videoMode && vid.readyState >= 2) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vid); } // sube el frame del video
               const ay = a + rmx * 0.9, ax = a * 0.42 + rmy * 0.8;
               const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
               // R = Rx(ax)*Ry(ay), en column-major para uniformMatrix3fv
@@ -669,7 +707,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               const bob = inProj ? 0 : Math.sin(a * 1.1) * 0.014; // flote sutil en el landing
               gl.uniform2f(uCenter, cx, cy + bob); gl.uniform1f(uScale, sc * pulse); gl.uniform1f(uAber, aber);
               gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uProjAmt, projAmt);
-              gl.uniform1f(uScroll, 0.5 - 0.5 * Math.cos(projPhase));
+              gl.uniform1f(uScroll, 0.5 - 0.5 * Math.cos(projPhase)); gl.uniform1f(uVideo, (videoMode || constructMode) ? 1 : 0);
               gl.uniformMatrix3fv(uRot, false, m);
               gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
             };
@@ -737,8 +775,10 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 
       rows.forEach((row) => {
         row.addEventListener('click', () => {
-          const slug = row.dataset.slug;
-          if (slug) openCase(slug);
+          const slug = row.dataset.slug; if (!slug) return;
+          if (finePointer) { openCase(slug); }        // desktop: click abre el case (el hover ya mostró la vitrina)
+          else if (lastTap === slug) { openCase(slug); } // mobile: segundo toque abre
+          else { lastTap = slug; focusRow(row); }        // mobile: primer toque llena la gema (vitrina)
         });
       });
       document.querySelector('[data-case-back]')?.addEventListener('click', () => closeCase());
