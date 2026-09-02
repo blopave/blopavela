@@ -18,3 +18,7 @@ node_modules/
 
 # temporales
 *.tmp
+
+# capturas de debug / herramientas de automatización
+/*.png
+.playwright-mcp/

@@ -1,6 +1,7 @@
 ---
+// HOME — la gema es la ENTRADA; al hacer click se corre y aparecen los proyectos
+// (nombres a la izquierda, gema ambiente a la derecha). Click en un nombre abre el case.
 import { projects } from '../data/projects';
-const pad = (n: number) => String(n).padStart(2, '0');
 const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 ---
 <!doctype html>
@@ -8,793 +9,294 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>blopa — índice</title>
-    <meta name="description" content="Los proyectos de blopa. Un índice vivo. Buenos Aires." />
-    <meta name="theme-color" content="#e7e3da" />
+    <title>blopa</title>
     <link rel="preload" href="/fonts/ClashDisplay-600.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/Satoshi-400.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-500.woff2') format('woff2'); font-weight:500; font-display:swap; }
-      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-700.woff2') format('woff2'); font-weight:700; font-display:swap; }
       @font-face { font-family:'Clash Display'; src:url('/fonts/ClashDisplay-600.woff2') format('woff2'); font-weight:600; font-display:swap; }
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
+        --aqua:#24e2e8; --red:#ff3a54;
+        --display:'Clash Display',Georgia,serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
+      *{box-sizing:border-box;margin:0}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow-x:hidden;
+        -webkit-font-smoothing:antialiased;line-height:1.5}
+      a{color:inherit;text-decoration:none}
+      canvas.shard{position:fixed;inset:0;z-index:1;pointer-events:none}
 
-      :root {
-        /* paleta inspirada en Resn: near-black frío + blanco frío + firma cromática cyan/rojo */
-        --paper: #141417;
-        --ink: #e9eaee;
-        --ink-soft: #74767e;
-        --hair: #2a2a30;
-        --lite: #f2f3f5;
-        --lite-soft: #7b7d86;
-        --acc: #e9eaee;
-        --aqua: #24e2e8;
-        --red: #ff3a54;
-        --display: 'Clash Display', Georgia, serif;
-        --body: 'Satoshi', -apple-system, BlinkMacSystemFont, sans-serif;
-        --gutter: clamp(1.3rem, 4vw, 4rem);
-        --ease: cubic-bezier(0.22, 1, 0.36, 1);
-      }
-      * { box-sizing: border-box; margin: 0; }
-      html { -webkit-text-size-adjust: 100%; }
-      body {
-        font-family: var(--body); background: var(--paper); color: var(--ink);
-        height: 100svh; -webkit-font-smoothing: antialiased; line-height: 1.4;
-        transition: color 0.55s var(--ease);
-        overflow: hidden;
-      }
-      a { color: inherit; text-decoration: none; }
-      ::selection { background: var(--ink); color: var(--paper); }
+      .top{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:baseline;
+        padding:var(--gut);font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--soft)}
+      .top a:hover{color:var(--ink)}
 
-      /* capa cinematográfica de fondo (aparece al enfocar un proyecto) */
-      .stage { position: fixed; inset: 0; z-index: -2; background: var(--paper); transition: background 0.55s var(--ease); perspective: 1200px; perspective-origin: 58% 45%; }
-      /* COLLAGE VIVO: láminas del sitio compuestas en un panel a la derecha */
-      .stage__tint { position: absolute; inset: 0; opacity: 0; transition: opacity 0.7s var(--ease);
-        background: radial-gradient(55% 55% at 66% 42%, color-mix(in srgb, var(--pacc, #888) 16%, transparent), transparent 72%); }
-      body.lit .stage__tint { opacity: 1; }
-      .stage__collage { position: absolute; left: 41%; right: calc(var(--gutter) + 1rem); top: 6rem; bottom: 5.5rem;
-        transform-style: preserve-3d; transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); will-change: transform; }
-      .pane { position: absolute; overflow: hidden; border: 1px solid rgba(240,236,226,0.15); border-radius: 2px;
-        background: #0a0a08 center/cover no-repeat;
-        opacity: 0; transform: translateZ(var(--pz, 0px)) rotateZ(var(--rz, 0deg)) translateY(20px) scale(0.985);
-        transition: opacity 0.55s var(--ease), transform 0.85s var(--ease); }
-      body.lit .pane.on { opacity: 1; transform: translateZ(var(--pz, 0px)) rotateZ(var(--rz, 0deg)); }
-      /* profundidad: cada lámina a una distancia distinta + inclinación "cartas tiradas" + sombra acorde */
-      /* apiladas y encastradas con profundidad (translateZ), pero el conjunto flota DENTRO del contenedor (con margen del viewport) */
-      .pane.p1 { top: 2%;    left: 2%;   width: 64%; height: 43%; z-index: 3; --pz: -120px; --rz: -1.6deg; transition-delay: 0.02s; box-shadow: 0 20px 50px rgba(0,0,0,0.42); }
-      .pane.p2 { top: 26%;   right: 3%;  width: 56%; height: 40%; z-index: 4; --pz: -15px;  --rz: 1.1deg;  transition-delay: 0.13s; box-shadow: 0 30px 66px rgba(0,0,0,0.5); }
-      .pane.p3 { bottom: 2%; left: 6%;   width: 58%; height: 42%; z-index: 5; --pz: 50px;   --rz: -0.9deg; transition-delay: 0.24s; box-shadow: 0 40px 88px rgba(0,0,0,0.56); }
-      .pane.pd { bottom: 8%; right: 5%;  width: 31%; height: 26%; z-index: 6; --pz: 105px;  --rz: 2.2deg;  transition-delay: 0.36s; background-size: 220%; background-position: 32% 42%; box-shadow: 0 52px 108px rgba(0,0,0,0.6); }
-      @media (max-width: 820px) { .stage__collage { left: var(--gutter); top: auto; height: 46vh; bottom: 7rem; } .pane.pd { display: none; } }
-      body.lit .stage { background: #0b0b08; }
-      body.lit .stage__scrim { opacity: 1; }
-      body.lit { color: var(--lite); }
+      /* landing: sólo el disparador (la palabra "blopa" vive dentro del cristal) */
+      .enter{position:fixed;inset:0;z-index:4;cursor:pointer}
+      body.entered .enter{pointer-events:none}
+      .hint{position:fixed;left:0;right:0;bottom:clamp(3rem,10vh,6rem);z-index:5;text-align:center;pointer-events:none;
+        font-family:var(--mono);font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--soft);
+        opacity:0;transition:opacity .6s var(--ease)}
+      body:not(.entered):not(.pre) .hint{opacity:.75}
+      .hint span{display:inline-block;margin-left:.35em;animation:nudge 1.5s var(--ease) infinite}
+      @keyframes nudge{0%,100%{transform:translateX(0);opacity:.55}50%{transform:translateX(6px);opacity:1}}
 
-      /* frame */
-      .frame { position: relative; z-index: 1; min-height: 100svh; display: flex; flex-direction: column; padding: 0 var(--gutter); }
+      /* la gema es la ENTRADA y permanece: al entrar se corre a la derecha y deja los nombres a la izquierda */
+      canvas.shard{transition:opacity .8s var(--ease)}
 
-      /* barra superior */
-      .top { display: flex; justify-content: space-between; align-items: baseline; padding: clamp(1.1rem, 2.6vw, 1.9rem) 0; transition: border-color 0.55s var(--ease); }
-      body.lit .top { border-color: rgba(239,236,227,0.16); }
-      .mark { font-family: var(--display); font-weight: 600; font-size: clamp(1.05rem, 1.5vw, 1.35rem); letter-spacing: -0.02em;
-        text-shadow: -1.4px 0 var(--red), 1.4px 0 var(--aqua); transition: text-shadow 0.4s var(--ease); }
-      .mark:hover { text-shadow: -3px 0 var(--red), 3px 0 var(--aqua); }
-
-      /* objeto cristalino con aberración cromática en el centro (se desvanece al enfocar un proyecto) */
-      .shard { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 1; transition: opacity 0.6s var(--ease); }
-      body.lit .shard { opacity: 1; } /* la gema NO desaparece: es la vitrina donde se muestra el proyecto */
-
-      /* ── Landing (comienzo tipo Resn: cristal + wordmark centrados) ── */
-      .landing { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer;
-        transition: opacity 0.7s var(--ease), visibility 0.7s, filter 0.7s var(--ease); }
-      .landing:focus-visible { outline: none; }
-      .landing:focus-visible .landing__mark { text-shadow: -3px 0 var(--red), 3px 0 var(--aqua); }
-      body.in-projects .landing { opacity: 0; visibility: hidden; pointer-events: none; filter: blur(7px); }
-      .landing__mark { font-family: var(--display); font-weight: 600; font-size: clamp(3rem, 11vw, 8.5rem); letter-spacing: -0.045em; color: var(--ink);
-        text-shadow: -2px 0 var(--red), 2px 0 var(--aqua); transition: text-shadow 0.4s var(--ease); }
-      body.ready .landing__mark { animation: glitch 1.5s steps(1, end) 1; }
-      .landing:hover .landing__mark { text-shadow: -3.5px 0 var(--red), 3.5px 0 var(--aqua); }
-      /* cuando el WebGL dibuja "blopa" DENTRO del vidrio, se oculta el wordmark DOM (queda de fallback) */
-      body.gl-word .landing__mark { opacity: 0; }
-      /* landing limpio: SÓLO blopa + cristal. La barra superior y el pie aparecen recién en proyectos */
-      .top, .foot { transition: opacity 0.6s var(--ease), visibility 0.6s, border-color 0.55s var(--ease); }
-      body:not(.in-projects) .top, body:not(.in-projects) .foot { opacity: 0 !important; visibility: hidden; pointer-events: none; }
-
-      /* índice oculto en el landing; aparece al entrar a proyectos */
-      .index { opacity: 0; pointer-events: none; transition: opacity 0.7s var(--ease); }
-      body.in-projects .index { opacity: 1; pointer-events: auto; }
-      /* el wordmark chico del nav aparece recién en proyectos (en el landing manda el grande) */
-      .mark { opacity: 0; transition: opacity 0.5s var(--ease); }
-      body.in-projects .mark { opacity: 1; }
-      @keyframes glitch {
-        0%   { text-shadow: -2px 0 var(--red), 2px 0 var(--aqua); transform: none; }
-        14%  { text-shadow: -8px 0 var(--red), 6px 0 var(--aqua); transform: translateX(2px) skewX(-3deg); }
-        26%  { text-shadow: 5px 0 var(--red), -7px 0 var(--aqua); transform: translateX(-2px); }
-        40%  { text-shadow: -2px 0 var(--red), 2px 0 var(--aqua); transform: none; }
-        58%  { text-shadow: -10px 0 var(--red), 8px 0 var(--aqua); transform: translateX(1px) skewX(2deg); }
-        70%, 100% { text-shadow: -2px 0 var(--red), 2px 0 var(--aqua); transform: none; }
+      /* índice: nombres alineados a la izquierda; la gema queda a la derecha (ambiente) */
+      .index{position:fixed;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:center;
+        gap:.2rem;padding:clamp(5rem,12vh,9rem) var(--gut) 4rem;max-width:min(46vw,40rem);
+        opacity:0;pointer-events:none;transition:opacity .7s var(--ease)}
+      body.entered .index{opacity:1;pointer-events:auto;transition-delay:.3s}
+      body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
+      .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;
+        display:flex;align-items:baseline;gap:1rem;padding:.55rem 0;position:relative;
+        transition:padding .35s var(--ease)}
+      .prow:hover{padding-left:1rem}
+      .prow__name{font-family:var(--display);font-weight:600;font-size:clamp(1.9rem,3.8vw,3.1rem);
+        letter-spacing:-.03em;line-height:1.02;color:var(--soft);transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+      .prow:hover .prow__name{color:var(--ink);text-shadow:-1.4px 0 var(--red),1.4px 0 var(--aqua)}
+      .prow__arrow{opacity:0;color:var(--c);transform:translateX(-6px);
+        transition:opacity .3s var(--ease),transform .3s var(--ease)}
+      .prow:hover .prow__arrow{opacity:1;transform:translateX(0)}
+      @media(max-width:860px){
+        .index{max-width:none;padding-top:clamp(4rem,9vh,7rem);justify-content:flex-end;padding-bottom:clamp(3rem,10vh,6rem)}
       }
 
-      /* ── Micro-interacciones cromáticas ── */
-      .row__name { text-shadow: 0 0 transparent; transition: text-shadow 0.35s var(--ease), opacity 0.5s var(--ease), transform 0.6s var(--ease); }
-      .row:hover .row__name, .row.active .row__name { text-shadow: -1.5px 0 var(--red), 1.5px 0 var(--aqua); }
-      body.in-projects .row__name { animation: chromaIn 0.75s var(--ease) backwards; }
-      body.in-projects [data-d="2"] .row__name { animation-delay: 0.05s; }
-      body.in-projects [data-d="3"] .row__name { animation-delay: 0.1s; }
-      @keyframes chromaIn {
-        0%   { text-shadow: -7px 0 var(--red), 6px 0 var(--aqua); }
-        60%  { text-shadow: -1.5px 0 var(--red), 1.5px 0 var(--aqua); }
-        100% { text-shadow: 0 0 transparent; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .landing__mark { animation: none; }
-        body.in-projects .row__name { animation: none; }
-      }
+      /* case (reusa el patrón editorial) */
+      .case{position:fixed;inset:0;z-index:6;background:#0b0b08;overflow-y:auto;opacity:0;visibility:hidden;pointer-events:none;
+        transition:opacity .5s var(--ease),visibility .5s var(--ease)}
+      body.in-case .case{opacity:1;visibility:visible;pointer-events:auto}
+      .case__bar{position:sticky;top:0;display:flex;justify-content:space-between;padding:var(--gut);
+        font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
+        background:linear-gradient(#0b0b08 60%,transparent)}
+      .case__bar button{appearance:none;background:none;border:0;font:inherit;color:var(--soft);cursor:pointer;letter-spacing:.14em}
+      .case__bar button:hover{color:var(--ink)}
+      .case__panel{max-width:84rem;margin:0 auto;padding:clamp(1rem,4vh,3rem) var(--gut) 6rem;
+        display:grid;grid-template-columns:minmax(0,26rem) 1fr;gap:clamp(2rem,5vw,5rem);align-items:start}
+      @media(max-width:860px){.case__panel{grid-template-columns:1fr}}
+      .case__head{position:sticky;top:6rem}
+      @media(max-width:860px){.case__head{position:static}}
+      .case__eye{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
+      .case__title{font-family:var(--display);font-weight:600;font-size:clamp(2.4rem,6vw,4.5rem);line-height:.95;
+        letter-spacing:-.03em;margin:.5rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
+      .case__role{margin-top:.6rem;color:#c9cbd2;font-size:.9rem}
+      .case__blurb{margin-top:1rem;color:var(--soft);line-height:1.55;max-width:34ch}
+      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.4rem;font-family:var(--mono);font-size:.72rem;
+        letter-spacing:.14em;text-transform:uppercase;color:var(--ink);border:1px solid rgba(242,243,245,.26);border-radius:999px;
+        padding:.7rem 1.2rem;transition:border-color .3s var(--ease)}
+      .case__live span{color:var(--aqua)} .case__live:hover{border-color:var(--aqua)}
+      .case__shots{display:flex;flex-direction:column;gap:clamp(1rem,2.5vh,2rem)}
+      .case__shots img{width:100%;height:auto;border:1px solid rgba(242,243,245,.1);border-radius:4px;display:block;
+        box-shadow:0 30px 80px rgba(0,0,0,.5)}
 
-      /* grano: textura tipo Resn sobre toda la página */
-      .grain { position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0.045; mix-blend-mode: overlay;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        background-size: 100px 100px; }
-      /* viñeta sutil: acabado cinematográfico */
-      .vignette { position: fixed; inset: 0; z-index: 39; pointer-events: none;
-        background: radial-gradient(ellipse 75% 75% at 50% 46%, transparent 52%, rgba(0,0,0,0.42) 100%); }
-      .top__right { display: flex; gap: clamp(0.8rem, 2vw, 1.8rem); align-items: baseline; font-size: 0.72rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-soft); transition: color 0.55s var(--ease); }
-      body.lit .top__right { color: var(--lite-soft); }
-      .clock { font-variant-numeric: tabular-nums; min-width: 9.5ch; }
-      @media (max-width: 620px) { .top__place { display: none; } }
-
-      /* índice */
-      .index { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: clamp(0.4rem, 1.4vh, 1.1rem) 0; max-width: min(40vw, 35rem); }
-      @media (max-width: 820px) {
-        /* mobile: gema centrada-arriba, la lista se va ABAJO y se compacta */
-        .index { max-width: 100%; flex: 0 1 auto; justify-content: flex-end; margin-top: auto; padding-bottom: 1.2rem; }
-        .row { padding: clamp(0.3rem, 0.9vh, 0.6rem) 0; }
-        .row__name { font-size: clamp(1.2rem, 6.4vw, 1.9rem); }
-      }
-      .row { position: relative; display: block; width: 100%; text-align: left; appearance: none; background: none; border: 0;
-        font: inherit; color: inherit; cursor: pointer;
-        padding: clamp(0.5rem, 1.4vh, 1rem) 0; transition: border-color 0.55s var(--ease); }
-      body.lit .row { border-color: rgba(239,236,227,0.12); }
-
-      .row__head { display: flex; align-items: baseline; gap: clamp(0.7rem, 2vw, 1.4rem); }
-      .row__num { font-size: 0.72rem; letter-spacing: 0.1em; color: var(--ink-soft); font-variant-numeric: tabular-nums; padding-top: 0.4em; transition: color 0.55s var(--ease), opacity 0.5s var(--ease); width: 2ch; flex: 0 0 auto; }
-      body.lit .row__num { color: var(--lite-soft); }
-      .row__name { font-family: var(--display); font-weight: 600; font-size: clamp(1.3rem, 1.4vw + 1.25vh, 2.6rem); line-height: 0.98; letter-spacing: -0.03em; transition: opacity 0.5s var(--ease), transform 0.6s var(--ease); }
-      .row__arrow { margin-left: auto; align-self: center; font-size: clamp(1rem, 2vw, 1.5rem); opacity: 0; transform: translateX(-10px); transition: opacity 0.5s var(--ease), transform 0.5s var(--ease); }
-      .row__tag { font-size: 0.58rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-soft); border: 1px solid var(--hair); border-radius: 999px; padding: 0.12rem 0.5rem; opacity: 0.7; transition: color 0.5s var(--ease), border-color 0.5s var(--ease); }
-      body.lit .row.active .row__tag { color: var(--lite-soft); border-color: var(--lite-soft); }
-
-      .row__meta { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; margin-top: 0.28rem; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--ink-soft); transition: color 0.55s var(--ease); }
-      body.lit .row__meta { color: var(--lite-soft); }
-      .row__meta .sep { opacity: 0.4; }
-      .row__craft { opacity: 0; max-height: 0; overflow: hidden; transition: opacity 0.5s var(--ease), max-height 0.5s var(--ease); }
-
-      /* estado iluminado: el índice sigue visible (no perdés el rumbo); la activa se resalta, el resto se atenúa */
-      body.lit .index .row { opacity: 0.4; transition: opacity 0.5s var(--ease), border-color 0.4s var(--ease); }
-      body.lit .index .row.active { opacity: 1; }
-      body.lit .index:hover .row:not(.active) { opacity: 0.28; }
-      .row.active .row__name { color: var(--lite); }
-      .row.active .row__arrow { opacity: 1; transform: none; color: var(--acc); }
-      .row.active .row__num { color: var(--acc); }
-      .row.active .row__craft { opacity: 1; max-height: 3rem; margin-top: 0.35rem; }
-      .row.active .row__now { color: var(--acc); }
-      .row:hover .row__name, .row:focus-visible .row__name { transform: translateX(clamp(6px, 1.2vw, 16px)); }
-      .row:focus-visible { outline: none; }
-      .row:focus-visible .row__name { text-decoration: underline; text-decoration-color: var(--acc); text-underline-offset: 0.15em; }
-
-      /* footer */
-      .foot { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.8rem; padding: clamp(1.1rem, 2.6vw, 1.9rem) 0; transition: border-color 0.55s var(--ease); font-size: 0.76rem; letter-spacing: 0.04em; color: var(--ink-soft); }
-      body.lit .foot { border-color: rgba(239,236,227,0.16); color: var(--lite-soft); }
-      .foot a { border-bottom: 1px solid transparent; transition: border-color 0.3s; }
-      .foot a:hover { border-color: currentColor; }
-      .foot__note { font-style: italic; opacity: 0.85; }
-
-      /* reveal de carga */
-      .rise { opacity: 0; transform: translateY(12px); }
-      body.ready .rise { opacity: 1; transform: none; transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
-      body.ready .rise[data-d="1"] { transition-delay: 0.06s; }
-      body.ready .rise[data-d="2"] { transition-delay: 0.12s; }
-      body.ready .rise[data-d="3"] { transition-delay: 0.18s; }
-
-      /* ── Case (página interna del proyecto) ── */
-      .case { position: fixed; inset: 0; z-index: 20; background: #0b0b08; overflow-y: auto; overscroll-behavior: contain;
-        opacity: 0; visibility: hidden; pointer-events: none;
-        transition: opacity 0.5s var(--ease), visibility 0.5s var(--ease); }
-      body.in-case .case { opacity: 1; visibility: visible; pointer-events: auto; }
-      body.in-case { overflow: hidden; }
-      .case__bar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center;
-        padding: clamp(1.1rem, 2.6vw, 1.9rem) var(--gutter); background: linear-gradient(#0b0b08 65%, transparent);
-        backdrop-filter: blur(2px); }
-      .case__back { appearance: none; background: none; border: 0; font: inherit; color: var(--lite-soft); cursor: pointer;
-        font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; display: inline-flex; align-items: center; gap: 0.5rem;
-        transition: color 0.35s var(--ease), letter-spacing 0.35s var(--ease); }
-      .case__back span { color: var(--red); text-shadow: 1px 0 var(--aqua); transition: transform 0.35s var(--ease); display: inline-block; }
-      .case__back:hover { color: var(--lite); letter-spacing: 0.18em; }
-      .case__back:hover span { transform: translateX(-4px); }
-      .case__mark { font-family: var(--display); font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em; color: var(--lite);
-        text-shadow: -1.4px 0 var(--red), 1.4px 0 var(--aqua); }
-
-      .case__panel[hidden] { display: none; }
-      .case__panel { max-width: 84rem; margin: 0 auto; padding: clamp(1rem, 3vh, 3rem) var(--gutter) clamp(4rem, 12vh, 9rem);
-        display: grid; grid-template-columns: minmax(0, 24rem) 1fr; gap: clamp(2rem, 5vw, 5rem); align-items: start; }
-      @media (max-width: 900px) { .case__panel { grid-template-columns: 1fr; gap: clamp(1.6rem, 5vh, 2.6rem); } }
-      .case__head { position: sticky; top: 6.5rem; }
-      @media (max-width: 900px) { .case__head { position: static; top: auto; } }
-      .case__eyebrow { font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--lite-soft); }
-      .case__eyebrow .sep { opacity: 0.4; margin: 0 0.15em; }
-      .case__title { font-family: var(--display); font-weight: 600; font-size: clamp(2.6rem, 6vw, 5rem); line-height: 0.95;
-        letter-spacing: -0.035em; color: var(--lite); margin: 0.5rem 0 0; text-shadow: -1.5px 0 var(--red), 1.5px 0 var(--aqua); }
-      body.in-case .case__panel:not([hidden]) .case__title { animation: glitch 0.7s steps(1, end) 1; }
-      .case__role { margin-top: 0.7rem; font-size: 0.86rem; letter-spacing: 0.02em;
-        color: color-mix(in srgb, var(--pacc, #fff) 72%, #fff); }
-      .case__blurb { margin-top: 1.1rem; font-size: clamp(0.98rem, 1.1vw, 1.15rem); line-height: 1.55; color: var(--lite-soft); max-width: 32ch; }
-      .case__actions { margin-top: 1.6rem; }
-      .case__live { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase;
-        color: var(--lite); border: 1px solid rgba(239,236,227,0.28); border-radius: 999px; padding: 0.72rem 1.3rem;
-        transition: border-color 0.35s var(--ease), color 0.35s var(--ease), letter-spacing 0.35s var(--ease); }
-      .case__live span { color: var(--aqua); }
-      .case__live:hover { border-color: var(--aqua); letter-spacing: 0.18em; }
-      .case__proto { font-size: 0.72rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--lite-soft);
-        border: 1px solid rgba(239,236,227,0.2); border-radius: 999px; padding: 0.55rem 1rem; }
-
-      .case__shots { display: flex; flex-direction: column; gap: clamp(1rem, 2.5vh, 2rem); }
-      .case__shot { position: relative; overflow: hidden; border: 1px solid rgba(239,236,227,0.12); border-radius: 3px;
-        box-shadow: 0 30px 80px rgba(0,0,0,0.5); background: #0a0a08;
-        opacity: 0; transform: translateY(24px); }
-      body.in-case .case__panel:not([hidden]) .case__shot { animation: shotRise 0.8s var(--ease) forwards; }
-      body.in-case .case__panel:not([hidden]) .case__shot:nth-child(2) { animation-delay: 0.09s; }
-      body.in-case .case__panel:not([hidden]) .case__shot:nth-child(3) { animation-delay: 0.18s; }
-      .case__shot img { display: block; width: 100%; height: auto; }
-      @keyframes shotRise { to { opacity: 1; transform: none; } }
-
-      /* barrido cromático RGB-split al entrar al case (la firma) */
-      .case__wipe { position: fixed; inset: 0; z-index: 24; pointer-events: none; overflow: hidden; opacity: 0; }
-      body.in-case .case__wipe { animation: wipeShow 0.72s var(--ease) 1; }
-      .case__wipe::before { content: ''; position: absolute; top: -10%; bottom: -10%; width: 45vw; transform: translateX(-70vw);
-        background: linear-gradient(90deg, transparent, rgba(255,58,84,0.22), rgba(255,255,255,0.06), rgba(36,226,232,0.22), transparent);
-        filter: blur(8px); }
-      body.in-case .case__wipe::before { animation: wipeSweep 0.72s var(--ease) 1; }
-      @keyframes wipeShow { 0%, 100% { opacity: 0; } 12%, 78% { opacity: 1; } }
-      @keyframes wipeSweep { from { transform: translateX(-70vw); } to { transform: translateX(170vw); } }
-
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { transition-duration: 0.001ms !important; }
-        .stage__img { transform: none !important; }
-        .rise { opacity: 1; transform: none; }
-        .case__shot { opacity: 1; transform: none; animation: none !important; }
-        .case__wipe { display: none; }
-        .case__title { animation: none !important; }
-      }
+      @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
   </head>
-  <body>
-    <section class="landing" data-landing data-enter aria-label="Entrar a blopa — clic en el cristal" role="button" tabindex="0">
-      <h1 class="landing__mark">blopa</h1>
-    </section>
-    <div class="stage" aria-hidden="true">
-      <div class="stage__tint"></div>
-      <div class="stage__collage" data-collage>
-        <div class="pane p1" data-pane="0"></div>
-        <div class="pane p2" data-pane="1"></div>
-        <div class="pane p3" data-pane="2"></div>
-        <div class="pane pd" data-pane="1"></div>
-      </div>
-    </div>
+  <body class="pre">
     <canvas class="shard" data-shard aria-hidden="true"></canvas>
-    <div class="vignette" aria-hidden="true"></div>
-    <div class="grain" aria-hidden="true"></div>
+    <div class="enter" data-enter role="button" tabindex="0" aria-label="Entrar"></div>
 
-    <div class="frame">
-      <header class="top rise">
-        <a class="mark" href="/" data-home>blopa</a>
-        <div class="top__right">
-          <span class="top__place">Buenos Aires</span>
-          <span class="clock" data-clock>--:--:--</span>
-        </div>
-      </header>
-
-      <main class="index" data-index>
-        {projects.map((p, i) => (
-          <button
-            type="button"
-            class="row rise" data-d={Math.min(3, i + 1)}
-            data-row data-slug={p.slug} data-shots={JSON.stringify(p.shots)} data-acc={p.accent} data-ended={p.ended}
-            aria-label={`Abrir ${p.name}`}
-          >
-            <div class="row__head">
-              <span class="row__name">{p.name}</span>
-              <span class="row__arrow" aria-hidden="true">→</span>
-            </div>
-          </button>
-        ))}
-      </main>
-
-      <footer class="foot rise" data-d="3">
-        <a href="mailto:blopave@pm.me">blopave@pm.me</a>
-        <span class="foot__note">un experimento — dirección a cargo de la IA</span>
-      </footer>
+    <div class="top">
+      <span class="top__mark">blopa</span>
+      <span>Buenos Aires · <time data-clock>—</time></span>
     </div>
+    <div class="hint" data-hint>entrá <span>→</span></div>
 
-    <!-- ── Case: página interna de cada proyecto (in-page, transición cromática) ── -->
+    <section class="index" data-index>
+      {projects.map((p) => (
+        <button type="button" class="prow" data-row data-slug={p.slug} style={`--c:${p.accent}`}>
+          <span class="prow__name">{p.name}</span>
+          <span class="prow__arrow" aria-hidden="true">→</span>
+        </button>
+      ))}
+    </section>
+
     <section class="case" data-case aria-hidden="true">
-      <span class="case__wipe" aria-hidden="true"></span>
-      <div class="case__bar">
-        <button type="button" class="case__back" data-case-back aria-label="Volver al índice"><span aria-hidden="true">←</span> índice</button>
-        <span class="case__mark">blopa</span>
-      </div>
-      <div class="case__stack" data-case-stack>
-        {projects.map((p) => (
-          <article class="case__panel" data-case-slug={p.slug} style={`--pacc:${p.accent}`} hidden>
-            <header class="case__head">
-              <p class="case__eyebrow">{p.category} <span class="sep">·</span> {yearOf(p.ended)}</p>
-              <h2 class="case__title">{p.name}</h2>
-              <p class="case__role">{p.role}</p>
-              <p class="case__blurb">{p.blurb}</p>
-              <div class="case__actions">
-                {p.url
-                  ? <a class="case__live" href={p.url} target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
-                  : <span class="case__proto">En construcción</span>}
-              </div>
-            </header>
-            <div class="case__shots">
-              {p.shots.map((s, si) => (
-                <figure class="case__shot"><img src={s} alt={`${p.name} — captura ${si + 1}`} loading="lazy" decoding="async" /></figure>
-              ))}
-            </div>
-          </article>
-        ))}
+      <div class="case__bar"><button type="button" data-back>← galería</button><span>blopa</span></div>
+      <div class="case__panel">
+        <div class="case__head">
+          <p class="case__eye" data-cat></p>
+          <h2 class="case__title" data-name></h2>
+          <p class="case__role" data-role></p>
+          <p class="case__blurb" data-blurb></p>
+          <a class="case__live" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="case__shots" data-shots></div>
       </div>
     </section>
 
-    <script>
+    <script define:vars={{ projects }}>
       const body = document.body;
-      const panes = Array.from(document.querySelectorAll('.pane')) as HTMLElement[];
-      const rows = Array.from(document.querySelectorAll('[data-row]')) as HTMLElement[];
-      const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches; // desktop con hover
-      let lastTap = ''; // mobile: para el patrón toque→vitrina, toque de nuevo→case
-      // hooks para controlar el cristal desde afuera (pausa de rAF, tilt, y "vitrina": el proyecto adentro de la gema)
-      let pauseCrystal = () => {}, resumeCrystal = () => {}, enableTilt = () => {};
-      let setGemProject = (_slug: string | null, _shots: string[] | null, _name?: string) => {};
-
-      // reloj de Buenos Aires, en vivo
-      const clock = document.querySelector('[data-clock]');
-      function tick() {
-        if (!clock) return;
-        clock.textContent = new Intl.DateTimeFormat('es-AR', {
-          timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-        }).format(new Date());
-      }
-      tick(); setInterval(tick, 1000);
-
-      // "hace cuánto" — calculado en tiempo real desde la fecha de cada proyecto
-      function since(ended: string): string {
-        if (!ended) return 'en curso';
-        const [y, m] = ended.split('-').map(Number);
-        const now = new Date();
-        let months = (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
-        if (months <= 0) return 'reciente';
-        const yy = Math.floor(months / 12), mm = months % 12;
-        if (yy === 0) return `hace ${mm} ${mm === 1 ? 'mes' : 'meses'}`;
-        if (mm === 0) return `hace ${yy} ${yy === 1 ? 'año' : 'años'}`;
-        return `hace ${yy} ${yy === 1 ? 'año' : 'años'} ${mm}m`;
-      }
-      rows.forEach((row) => {
-        const el = row.querySelector('[data-now]');
-        if (el) el.textContent = since(row.dataset.ended || '');
-      });
-
-      // collage vivo: al enfocar un proyecto, la página se invierte y las láminas de su sitio entran escalonadas
-      let current: HTMLElement | null = null;
-      function focusRow(row: HTMLElement) {
-        if (current === row) return;
-        const wasLit = body.classList.contains('lit');
-        current = row;
-        let shots: string[] = [];
-        try { shots = JSON.parse(row.dataset.shots || '[]'); } catch {}
-        const acc = row.dataset.acc || '#efece3';
-        body.style.setProperty('--acc', acc);
-        body.style.setProperty('--pacc', acc);
-        rows.forEach((r) => r.classList.toggle('active', r === row));
-        body.classList.add('lit');            // ahonda la página (el índice se atenúa)
-        setGemProject(row.dataset.slug || '', shots.length ? shots : null, row.querySelector('.row__name')?.textContent || ''); // la gema: tour en video / paneo / "en construcción"
-      }
-      function clearFocus() {
-        current = null;
-        body.classList.remove('lit');
-        rows.forEach((r) => r.classList.remove('active'));
-        setGemProject(null, null);
-      }
-      rows.forEach((row) => {
-        // el hover que llena la gema es sólo en desktop; en mobile se activa por toque (más abajo)
-        if (finePointer) { row.addEventListener('mouseenter', () => focusRow(row)); row.addEventListener('focus', () => focusRow(row)); }
-      });
-      const index = document.querySelector('[data-index]');
-      index?.addEventListener('mouseleave', clearFocus);
-      // en teclado, limpiar cuando el foco sale del índice
-      index?.addEventListener('focusout', (e) => {
-        const to = (e as FocusEvent).relatedTarget as Node | null;
-        if (!to || !index.contains(to)) clearFocus();
-      });
-
-      // profundidad: parallax — el collage se inclina siguiendo el cursor, las láminas cercanas se mueven más
-      const collage = document.querySelector('[data-collage]') as HTMLElement;
       const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (collage && finePointer && !reduceMotion) {
-        let tx = 0, ty = 0, rx = 0, ry = 0;
-        addEventListener('mousemove', (e) => {
-          tx = e.clientX / window.innerWidth - 0.5;
-          ty = e.clientY / window.innerHeight - 0.5;
-        }, { passive: true });
-        const spin = () => {
-          const on = body.classList.contains('lit');
-          const targetY = on ? tx * 11 : 0;
-          const targetX = on ? -ty * 7.5 : 0;
-          ry += (targetY - ry) * 0.075;
-          rx += (targetX - rx) * 0.075;
-          collage.style.setProperty('--ry', ry.toFixed(2) + 'deg');
-          collage.style.setProperty('--rx', rx.toFixed(2) + 'deg');
-          requestAnimationFrame(spin);
-        };
-        requestAnimationFrame(spin);
-      }
-
-      // cristal de vidrio que REFRACTA (WebGL): la aberración cyan/rojo sale de la dispersión
-      // física (índice de refracción distinto por canal R/G/B), no de trazos offset. Fusiona
-      // las dos firmas — el cristal y el color — en un solo efecto óptico motivado.
-      const shard = document.querySelector('[data-shard]') as HTMLCanvasElement | null;
       const coarse = matchMedia('(pointer: coarse)').matches;
-      if (shard) {
-        const DPR = Math.min(coarse ? 1.4 : 2, window.devicePixelRatio || 1);
-        // vector de entrada compartido: mouse en desktop, giroscopio + drag en mobile
-        let smx = 0, smy = 0;
-        window.addEventListener('mousemove', (e) => { smx = e.clientX / window.innerWidth - 0.5; smy = e.clientY / window.innerHeight - 0.5; }, { passive: true });
-        const clampv = (v: number, m: number) => Math.max(-m, Math.min(m, v));
-        const onOrient = (e: DeviceOrientationEvent) => {
-          smx = clampv((e.gamma || 0) / 45 * 0.5, 0.5);
-          smy = clampv(((e.beta || 0) - 40) / 45 * 0.5, 0.5);
-        };
-        let tiltOn = false;
-        enableTilt = () => {
-          if (tiltOn || !('DeviceOrientationEvent' in window)) return;
-          const DOE = (window as any).DeviceOrientationEvent;
-          const add = () => { tiltOn = true; window.addEventListener('deviceorientation', onOrient, { passive: true }); };
-          if (typeof DOE.requestPermission === 'function') { DOE.requestPermission().then((s: string) => { if (s === 'granted') add(); }).catch(() => {}); }
-          else add();
-        };
-        addEventListener('touchmove', (e) => {
-          const tch = (e as TouchEvent).touches[0]; if (!tch) return;
-          smx = tch.clientX / window.innerWidth - 0.5; smy = tch.clientY / window.innerHeight - 0.5;
-        }, { passive: true });
+      const DPR = Math.min(coarse ? 1.4 : 2, window.devicePixelRatio || 1);
+      requestAnimationFrame(() => body.classList.remove('pre'));
 
-        // ── fallback 2D (sin WebGL): wireframe estático, para que nunca quede en blanco ──
-        function fallback2D() {
-          const ctx = shard!.getContext('2d'); if (!ctx) return;
-          const t = (1 + Math.sqrt(5)) / 2;
-          const Vs = [[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],[t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]]
-            .map((p) => { const n = Math.hypot(p[0], p[1], p[2]); return [p[0]/n, p[1]/n, p[2]/n]; });
-          const Es: number[][] = [];
-          for (let i = 0; i < Vs.length; i++) for (let j = i + 1; j < Vs.length; j++) if (Math.hypot(Vs[i][0]-Vs[j][0], Vs[i][1]-Vs[j][1], Vs[i][2]-Vs[j][2]) < 1.2) Es.push([i, j]);
-          const draw = () => {
-            const W = innerWidth, H = innerHeight; shard!.width = W * DPR; shard!.height = H * DPR;
-            shard!.style.width = W + 'px'; shard!.style.height = H + 'px'; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-            const a = 0.6, cyw = Math.cos(a), syw = Math.sin(a), cxw = Math.cos(a*0.5), sxw = Math.sin(a*0.5);
-            const ox = W*0.5, oy = H*0.46, R = Math.min(W,H)*0.34, F = 3.1;
-            const P = Vs.map(([x,y,z]) => { const X=x*cyw+z*syw,Z1=-x*syw+z*cyw,Y=y*cxw-Z1*sxw,Z=y*sxw+Z1*cxw,s=F/(F-Z); return {x:ox+X*s*R,y:oy+Y*s*R}; });
-            ctx.clearRect(0,0,W,H); ctx.globalCompositeOperation='lighter'; ctx.lineWidth=1.1;
-            for (const [i,j] of Es) { const p=P[i],q=P[j];
-              ctx.strokeStyle='rgba(255,58,84,0.5)'; ctx.beginPath(); ctx.moveTo(p.x-2,p.y); ctx.lineTo(q.x-2,q.y); ctx.stroke();
-              ctx.strokeStyle='rgba(36,226,232,0.5)'; ctx.beginPath(); ctx.moveTo(p.x+2,p.y); ctx.lineTo(q.x+2,q.y); ctx.stroke();
-              ctx.strokeStyle='rgba(228,232,238,0.55)'; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
-            ctx.globalCompositeOperation='source-over';
-          };
-          draw(); addEventListener('resize', draw);
-        }
-
-        const gl = shard.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true, powerPreference: 'low-power' }) as WebGLRenderingContext | null;
-        if (!gl) { fallback2D(); }
-        else {
-          const STEPS = coarse ? 52 : 84, INSTEPS = coarse ? 26 : 40;
-          const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
-          const FRAG = `precision highp float;
-            uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform float uAber; uniform mat3 uRot;
-            uniform sampler2D uWord; uniform float uWordAmt;
-            uniform sampler2D uProj; uniform float uProjAmt; uniform float uScroll; uniform float uVideo;
-            #define PHI 1.61803398875
-            float smax(float a, float b, float k){ float h=clamp(0.5+0.5*(a-b)/k, 0., 1.); return mix(b,a,h)+k*h*(1.0-h); }
-            float sdIco(vec3 p){ p=abs(p); float k=0.055; // k = redondeo de aristas (normales suaves = sin punteo)
-              float d=dot(p,normalize(vec3(1.,1.,1.)));
-              d=smax(d,dot(p,normalize(vec3(0.,1.,PHI+1.))),k);
-              d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
-              d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
-              return d-1.0; }
-            vec3 nrm(vec3 p){ vec2 e=vec2(0.004,0.);
-              return normalize(vec3(sdIco(p+e.xyy)-sdIco(p-e.xyy),sdIco(p+e.yxy)-sdIco(p-e.yxy),sdIco(p+e.yyx)-sdIco(p-e.yyx))); }
-            vec3 env(vec3 d){ vec3 c=vec3(0.042,0.045,0.058); // base un poco más luminosa: vidrio, no roca
-              c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*(0.85+uAber*1.6);
-              c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*(0.85+uAber*1.6);
-              c+=vec3(0.9,0.95,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),24.0)*0.7;
-              // destellos ANCHOS (joya, sin puntear): luces suaves, no agudas
-              c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),34.0)*0.65;
-              c+=vec3(0.75,0.88,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.35,-0.5,0.8)))),22.0)*0.32;
-              return c; }
-            void main(){
-              vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
-              vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
-              float t=0.; float hit=-1.; float md=1e9;
-              for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdIco(q); md=min(md,d);
-                if(d<0.0008){hit=t;break;} t+=d*0.85; if(t>7.)break; }
-              if(hit<0.){
-                // borde nítido (anti-alias de la silueta) + halo/bloom suave alrededor de la gema
-                float e=smoothstep(0.014, 0.0, md);
-                float glow=smoothstep(0.17, 0.0, md);
-                if(e<=0.001 && glow<=0.001){ gl_FragColor=vec4(0.); return; }
-                vec3 hc=mix(vec3(0.13,0.85,1.0), vec3(1.0,0.22,0.35), step(0., uv.x));
-                vec3 outc=hc*e*0.55 + vec3(0.12,0.15,0.22)*glow*glow*0.55;
-                float outa=max(e*0.6, glow*glow*0.32);
-                gl_FragColor=vec4(outc, outa); return;
-              }
-              vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
-              float ci=clamp(dot(-rd,nw),0.,1.);
-              float fres=0.04+0.96*pow(1.0-ci,4.0);
-              float iorG=1.47; float disp=0.05+uAber*0.07;
-              vec3 col;
-              vec3 rin=refract(rd,nw,1.0/iorG);
-              if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
-              else{
-                vec3 rinObj=uRot*rin; float ti=0.02;
-                for(int i=0;i<${INSTEPS};i++){ float d=sdIco(po+rinObj*ti); if(d>0.)break; ti+=max(0.01,-d)*0.9; if(ti>6.)break; }
-                vec3 pe=po+rinObj*ti; vec3 neW=(-nrm(pe))*uRot;
-                vec3 oR=refract(rin,neW,iorG+disp); vec3 oG=refract(rin,neW,iorG); vec3 oB=refract(rin,neW,iorG-disp);
-                if(length(oR)<0.5)oR=reflect(rin,neW); if(length(oG)<0.5)oG=reflect(rin,neW); if(length(oB)<0.5)oB=reflect(rin,neW);
-                col=vec3(env(oR).r,env(oG).g,env(oB).b);
-              }
-              vec3 rfl=env(reflect(rd,nw)); col=mix(col,rfl,fres*0.7);
-              float rim=pow(1.0-ci,2.2);
-              vec3 rimC=mix(vec3(0.13,0.85,1.0), vec3(1.0,0.22,0.35), smoothstep(-0.28, 0.28, nw.x));
-              col+=rim*(0.42+uAber*1.2)*rimC;
-              // "blopa" suspendido DENTRO del vidrio, refractado + con dispersión cromática (la firma)
-              if(uWordAmt>0.001){
-                vec2 wuv=uv*vec2(1.0,2.7)+rin.xy*0.05+vec2(0.5,0.5);
-                float so=0.005+uAber*0.012; // split por canal (crece con la velocidad, como la aberración)
-                float wr=texture2D(uWord, wuv+vec2(so,0.0)).r;
-                float wg=texture2D(uWord, wuv).r;
-                float wb=texture2D(uWord, wuv-vec2(so,0.0)).r;
-                col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
-              }
-              // VITRINA: el proyecto refractado DENTRO de la gema — TOUR en video o paneo de capturas
-              if(uProjAmt>0.001){
-                vec2 puv;
-                if(uVideo>0.5){
-                  puv=vec2(uv.x*0.62+0.5, uv.y*1.05+0.5)+rin.xy*0.05;   // video: llena la gema
-                } else {
-                  float win=0.34; float top=uScroll*(1.0-win);          // capturas: ventana que panea
-                  puv=vec2(uv.x*0.6+0.5, top+(uv.y*0.9+0.5)*win)+rin.xy*0.05;
-                }
-                vec3 pc=texture2D(uProj, clamp(puv,0.0,1.0)).rgb;
-                col=mix(col, pc*1.08+col*0.16, uProjAmt*0.9);
-              }
-              float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.0);
-              gl_FragColor=vec4(col,al);
-            }`;
-          const compile = (type: number, src: string) => {
-            const s = gl.createShader(type)!; gl.shaderSource(s, src); gl.compileShader(s);
-            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn('shard shader', gl.getShaderInfoLog(s)); return null; }
-            return s;
-          };
-          const vs = compile(gl.VERTEX_SHADER, VERT), fs = compile(gl.FRAGMENT_SHADER, FRAG);
-          if (!vs || !fs) { fallback2D(); }
-          else {
-            const prog = gl.createProgram()!; gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
-            gl.useProgram(prog);
-            const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
-            const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-            const uRes = gl.getUniformLocation(prog, 'uRes'), uCenter = gl.getUniformLocation(prog, 'uCenter'),
-              uScale = gl.getUniformLocation(prog, 'uScale'), uAber = gl.getUniformLocation(prog, 'uAber'), uRot = gl.getUniformLocation(prog, 'uRot'),
-              uWord = gl.getUniformLocation(prog, 'uWord'), uWordAmt = gl.getUniformLocation(prog, 'uWordAmt'),
-              uProj = gl.getUniformLocation(prog, 'uProj'), uProjAmt = gl.getUniformLocation(prog, 'uProjAmt'),
-              uScroll = gl.getUniformLocation(prog, 'uScroll'), uVideo = gl.getUniformLocation(prog, 'uVideo');
-            gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
-            // ── "blopa" como textura, para renderizarlo DENTRO del vidrio ──
-            const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.uniform1i(uWord, 0);
-            let wordReady = false, wordAmt = 0, wordTarget = 0;
-            const drawWord = () => {
-              const c = document.createElement('canvas'); c.width = 1024; c.height = 384;
-              const x = c.getContext('2d')!; x.clearRect(0, 0, 1024, 384);
-              x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-              x.font = '600 280px "Clash Display", sans-serif';
-              (x as any).letterSpacing = '20px'; // más tracking = más editorial/elegante
-              x.fillText('blopa', 512, 200);
-              gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
-              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-              wordReady = true;
-              if (!reduceMotion) body.classList.add('gl-word'); // oculta el wordmark DOM; en reduced-motion queda el DOM
-            };
-            if ((document as any).fonts && (document as any).fonts.load) (document as any).fonts.load('600 300px "Clash Display"').then(drawWord).catch(drawWord);
-            else drawWord();
-            // ── VITRINA: textura del proyecto enfocado, para refractarlo DENTRO de la gema (unidad 1) ──
-            const projTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([12, 12, 16, 255]));
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.uniform1i(uProj, 1);
-            let projAmt = 0, projTarget = 0, projPhase = 0, curKey = '', videoMode = 0, constructMode = 0;
-            // proyectos ONLINE con TOUR en video; los EN CONSTRUCCIÓN muestran un estado propio en la gema
-            const TOUR = new Set(['valecasenave', 'indoyoga', 'beokey', 'basslayer', 'pulz']);
-            const CONSTRUCTION = new Set(['lucid', 'fini']);
-            const vid = document.createElement('video'); vid.muted = true; vid.loop = true; (vid as any).playsInline = true; vid.crossOrigin = 'anonymous'; vid.preload = 'auto';
-            vid.style.cssText = 'position:fixed;left:-8px;top:-8px;width:2px;height:2px;opacity:0;pointer-events:none;z-index:-99'; document.body.appendChild(vid);
-            // dibuja una imagen "cover" (recorta para llenar el slot sin deformar)
-            const drawCover = (x: CanvasRenderingContext2D, im: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) => {
-              const ir = im.width / im.height, sr = dw / dh; let sw, sh, sx, sy;
-              if (ir > sr) { sh = im.height; sw = sh * sr; sx = (im.width - sw) / 2; sy = 0; }
-              else { sw = im.width; sh = sw / sr; sx = 0; sy = (im.height - sh) / 2; }
-              x.drawImage(im, sx, sy, sw, sh, dx, dy, dw, dh);
-            };
-            // compone las 3 tomas apiladas en un composite alto y lo sube como textura
-            const loadProj = (shots: string[]) => {
-              const key = shots.join('|');
-              const imgs = shots.map((s) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.src = s; return im; });
-              Promise.all(imgs.map((im) => (im.decode ? im.decode().catch(() => {}) : new Promise((r) => { im.onload = r; im.onerror = r; })))).then(() => {
-                if (curKey !== key) return;
-                const CW = 1024, slotH = Math.round(CW * 0.62);
-                const c = document.createElement('canvas'); c.width = CW; c.height = slotH * imgs.length;
-                const x = c.getContext('2d')!;
-                imgs.forEach((im, i) => { if (im.width) drawCover(x, im, 0, i * slotH, CW, slotH); });
-                gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
-                gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-                projTarget = 1;
-              });
-            };
-            // textura "EN CONSTRUCCIÓN" (nombre del proyecto + subtítulo) para los WIP
-            const buildConstructTex = (name: string) => {
-              const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const x = c.getContext('2d')!;
-              x.clearRect(0, 0, 1024, 512); x.textAlign = 'center'; x.textBaseline = 'middle';
-              x.fillStyle = '#eceef2'; x.font = '600 150px "Clash Display", sans-serif'; x.fillText(name, 512, 210);
-              x.fillStyle = 'rgba(236,238,242,0.62)'; x.font = '500 40px ui-monospace, Menlo, monospace'; (x as any).letterSpacing = '14px';
-              x.fillText('EN CONSTRUCCIÓN', 512, 322);
-              gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex);
-              gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
-              projTarget = 1;
-            };
-            setGemProject = (slug, shots, name) => {
-              if (slug && TOUR.has(slug)) { // TOUR en video (proyecto online)
-                videoMode = 1; constructMode = 0; curKey = 'vid:' + slug;
-                if (!vid.src || !vid.src.endsWith('/' + slug + '.mp4')) { vid.src = '/img/tours/' + slug + '.mp4'; }
-                vid.play().catch(() => {}); projTarget = 1;
-              } else if (slug && CONSTRUCTION.has(slug)) { // en construcción
-                videoMode = 0; constructMode = 1; if (curKey !== 'wip:' + slug) { curKey = 'wip:' + slug; buildConstructTex(name || slug); } else projTarget = 1;
-              } else if (shots && shots.length) { // panorama de capturas (fallback)
-                videoMode = 0; constructMode = 0; const key = shots.join('|'); if (key !== curKey) { curKey = key; loadProj(shots); } else projTarget = 1;
-              } else { projTarget = 0; vid.pause(); }
-            };
-            let W = 0, H = 0;
-            // supersampling: renderizamos a más resolución y el navegador baja la escala → anti-alias real de las aristas
-            const SS = coarse ? 1 : 1.5;
-            const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS); shard.style.width = W + 'px'; shard.style.height = H + 'px'; gl.viewport(0, 0, shard.width, shard.height); };
-            resize(); addEventListener('resize', resize);
-            let a = 0, rmx = 0, rmy = 0, prmx = 0, prmy = 0, cx = 0, cy = 0.03, sc = 1.95, aber = 0;
-            const render = () => {
-              rmx += (smx - rmx) * 0.05; rmy += (smy - rmy) * 0.05;
-              const inProj = body.classList.contains('in-projects');
-              // spread mayor = cristal (y "blopa" adentro) más chicos; en mobile (vertical) se achican más
-              const mob = W < H;
-              const fit = mob ? 0.52 + 0.75 * (H / W) : 1;
-              // en mobile la gema va CENTRADA y arriba (la lista queda abajo); en desktop, al costado derecho
-              const tcx = inProj ? (mob ? 0.0 : 0.32) : 0.0;
-              const tcy = inProj ? (mob ? 0.26 : 0.0) : 0.02;
-              const tsc = (inProj ? 2.15 : 1.95) * fit;
-              cx += (tcx - cx) * 0.055; cy += (tcy - cy) * 0.055; sc += (tsc - sc) * 0.055;
-              const vel = Math.hypot(rmx - prmx, rmy - prmy); prmx = rmx; prmy = rmy;
-              aber += (Math.min(1, vel * 110) - aber) * 0.08;
-              wordTarget = (wordReady && !inProj) ? 1 : 0; wordAmt += (wordTarget - wordAmt) * 0.07;
-              projAmt += (projTarget - projAmt) * 0.09; projPhase += 0.006; // scroll del proyecto (ping-pong)
-              if (videoMode && vid.readyState >= 2) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, projTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vid); } // sube el frame del video
-              const ay = a + rmx * 0.9, ax = a * 0.42 + rmy * 0.8;
-              const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
-              // R = Rx(ax)*Ry(ay), en column-major para uniformMatrix3fv
-              const m = new Float32Array([
-                cyw, sxw * syw, -cxw * syw,
-                0, cxw, sxw,
-                syw, -sxw * cyw, cxw * cyw,
-              ]);
-              gl.uniform2f(uRes, shard.width, shard.height);
-              const pulse = inProj ? 1 : (1 + Math.sin(a * 2.2) * 0.02); // latido sutil: señala que el cristal es clickeable
-              const bob = inProj ? 0 : Math.sin(a * 1.1) * 0.014; // flote sutil en el landing
-              gl.uniform2f(uCenter, cx, cy + bob); gl.uniform1f(uScale, sc * pulse); gl.uniform1f(uAber, aber);
-              gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uProjAmt, projAmt);
-              gl.uniform1f(uScroll, 0.5 - 0.5 * Math.cos(projPhase)); gl.uniform1f(uVideo, (videoMode || constructMode) ? 1 : 0);
-              gl.uniformMatrix3fv(uRot, false, m);
-              gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
-            };
-            if (reduceMotion) { a = 0.7; render(); addEventListener('resize', render); }
-            else {
-              let rafId = 0, running = false;
-              const loop = () => { a += 0.0016; render(); rafId = requestAnimationFrame(loop); };
-              const start = () => { if (running) return; running = true; rafId = requestAnimationFrame(loop); };
-              const stop = () => { running = false; cancelAnimationFrame(rafId); };
-              pauseCrystal = stop; resumeCrystal = () => { if (!document.hidden) start(); };
-              document.addEventListener('visibilitychange', () => { document.hidden ? stop() : (body.classList.contains('in-case') ? null : start()); });
-              start();
-            }
-          }
-        }
+      // reloj vivo de Buenos Aires (top-right)
+      const clockEl = document.querySelector('[data-clock]');
+      if (clockEl) {
+        const tick = () => { clockEl.textContent = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()); };
+        tick(); setInterval(tick, 15000);
       }
 
-      // landing ↔ proyectos: el cristal es el hilo (se desliza del centro al costado)
-      requestAnimationFrame(() => body.classList.add('ready'));
-      const landingEl = document.querySelector('[data-enter]');
-      const homeLink = document.querySelector('[data-home]');
-      const goProjects = () => { enableTilt(); body.classList.add('in-projects'); };
-      landingEl?.addEventListener('click', goProjects);
-      landingEl?.addEventListener('keydown', (e) => {
-        if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') { e.preventDefault(); goProjects(); }
-      });
-      // entrar con scroll hacia abajo desde el landing
-      window.addEventListener('wheel', (e) => {
-        if (!body.classList.contains('in-projects') && e.deltaY > 6) goProjects();
-      }, { passive: true });
-      homeLink?.addEventListener('click', (e) => { e.preventDefault(); clearFocus(); body.classList.remove('in-projects'); });
+      // ── entrada / galería / case ──
+      let entered = false;
+      const enter = () => { if (entered) return; entered = true; body.classList.add('entered'); };
+      const enterEl = document.querySelector('[data-enter]');
+      enterEl.addEventListener('click', enter);
+      enterEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } });
+      addEventListener('wheel', (e) => { if (!entered && e.deltaY > 6) enter(); }, { passive: true });
 
-      // ── Case: página interna de cada proyecto ──
+      // case
       const caseEl = document.querySelector('[data-case]');
-      const casePanels = Array.from(document.querySelectorAll('[data-case-slug]')) as HTMLElement[];
-      const panelBySlug = (slug: string) => casePanels.find((p) => p.dataset.caseSlug === slug) || null;
-
-      function showCase(slug: string): boolean {
-        const panel = panelBySlug(slug);
-        if (!panel) return false;
-        casePanels.forEach((p) => { p.hidden = p !== panel; });
-        const acc = panel.style.getPropertyValue('--pacc').trim() || '#e9eaee';
-        body.style.setProperty('--acc', acc);
-        body.classList.add('in-projects');
-        // forzar reflow para que el barrido cromático + glitch se reproduzcan cada vez
-        body.classList.remove('in-case'); void caseEl?.getBoundingClientRect();
-        body.classList.add('in-case');
-        caseEl?.setAttribute('aria-hidden', 'false');
-        if (caseEl) caseEl.scrollTop = 0;
-        pauseCrystal(); // el case tapa el cristal: no gastamos rAF detrás del overlay
-        return true;
-      }
-      function hideCase() {
-        body.classList.remove('in-case');
-        caseEl?.setAttribute('aria-hidden', 'true');
-        resumeCrystal();
-      }
-      function openCase(slug: string) {
-        if (showCase(slug)) history.pushState({ case: slug }, '', '?p=' + slug);
-      }
-      function closeCase() {
-        hideCase();
-        history.pushState({}, '', location.pathname);
-      }
-
-      rows.forEach((row) => {
-        row.addEventListener('click', () => {
-          const slug = row.dataset.slug; if (!slug) return;
-          if (finePointer) { openCase(slug); }        // desktop: click abre el case (el hover ya mostró la vitrina)
-          else if (lastTap === slug) { openCase(slug); } // mobile: segundo toque abre
-          else { lastTap = slug; focusRow(row); }        // mobile: primer toque llena la gema (vitrina)
-        });
+      const catEl = caseEl.querySelector('[data-cat]'), nameEl = caseEl.querySelector('[data-name]'),
+        roleEl = caseEl.querySelector('[data-role]'), blurbEl = caseEl.querySelector('[data-blurb]'),
+        liveEl = caseEl.querySelector('[data-live]'), shotsEl = caseEl.querySelector('[data-shots]');
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      const openCase = (slug) => {
+        const p = projects.find((x) => x.slug === slug); if (!p) return;
+        catEl.textContent = p.category + ' · ' + yearOf(p.ended);
+        nameEl.textContent = p.name; roleEl.textContent = p.role; blurbEl.textContent = p.blurb;
+        if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; } else { liveEl.style.display = 'none'; }
+        shotsEl.innerHTML = ''; [1, 2, 3].forEach((n) => { const im = document.createElement('img'); im.src = '/img/src/' + slug + '-' + n + '.jpg'; im.alt = p.name + ' — ' + n; im.loading = 'lazy'; shotsEl.appendChild(im); });
+        body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false'); caseEl.scrollTop = 0;
+      };
+      const closeCase = () => { body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true'); };
+      // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
+      document.querySelectorAll('[data-row]').forEach((row) => {
+        row.addEventListener('click', () => openCase(row.dataset.slug));
       });
-      document.querySelector('[data-case-back]')?.addEventListener('click', () => closeCase());
-      addEventListener('keydown', (e) => {
-        if ((e as KeyboardEvent).key === 'Escape' && body.classList.contains('in-case')) closeCase();
-      });
-      addEventListener('popstate', (e) => {
-        const slug = (e as PopStateEvent).state && (e as PopStateEvent).state.case;
-        if (slug) showCase(slug); else hideCase();
-      });
+      document.querySelector('[data-back]').addEventListener('click', closeCase);
+      addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
 
-      // entrada directa por URL compartible (?p=slug) — abre el case y saltea el landing
-      const initSlug = new URLSearchParams(location.search).get('p');
-      if (initSlug && panelBySlug(initSlug)) {
-        showCase(initSlug);
-        history.replaceState({ case: initSlug }, '', '?p=' + initSlug);
+      // ── cristal (entrada): icosaedro de hielo con "blopa", idle + parallax; al entrar se achica arriba ──
+      const shard = document.querySelector('[data-shard]');
+      const gl = shard.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true, powerPreference: 'low-power' });
+      if (gl) {
+        const STEPS = coarse ? 60 : 92, INSTEPS = coarse ? 26 : 42;
+        const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+        const FRAG = `precision highp float;
+          uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
+          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime;
+          #define PHI 1.61803398875
+          float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
+          float sdIco(vec3 p){ p=abs(p); float k=0.085;
+            float d=dot(p,normalize(vec3(1.,1.,1.)));
+            d=smax(d,dot(p,normalize(vec3(0.,1.,PHI+1.))),k);
+            d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
+            d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
+            return d-1.0; }
+          float sdC(vec3 p){ return sdIco(p) - (0.008 + 0.008*sin(uTime*0.7)); }
+          vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
+            return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
+          vec3 env(vec3 d){
+            float ea=uTime*0.06; float ec=cos(ea), es=sin(ea); d.xz=mat2(ec,-es,es,ec)*d.xz;
+            vec3 c=vec3(0.040,0.043,0.055);
+            c+=vec3(0.70,0.84,0.98)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),7.0)*0.60;
+            c+=vec3(0.90,0.94,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),15.0)*0.52;
+            c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),22.0)*0.45;
+            c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*uAber*1.8;
+            c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*uAber*1.8;
+            return c; }
+          void main(){
+            vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
+            vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
+            float t=0.; float hit=-1.; float md=1e9;
+            for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
+              if(d<0.0008){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+            if(hit<0.){
+              float e=smoothstep(0.014,0.0,md); float glow=smoothstep(0.17,0.0,md);
+              if(e<=0.001&&glow<=0.001){ gl_FragColor=vec4(0.); return; }
+              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),step(0.,uv.x));
+              gl_FragColor=vec4(hc*e*0.5+vec3(0.12,0.16,0.24)*glow*glow*0.5, max(e*0.6,glow*glow*0.32)); return;
+            }
+            vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
+            float ci=clamp(dot(-rd,nw),0.,1.); float fres=0.04+0.96*pow(1.0-ci,4.0);
+            float iorG=1.47; float disp=0.03+uAber*0.11; vec3 col;
+            vec3 rin=refract(rd,nw,1.0/iorG);
+            if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
+            else{
+              vec3 rinObj=uRot*rin; float ti=0.02;
+              for(int i=0;i<${INSTEPS};i++){ float d=sdC(po+rinObj*ti); if(d>0.)break; ti+=max(0.01,-d)*0.9; if(ti>6.)break; }
+              vec3 pe=po+rinObj*ti; vec3 neW=(-nrm(pe))*uRot;
+              vec3 oR=refract(rin,neW,iorG+disp),oG=refract(rin,neW,iorG),oB=refract(rin,neW,iorG-disp);
+              if(length(oR)<0.5)oR=reflect(rin,neW); if(length(oG)<0.5)oG=reflect(rin,neW); if(length(oB)<0.5)oB=reflect(rin,neW);
+              col=vec3(env(oR).r,env(oG).g,env(oB).b);
+              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.5);
+            }
+            vec3 rfl=env(reflect(rd,nw)); col=mix(col,rfl,fres*0.7);
+            float rim=pow(1.0-ci,2.2);
+            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.28,0.28,nw.x));
+            col+=rim*(0.44+uAber*1.3)*rimC;
+            if(uWordAmt>0.001){
+              vec2 wuv=uv*vec2(1.0,2.7)+rin.xy*0.05+vec2(0.5,0.5);
+              float so=0.005+uAber*0.012;
+              float wr=texture2D(uWord,wuv+vec2(so,0.)).r, wg=texture2D(uWord,wuv).r, wb=texture2D(uWord,wuv-vec2(so,0.)).r;
+              col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
+            }
+            float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
+            gl_FragColor=vec4(col,al);
+          }`;
+        const cmp = (ty, s) => { const sh = gl.createShader(ty); gl.shaderSource(sh, s); gl.compileShader(sh);
+          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(sh)); return null; } return sh; };
+        const prog = gl.createProgram(); gl.attachShader(prog, cmp(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, cmp(gl.FRAGMENT_SHADER, FRAG));
+        gl.linkProgram(prog); gl.useProgram(prog);
+        const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+        const U = (n) => gl.getUniformLocation(prog, n);
+        const uRes = U('uRes'), uCenter = U('uCenter'), uScale = U('uScale'), uRot = U('uRot'), uAber = U('uAber'),
+          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime');
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
+        const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.uniform1i(uWord, 0);
+        let wordReady = false;
+        const drawWord = () => { const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
+          x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.font = '600 280px "Clash Display", sans-serif'; x.letterSpacing = '20px'; x.fillText('blopa', 512, 200);
+          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; };
+        if (document.fonts && document.fonts.load) document.fonts.load('600 300px "Clash Display"').then(drawWord).catch(drawWord); else drawWord();
+
+        const SS = coarse ? 1.3 : 1.8; let W = 0, H = 0;
+        const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS);
+          shard.style.width = W + 'px'; shard.style.height = H + 'px'; gl.viewport(0, 0, shard.width, shard.height); };
+        resize(); addEventListener('resize', resize);
+
+        let mtx = 0, mty = 0, pmx = 0, pmy = 0;
+        addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; });
+
+        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0;
+        const render = () => {
+          a += 0.0016;
+          ent += (((entered ? 1 : 0)) - ent) * 0.06;   // 0 landing → 1 índice
+          const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
+          // landing: grande y centrado; índice: la gema se corre a la derecha (nombres a la izquierda)
+          const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit;
+          sc += (scT - sc) * 0.06;
+          const cxT = entered ? (mob ? 0 : 0.30) : 0;      // desktop: gema a la derecha
+          cx += (cxT - cx) * 0.06;
+          const cyT = entered ? (mob ? 0.28 : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
+          cy += (cyT - cy) * 0.06;
+          const wt = (wordReady && !entered) ? 1 : 0; wordAmt += (wt - wordAmt) * 0.06;
+          pmx += (mtx - pmx) * 0.06; pmy += (mty - pmy) * 0.06;
+          const vel = Math.hypot(mtx - pmx, mty - pmy); aber += ((Math.min(1, vel * 30) * 0.5) - aber) * 0.1;
+          // idle: mecido desincronizado + mira al cursor (menos parallax cuando es motivo chico)
+          const pk = 1 - ent * 0.7;
+          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07) + pmx * 0.6 * pk;
+          const ax = (0.12 + Math.sin(a * 0.33) * 0.07) - pmy * 0.45 * pk;
+          const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
+          const m = new Float32Array([cyw, sxw * syw, -cxw * syw, 0, cxw, sxw, syw, -sxw * cyw, cxw * cyw]);
+          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx, cy); gl.uniform1f(uScale, sc);
+          gl.uniform1f(uAber, aber); gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uTime, performance.now() * 0.001);
+          gl.uniformMatrix3fv(uRot, false, m);
+          gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+        if (reduceMotion) { const d = () => render(); d(); addEventListener('resize', d); enterEl.addEventListener('click', () => { let n = 0; const l = () => { render(); if (n++ < 60) requestAnimationFrame(l); }; l(); }); }
+        else { const loop = () => { render(); requestAnimationFrame(loop); }; loop(); }
       }
     </script>
   </body>
