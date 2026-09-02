@@ -9,15 +9,22 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>blopa</title>
-    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <title>blopa — selector de tipografía</title>
+    <link rel="preload" href="/fonts/ClashDisplay-600.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-500.woff2') format('woff2'); font-weight:500; font-display:swap; }
+      @font-face { font-family:'Clash Display'; src:url('/fonts/ClashDisplay-600.woff2') format('woff2'); font-weight:600; font-display:swap; }
+      /* candidatas del selector */
       @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Space Mono'; src:url('/fonts/space-mono-latin-700-normal.woff2') format('woff2'); font-weight:700; font-display:swap; }
+      @font-face { font-family:'Zilla Slab'; src:url('/fonts/zilla-slab-latin-600-normal.woff2') format('woff2'); font-weight:600; font-display:swap; }
+      @font-face { font-family:'Chakra Petch'; src:url('/fonts/chakra-petch-latin-600-normal.woff2') format('woff2'); font-weight:600; font-display:swap; }
+      @font-face { font-family:'Darker Grotesque'; src:url('/fonts/darker-grotesque-latin-700-normal.woff2') format('woff2'); font-weight:700; font-display:swap; }
+      @font-face { font-family:'Anton'; src:url('/fonts/anton-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
       :root{ --bg:#0b0b0e; --ink:#f2f3f5; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
         --aqua:#24e2e8; --red:#ff3a54;
-        --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --display:'Clash Display',Georgia,serif; --body:'Satoshi',-apple-system,sans-serif;
         --mono:ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
       *{box-sizing:border-box;margin:0}
       body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow-x:hidden;
@@ -52,8 +59,8 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         display:flex;align-items:baseline;gap:1rem;padding:.55rem 0;position:relative;
         transition:padding .35s var(--ease)}
       .prow:hover{padding-left:1rem}
-      .prow__name{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,5.4vw,4.4rem);
-        letter-spacing:.01em;line-height:1.0;color:var(--soft);transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+      .prow__name{font-family:var(--display);font-weight:var(--dw,600);font-size:var(--dps,clamp(1.9rem,3.8vw,3.1rem));
+        letter-spacing:-.03em;line-height:1.02;color:var(--soft);transition:color .35s var(--ease),text-shadow .35s var(--ease)}
       .prow:hover .prow__name{color:var(--ink);text-shadow:-1.4px 0 var(--red),1.4px 0 var(--aqua)}
       .prow__arrow{opacity:0;color:var(--c);transform:translateX(-6px);
         transition:opacity .3s var(--ease),transform .3s var(--ease)}
@@ -61,6 +68,16 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       @media(max-width:860px){
         .index{max-width:none;padding-top:clamp(4rem,9vh,7rem);justify-content:flex-end;padding-bottom:clamp(3rem,10vh,6rem)}
       }
+
+      /* selector de tipografía en vivo (herramienta de comparación) */
+      .fontpick{position:fixed;left:50%;top:2.4rem;transform:translateX(-50%);z-index:30;display:flex;gap:.3rem;flex-wrap:wrap;
+        justify-content:center;max-width:92vw;background:rgba(12,12,16,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+        border:1px solid var(--hair);border-radius:999px;padding:.35rem}
+      .fontpick button{appearance:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+        white-space:nowrap;color:var(--soft);background:transparent;border:0;border-radius:999px;padding:.4rem .7rem;transition:color .2s,background .2s}
+      .fontpick button:hover{color:var(--ink)}
+      .fontpick button.on{color:#06131a;background:var(--aqua)}
+      @media(max-width:860px){ .fontpick{top:auto;bottom:.6rem;font-size:.55rem} }
 
       /* case (reusa el patrón editorial) */
       .case{position:fixed;inset:0;z-index:6;background:#0b0b08;overflow-y:auto;opacity:0;visibility:hidden;pointer-events:none;
@@ -77,7 +94,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       .case__head{position:sticky;top:6rem}
       @media(max-width:860px){.case__head{position:static}}
       .case__eye{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
-      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,8vw,6rem);line-height:.92;
+      .case__title{font-family:var(--display);font-weight:var(--dw,600);font-size:var(--dcs,clamp(2.4rem,6vw,4.5rem));line-height:.95;
         letter-spacing:-.03em;margin:.5rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
       .case__role{margin-top:.6rem;color:#c9cbd2;font-size:.9rem}
       .case__blurb{margin-top:1rem;color:var(--soft);line-height:1.55;max-width:34ch}
@@ -99,6 +116,16 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
     <div class="top">
       <span class="top__mark">blopa</span>
       <span>Buenos Aires · <time data-clock>—</time></span>
+    </div>
+
+    <div class="fontpick" data-fontpick>
+      <button type="button" data-f="clash" class="on">Clash</button>
+      <button type="button" data-f="d1">Bebas</button>
+      <button type="button" data-f="d2">Space Mono</button>
+      <button type="button" data-f="d3">Zilla</button>
+      <button type="button" data-f="d4">Chakra</button>
+      <button type="button" data-f="d5">Darker</button>
+      <button type="button" data-f="d6">Anton</button>
     </div>
     <div class="hint" data-hint>entrá <span>→</span></div>
 
@@ -254,12 +281,36 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.uniform1i(uWord, 0);
         let wordReady = false;
+        let wmW = 600, wmFam = 'Clash Display', wmFB = 'sans-serif', wmLs = 20, wmSize = 260;
         const drawWord = () => { const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
           x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-          x.font = '400 300px "Bebas Neue", sans-serif'; x.letterSpacing = '8px'; x.fillText('blopa', 512, 200);
+          x.font = wmW + ' ' + wmSize + 'px "' + wmFam + '", ' + wmFB; x.letterSpacing = wmLs + 'px'; x.fillText('blopa', 512, 200);
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; };
-        if (document.fonts && document.fonts.load) document.fonts.load('400 300px "Bebas Neue"').then(drawWord).catch(drawWord); else drawWord();
+        const loadAndDraw = () => { if (document.fonts && document.fonts.load) document.fonts.load(wmW + ' 300px "' + wmFam + '"').then(drawWord).catch(drawWord); else drawWord(); };
+        loadAndDraw();
+        // ── selector de tipografía en vivo (cambia nombres + wordmark sin recargar) ──
+        const FONTS = {
+          clash: { stack:"'Clash Display',Georgia,serif",        w:600, fam:'Clash Display',    fb:'sans-serif', ls:20, prow:'clamp(1.9rem,3.8vw,3.1rem)', casesz:'clamp(2.4rem,6vw,4.5rem)' },
+          d1:    { stack:"'Bebas Neue',sans-serif",              w:400, fam:'Bebas Neue',       fb:'sans-serif', ls:4,  prow:'clamp(2.6rem,5.4vw,4.4rem)', casesz:'clamp(3.2rem,8vw,6rem)' },
+          d2:    { stack:"'Space Mono',ui-monospace,monospace",  w:700, fam:'Space Mono',       fb:'monospace',  ls:2,  prow:'clamp(1.5rem,3.0vw,2.5rem)', casesz:'clamp(1.9rem,4.4vw,3.4rem)' },
+          d3:    { stack:"'Zilla Slab',Georgia,serif",           w:600, fam:'Zilla Slab',       fb:'serif',      ls:6,  prow:'clamp(2.0rem,4.1vw,3.4rem)', casesz:'clamp(2.6rem,6.4vw,4.9rem)' },
+          d4:    { stack:"'Chakra Petch',sans-serif",            w:600, fam:'Chakra Petch',     fb:'sans-serif', ls:2,  prow:'clamp(1.8rem,3.6vw,3.0rem)', casesz:'clamp(2.3rem,5.6vw,4.3rem)' },
+          d5:    { stack:"'Darker Grotesque',sans-serif",        w:700, fam:'Darker Grotesque', fb:'sans-serif', ls:2,  prow:'clamp(2.6rem,5.4vw,4.4rem)', casesz:'clamp(3.2rem,7.8vw,5.8rem)' },
+          d6:    { stack:"'Anton',sans-serif",                   w:400, fam:'Anton',            fb:'sans-serif', ls:2,  prow:'clamp(2.3rem,4.8vw,3.9rem)', casesz:'clamp(2.9rem,7vw,5.3rem)' },
+        };
+        const rootEl = document.documentElement;
+        const pickBtns = Array.from(document.querySelectorAll('[data-fontpick] button'));
+        const pickFont = (id) => { const f = FONTS[id]; if (!f) return;
+          rootEl.style.setProperty('--display', f.stack);
+          rootEl.style.setProperty('--dw', f.w);
+          rootEl.style.setProperty('--dps', f.prow);
+          rootEl.style.setProperty('--dcs', f.casesz);
+          wmW = f.w; wmFam = f.fam; wmFB = f.fb; wmLs = f.ls;
+          loadAndDraw();
+          pickBtns.forEach((b) => b.classList.toggle('on', b.dataset.f === id));
+        };
+        pickBtns.forEach((b) => b.addEventListener('click', () => pickFont(b.dataset.f)));
 
         const SS = coarse ? 1.3 : 1.8; let W = 0, H = 0;
         const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS);
