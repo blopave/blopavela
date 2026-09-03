@@ -10,6 +10,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>blopa — selector de tipografía</title>
+    <meta name="robots" content="noindex" />
     <link rel="preload" href="/fonts/ClashDisplay-600.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
@@ -265,7 +266,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             gl_FragColor=vec4(col,al);
           }`;
         const cmp = (ty, s) => { const sh = gl.createShader(ty); gl.shaderSource(sh, s); gl.compileShader(sh);
-          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(sh)); return null; } return sh; };
+          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(sh)); return null; } return sh; };
         const prog = gl.createProgram(); gl.attachShader(prog, cmp(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, cmp(gl.FRAGMENT_SHADER, FRAG));
         gl.linkProgram(prog); gl.useProgram(prog);
         const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);

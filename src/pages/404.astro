@@ -1,0 +1,36 @@
+---
+// 404 — misma firma visual que el home, sin WebGL: liviana y directa
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>blopa — 404</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --soft:#7b7d86; --aqua:#24e2e8; --red:#ff3a54;
+        --mono:ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); }
+      *{box-sizing:border-box;margin:0}
+      body{background:var(--bg);color:var(--ink);min-height:100svh;display:grid;place-items:center;
+        font-family:var(--mono);-webkit-font-smoothing:antialiased}
+      main{text-align:center}
+      h1{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:clamp(6rem,22vw,14rem);line-height:1;
+        text-shadow:-3px 0 var(--red),3px 0 var(--aqua)}
+      p{margin-top:.5rem;color:var(--soft);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase}
+      a{display:inline-block;margin-top:2rem;color:var(--ink);text-decoration:none;font-size:.7rem;
+        letter-spacing:.14em;text-transform:uppercase;border:1px solid rgba(242,243,245,.26);border-radius:999px;
+        padding:.7rem 1.2rem;transition:border-color .3s var(--ease)}
+      a:hover{border-color:var(--aqua)}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>404</h1>
+      <p>Acá no hay nada</p>
+      <a href="/">Volver al inicio</a>
+    </main>
+  </body>
+</html>

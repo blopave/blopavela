@@ -2,7 +2,6 @@
 // HOME — la gema es la ENTRADA; al hacer click se corre y aparecen los proyectos
 // (nombres a la izquierda, gema ambiente a la derecha). Click en un nombre abre el case.
 import { projects } from '../data/projects';
-const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 ---
 <!doctype html>
 <html lang="es">
@@ -10,6 +9,13 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>blopa</title>
+    <meta name="description" content="blopa — creative developer. Portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta property="og:title" content="blopa" />
+    <meta property="og:description" content="Creative developer — portfolio de Pablo Vela." />
+    <meta property="og:image" content="/img/og.jpg" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
@@ -93,9 +99,6 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       .case__eye{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
       .case__title{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,5.5vw,4.6rem);line-height:.9;
         letter-spacing:.01em;margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
-      .case__role{margin-top:.7rem;color:#c9cbd2;font-size:.9rem}
-      /* stack técnico: rótulo + chips mono */
-      .case__blurb{margin-top:1.1rem;color:var(--soft);line-height:1.55;max-width:36ch}
       .case__approach{margin-top:1rem;color:#c9cbd2;line-height:1.5;font-size:.92rem;max-width:38ch}
       .kase__slabel{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
         margin:1.6rem 0 .6rem;display:flex;align-items:center;gap:.7rem}
@@ -126,13 +129,12 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         .kase{place-items:start center}
         .kase__board{grid-template-columns:1fr;gap:1.5rem}
         .kase__collage{order:-1;width:min(86vw,24rem)}
-        .case__blurb{max-width:none}
       }
 
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
   </head>
-  <body class="pre">
+  <body>
     <canvas class="shard" data-shard aria-hidden="true"></canvas>
     <div class="enter" data-enter role="button" tabindex="0" aria-label="Entrar"></div>
 
@@ -177,10 +179,10 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const coarse = matchMedia('(pointer: coarse)').matches;
       const DPR = Math.min(coarse ? 1.4 : 2, window.devicePixelRatio || 1);
-      requestAnimationFrame(() => body.classList.remove('pre'));
 
       // ── entrada / galería / case ──
       let entered = false;
+      let bootT0 = performance.now();   // carga: la gema se ARMA (el quiebre del case, invertido)
       const enter = () => { if (entered) return; entered = true; body.classList.add('entered'); };
       const enterEl = document.querySelector('[data-enter]');
       enterEl.addEventListener('click', enter);
@@ -241,21 +243,22 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       document.querySelector('[data-back]').addEventListener('click', closeCase);
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
       // home: vuelve a la entrada (cierra el case y rearma la gema)
-      const goHome = () => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true'); };
+      const goHome = () => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
+        bootT0 = performance.now(); };   // volver al home rearma la gema (mismo idioma que la carga)
       document.querySelector('[data-home]').addEventListener('click', goHome);
 
       // ── cristal (entrada): icosaedro de hielo con "blopa", idle + parallax; al entrar se achica arriba ──
       const shard = document.querySelector('[data-shard]');
       const gl = shard.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true, powerPreference: 'low-power' });
       if (gl) {
-        const STEPS = coarse ? 60 : 92, INSTEPS = coarse ? 26 : 42;
+        const STEPS = coarse ? 72 : 110, INSTEPS = coarse ? 26 : 42;
         const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
         const FRAG = `precision highp float;
           uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
           uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
           #define PHI 1.61803398875
           float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
-          float sdIco(vec3 p){ p=abs(p); float k=0.085;
+          float sdIco(vec3 p){ p=abs(p); float k=0.072;
             float d=dot(p,normalize(vec3(1.,1.,1.)));
             d=smax(d,dot(p,normalize(vec3(0.,1.,PHI+1.))),k);
             d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
@@ -267,31 +270,39 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             d += uBreak*(0.30*fracture(p) + 0.15*fracture(p*2.3)); return d; }
           vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
             return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
+          // normal "gruesa": donde diverge de la fina hay una arista → línea de facetado
+          vec3 nrmC(vec3 p){ vec2 e=vec2(0.05,0.);
+            return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
           vec3 env(vec3 d){
             float ea=uTime*0.06; float ec=cos(ea), es=sin(ea); d.xz=mat2(ec,-es,es,ec)*d.xz;
             vec3 c=vec3(0.040,0.043,0.055);
+            c+=mix(vec3(0.020,0.024,0.036),vec3(0.125,0.15,0.20),clamp(d.y*0.6+0.5,0.,1.));
             c+=vec3(0.70,0.84,0.98)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),7.0)*0.60;
             c+=vec3(0.90,0.94,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),15.0)*0.52;
             c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),22.0)*0.45;
             c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*uAber*1.8;
             c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*uAber*1.8;
             return c; }
-          void main(){
-            vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
+          vec4 shade(vec2 frag, out float ef){ ef=0.;
+            vec2 uv=(frag-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
             vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
             float t=0.; float hit=-1.; float md=1e9;
             for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
-              if(d<0.0008){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+              if(d<0.0008+0.0007*t){hit=t;break;} t+=d*0.8; if(t>7.)break; }
             float bf=(1.0-smoothstep(0.35,0.9,uBreak));   // se apaga al romperse (sin fantasma)
             if(hit<0.){
-              float e=smoothstep(0.014,0.0,md); float glow=smoothstep(0.17,0.0,md);
-              if(e<=0.001&&glow<=0.001){ gl_FragColor=vec4(0.); return; }
-              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),step(0.,uv.x));
-              gl_FragColor=vec4((hc*e*0.5+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.6,glow*glow*0.32)*bf); return;
+              ef=step(md,0.02);
+              float e=smoothstep(0.012,0.0,md); float glow=smoothstep(0.20,0.0,md);
+              if(e<=0.001&&glow<=0.001){ return vec4(0.); }
+              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.08,0.08,uv.x));
+              return vec4((hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.8,glow*glow*0.32)*bf);
             }
+            /* refina el impacto: estabiliza la normal en rayos rasantes (sin esto el borde "puntea") */
+            for(int i=0;i<3;i++){ hit+=sdC(uRot*(ro+rd*hit))*0.8; }
             vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
             float ci=clamp(dot(-rd,nw),0.,1.); float fres=0.04+0.96*pow(1.0-ci,4.0);
-            float iorG=1.47; float disp=0.03+uAber*0.11; vec3 col;
+            ef=1.0-smoothstep(0.10,0.17,ci);   // sólo el rasante extremo (la silueta misma)
+            float iorG=1.47; float disp=0.045+uAber*0.11; vec3 col;
             vec3 rin=refract(rd,nw,1.0/iorG);
             if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
             else{
@@ -301,12 +312,21 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               vec3 oR=refract(rin,neW,iorG+disp),oG=refract(rin,neW,iorG),oB=refract(rin,neW,iorG-disp);
               if(length(oR)<0.5)oR=reflect(rin,neW); if(length(oG)<0.5)oG=reflect(rin,neW); if(length(oB)<0.5)oB=reflect(rin,neW);
               col=vec3(env(oR).r,env(oG).g,env(oB).b);
-              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.5);
+              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.32)*1.15;
             }
             vec3 rfl=env(reflect(rd,nw)); col=mix(col,rfl,fres*0.7);
-            float rim=pow(1.0-ci,2.2);
-            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.28,0.28,nw.x));
-            col+=rim*(0.44+uAber*1.3)*rimC;
+            /* curvatura (fina vs gruesa): alta en vértices y uniones de aristas */
+            float dnn=1.0-dot(n,nrmC(po));
+            /* rim en dos capas: halo suave + línea tensa; atenuado en vértices para que
+               las uniones se fundan en vez de "pinchar" con un punto caliente */
+            float rim=pow(1.0-ci,2.6), rimT=pow(1.0-ci,4.0);
+            float vsoft=1.0-0.55*smoothstep(0.10,0.55,dnn);
+            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x));
+            col+=(rim*0.34+rimT*0.92)*(1.0+uAber*2.6)*rimC*vsoft;
+            /* glint de aristas: línea fina de luz donde se quiebran las facetas
+               (apagado en la silueta, donde la normal gruesa es inestable y puntea) */
+            float eg=smoothstep(0.06,0.5,dnn)*smoothstep(0.0,0.25,ci);
+            col+=eg*(0.33+uAber*0.7)*mix(rimC,vec3(0.9,0.95,1.0),0.6);
             if(uWordAmt>0.001){
               vec2 wuv=uv*vec2(1.0,2.7)+rin.xy*0.05+vec2(0.5,0.5);
               float so=0.005+uAber*0.012;
@@ -315,10 +335,24 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             }
             float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
             al*=bf;   // al romperse, la gema se apaga (mismo ritmo que el borde)
-            gl_FragColor=vec4(col,al);
+            return vec4(col,al);
+          }
+          void main(){
+            /* AA adaptativo: sólo en la silueta (rasante o casi-impacto) se promedian
+               5 muestras subpixel en grid rotado — elimina el punteado del borde */
+            float ef; vec4 c=shade(gl_FragCoord.xy,ef);
+            if(ef>0.35){
+              vec3 acc=c.rgb*c.a; float aa=c.a; float e2; vec4 s;
+              s=shade(gl_FragCoord.xy+vec2(0.45,0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.15,0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(0.15,-0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.45,-0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              c=vec4(acc/max(aa,1e-4),aa*0.2);
+            }
+            gl_FragColor=c;
           }`;
         const cmp = (ty, s) => { const sh = gl.createShader(ty); gl.shaderSource(sh, s); gl.compileShader(sh);
-          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(sh)); return null; } return sh; };
+          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(sh)); return null; } return sh; };
         const prog = gl.createProgram(); gl.attachShader(prog, cmp(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, cmp(gl.FRAGMENT_SHADER, FRAG));
         gl.linkProgram(prog); gl.useProgram(prog);
         const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -341,7 +375,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; };
         if (document.fonts && document.fonts.load) document.fonts.load('400 300px "Bebas Neue"').then(drawWord).catch(drawWord); else drawWord();
 
-        const SS = coarse ? 1.3 : 1.8; let W = 0, H = 0;
+        const SS = coarse ? 1.2 : 1.5; let W = 0, H = 0;   // el AA de silueta permite bajar el supersampling global
         const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS);
           shard.style.width = W + 'px'; shard.style.height = H + 'px'; gl.viewport(0, 0, shard.width, shard.height); };
         resize(); addEventListener('resize', resize);
@@ -349,10 +383,22 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         let mtx = 0, mty = 0, pmx = 0, pmy = 0;
         addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; });
 
-        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = 0;
-        const render = () => {
-          a += 0.0016;
-          ent += (((entered ? 1 : 0)) - ent) * 0.06;   // 0 landing → 1 índice
+        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = reduceMotion ? 0 : 0.85, last = 0, scInit = false;
+        // rotación completa (yaw+pitch+roll), transpuesta para llevar el rayo a espacio objeto
+        const rotM = (ax, ay, az) => {
+          const cX = Math.cos(ax), sX = Math.sin(ax), cY = Math.cos(ay), sY = Math.sin(ay), cZ = Math.cos(az), sZ = Math.sin(az);
+          const rxy = [[cY, 0, sY], [sX * sY, cX, -sX * cY], [-cX * sY, sX, cX * cY]];
+          const rz = [[cZ, -sZ, 0], [sZ, cZ, 0], [0, 0, 1]];
+          const m = [];
+          for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let s = 0; for (let k = 0; k < 3; k++) s += rz[r][k] * rxy[k][c]; m[r * 3 + c] = s; }
+          return new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+        };
+        const render = (now) => {
+          now = now || performance.now();
+          const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
+          const lp = (r) => 1 - Math.exp(-r * dt);   // easing independiente del framerate
+          a += 0.096 * dt;
+          ent += (((entered ? 1 : 0)) - ent) * lp(3.7);   // 0 landing → 1 índice
           // quiebre: 0 = gema entera · 1 = rota (case abierto). burst = violencia a mitad de transición
           // línea de tiempo del quiebre: fractura (gema visible) → HOLD → se apaga + collage
           const es = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
@@ -361,37 +407,50 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             if (ts < 0.4) brkT = es(ts / 0.4) * 0.5;                    // 1) se fractura, gema aún visible
             else if (ts < 0.85) brkT = 0.5;                             // 2) HOLD: gema rota a la vista
             else brkT = 0.5 + 0.5 * es(Math.min(1, (ts - 0.85) / 0.5)); // 3) se apaga (collage emerge)
+          } else if (!reduceMotion) {
+            // carga / vuelta al home: quiebre invertido — de rota (0.85) a entera, rápido al
+            // principio y asentando al final (el burst cromático del medio sale gratis)
+            const cs = (now - bootT0) / 1000;
+            if (cs < 1.15) { const x = cs / 1.15; brkT = 0.85 * Math.pow(1 - x, 3); }
           }
-          brk += (brkT - brk) * (inCase ? 0.4 : 0.12);
+          brk += (brkT - brk) * lp(inCase ? 30 : 7.5);
           const burst = brk * (1 - brk) * 4.0;
+          // nacimiento: la gema se origina en el centro y crece hacia afuera mientras se arma
+          // (uScale es inverso: más grande = gema más chica en pantalla)
+          let birth = 1;
+          if (!inCase && !reduceMotion) { const cs = (now - bootT0) / 1000;
+            if (cs < 1.15) { const g = 1 - Math.pow(1 - cs / 1.15, 3); birth = 1 / (0.06 + 0.94 * g); } }
           const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
           // landing: grande y centrado; índice: la gema se corre a la derecha (nombres a la izquierda)
           const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit * (1 + brk * 0.75);
-          sc += (scT - sc) * 0.06;
+          if (!scInit) { sc = scT; scInit = true; }   // sin zoom-lerp inicial: el nacimiento manda
+          sc += (scT - sc) * lp(3.7);
           const cxT = entered ? (mob ? 0 : 0.30) : 0;      // desktop: gema a la derecha
-          cx += (cxT - cx) * 0.06;
+          cx += (cxT - cx) * lp(3.7);
           const cyT = entered ? (mob ? 0.28 : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
-          cy += (cyT - cy) * 0.06;
-          const wt = (wordReady && !entered) ? 1 : 0; wordAmt += (wt - wordAmt) * 0.06;
-          pmx += (mtx - pmx) * 0.06; pmy += (mty - pmy) * 0.06;
-          const vel = Math.hypot(mtx - pmx, mty - pmy); aber += ((Math.min(1, vel * 30) * 0.5) - aber) * 0.1;
+          cy += (cyT - cy) * lp(3.7);
+          const wt = (wordReady && !entered && brk < 0.08) ? 1 : 0; wordAmt += (wt - wordAmt) * lp(3.7);   // el BLOPA revela después de que la gema cierra
+          pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
+          const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
+          aber += ((Math.min(1, vel * 30) * 0.5) - aber) * lp(6.3);
           aber = Math.max(aber, burst * 1.4);   // estallido cromático al romperse
           // idle: mecido desincronizado + mira al cursor (menos parallax cuando es motivo chico)
           const pk = 1 - ent * 0.7;
           // rotación orgánica: varias frecuencias desincronizadas (no mecánico) + parallax
           const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07 + Math.sin(a * 0.12 + 1.3) * 0.055) + pmx * 0.6 * pk;
           const ax = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk;
-          const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
-          const m = new Float32Array([cyw, sxw * syw, -cxw * syw, 0, cxw, sxw, syw, -sxw * cyw, cxw * cyw]);
+          const az = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;   // roll sutil: tumble orgánico
+          const m = rotM(ax, ay, az);
           const fx = Math.sin(a * 0.6) * 0.004, fy = Math.sin(a * 0.42 + 0.8) * 0.006;   // flotación suave
-          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx + fx, cy + fy); gl.uniform1f(uScale, sc);
+          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx + fx, cy + fy); gl.uniform1f(uScale, sc * birth);
           gl.uniform1f(uAber, aber); gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uTime, performance.now() * 0.001);
           gl.uniform1f(uBreak, brk);
           gl.uniformMatrix3fv(uRot, false, m);
-          gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          if (brk < 0.93) gl.drawArrays(gl.TRIANGLES, 0, 3);   // gema rota y apagada (case abierto): no raymarchear de fondo
         };
         if (reduceMotion) { const d = () => render(); d(); addEventListener('resize', d); enterEl.addEventListener('click', () => { let n = 0; const l = () => { render(); if (n++ < 60) requestAnimationFrame(l); }; l(); }); }
-        else { const loop = () => { render(); requestAnimationFrame(loop); }; loop(); }
+        else { const loop = (t) => { render(t); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
       }
     </script>
   </body>
