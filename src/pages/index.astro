@@ -31,8 +31,13 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
       body.entered .nav{opacity:1;pointer-events:auto;transition-delay:.3s}
       .nav__home{appearance:none;background:none;border:0;font:inherit;letter-spacing:.16em;text-transform:uppercase;
-        color:var(--soft);cursor:pointer;transition:color .25s var(--ease)}
+        color:var(--soft);cursor:pointer;transition:color .25s var(--ease);
+        text-shadow:-.7px 0 rgba(255,58,84,.5),.7px 0 rgba(36,226,232,.5)}   /* colores de la gema a través del mark */
       .nav__home:hover{color:var(--ink)}
+      .nav__contact{text-transform:none;letter-spacing:.02em;color:var(--soft);white-space:nowrap;transition:color .25s var(--ease)}
+      .nav__contact span{color:var(--dim)}
+      .nav__contact:hover{color:var(--ink)} .nav__contact:hover span{color:var(--soft)}
+      @media(max-width:640px){ .nav__contact span{display:none} }
 
       /* landing: sólo el disparador; la gema es todo */
       .enter{position:fixed;inset:0;z-index:4;cursor:pointer}
@@ -48,12 +53,16 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       body.entered .index{opacity:1;pointer-events:auto;transition-delay:.3s}
       body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
       .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;
-        display:flex;align-items:baseline;gap:1rem;padding:.55rem 0;position:relative;
+        display:flex;align-items:baseline;gap:1rem;padding:.55rem 0;position:relative;isolation:isolate;
         transition:padding .35s var(--ease)}
       .prow:hover{padding-left:1rem}
+      /* mismo efecto que el "blopa" del cristal: aberración cromática (desfase cyan/rojo) */
       .prow__name{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,5.4vw,4.4rem);
-        letter-spacing:.01em;line-height:1.0;color:var(--soft);transition:color .35s var(--ease),text-shadow .35s var(--ease)}
-      .prow:hover .prow__name{color:var(--ink);text-shadow:-1.4px 0 var(--red),1.4px 0 var(--aqua)}
+        letter-spacing:.01em;line-height:1.0;color:var(--soft);
+        text-shadow:-1px 0 rgba(255,58,84,.45),1px 0 rgba(36,226,232,.45);
+        transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+      .prow:hover .prow__name{color:var(--ink);
+        text-shadow:-2px 0 var(--red),2px 0 var(--aqua)}
       .prow__arrow{opacity:0;color:var(--c);transform:translateX(-6px);
         transition:opacity .3s var(--ease),transform .3s var(--ease)}
       .prow:hover .prow__arrow{opacity:1;transform:translateX(0)}
@@ -61,32 +70,64 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         .index{max-width:none;padding-top:clamp(4rem,9vh,7rem);justify-content:flex-end;padding-bottom:clamp(3rem,10vh,6rem)}
       }
 
-      /* case (reusa el patrón editorial) */
-      .case{position:fixed;inset:0;z-index:6;background:#0b0b08;overflow-y:auto;opacity:0;visibility:hidden;pointer-events:none;
-        transition:opacity .5s var(--ease),visibility .5s var(--ease)}
-      body.in-case .case{opacity:1;visibility:visible;pointer-events:auto}
-      .case__bar{position:sticky;top:0;display:flex;justify-content:space-between;padding:var(--gut);
-        font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
-        background:linear-gradient(#0b0b08 60%,transparent)}
-      .case__bar button{appearance:none;background:none;border:0;font:inherit;color:var(--soft);cursor:pointer;letter-spacing:.14em}
-      .case__bar button:hover{color:var(--ink)}
-      .case__panel{max-width:84rem;margin:0 auto;padding:clamp(1rem,4vh,3rem) var(--gut) 6rem;
-        display:grid;grid-template-columns:minmax(0,26rem) 1fr;gap:clamp(2rem,5vw,5rem);align-items:start}
-      @media(max-width:860px){.case__panel{grid-template-columns:1fr}}
-      .case__head{position:sticky;top:6rem}
-      @media(max-width:860px){.case__head{position:static}}
-      .case__eye{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
-      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,8vw,6rem);line-height:.92;
-        letter-spacing:-.03em;margin:.5rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
-      .case__role{margin-top:.6rem;color:#c9cbd2;font-size:.9rem}
-      .case__blurb{margin-top:1rem;color:var(--soft);line-height:1.55;max-width:34ch}
-      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.4rem;font-family:var(--mono);font-size:.72rem;
+      /* case como UNA composición: info + stack + collage, centrado, tras el estallido */
+      .kase{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:clamp(4rem,10vh,7rem) var(--gut) clamp(3.5rem,9vh,6rem);
+        opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease)}
+      body.in-case .kase{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.82s}
+      body.in-case .index{opacity:0;pointer-events:none}   /* al abrir, los nombres se van */
+
+      .kase__board{width:min(95vw,84rem);display:grid;grid-template-columns:minmax(0,20rem) 1fr;
+        gap:clamp(1.5rem,3vw,3.5rem);align-items:center}
+
+      /* en el case ocultamos la nav; el volver a proyectos es el control principal */
+      body.in-case .nav{opacity:0;pointer-events:none;transition-delay:0s}
+      .kase__back{position:fixed;left:var(--gut);top:var(--gut);z-index:9;appearance:none;cursor:pointer;
+        display:inline-flex;align-items:center;gap:.55rem;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
+        border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+        font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
+        transition:color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
+      .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
+      .kase__back:hover{color:var(--ink);border-color:var(--soft);background:rgba(20,20,26,.7)}
+
+      .kase__info{min-width:0}
+      .case__eye{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
+      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,5.5vw,4.6rem);line-height:.9;
+        letter-spacing:.01em;margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
+      .case__role{margin-top:.7rem;color:#c9cbd2;font-size:.9rem}
+      /* stack técnico: rótulo + chips mono */
+      .case__blurb{margin-top:1.1rem;color:var(--soft);line-height:1.55;max-width:36ch}
+      .case__approach{margin-top:1rem;color:#c9cbd2;line-height:1.5;font-size:.92rem;max-width:38ch}
+      .kase__slabel{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+        margin:1.6rem 0 .6rem;display:flex;align-items:center;gap:.7rem}
+      .kase__slabel::after{content:"";flex:1;height:1px;background:var(--hair)}
+      .kase__stack{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;margin:0;padding:0}
+      :global(.kase__stack li){font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:#c9cbd2;
+        border:1px solid var(--hair);border-radius:6px;padding:.42rem .7rem;white-space:nowrap;
+        background:rgba(255,255,255,.02);transition:border-color .25s var(--ease),color .25s var(--ease)}
+      :global(.kase__stack li:hover){border-color:var(--soft);color:var(--ink)}
+      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.5rem;font-family:var(--mono);font-size:.7rem;
         letter-spacing:.14em;text-transform:uppercase;color:var(--ink);border:1px solid rgba(242,243,245,.26);border-radius:999px;
         padding:.7rem 1.2rem;transition:border-color .3s var(--ease)}
       .case__live span{color:var(--aqua)} .case__live:hover{border-color:var(--aqua)}
-      .case__shots{display:flex;flex-direction:column;gap:clamp(1rem,2.5vh,2rem)}
-      .case__shots img{width:100%;height:auto;border:1px solid rgba(242,243,245,.1);border-radius:4px;display:block;
-        box-shadow:0 30px 80px rgba(0,0,0,.5)}
+
+      /* collage grande: 3 capturas con profundidad real (translateZ) + parallax */
+      .kase__collage{position:relative;width:min(100%,56rem);aspect-ratio:16/11;justify-self:center;perspective:1700px}
+      .kase__stage{position:absolute;inset:0;transform-style:preserve-3d;
+        transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .2s ease-out;will-change:transform}
+      /* paneles dinámicos (N): posición/transform inline desde JS. Estilos :global porque se crean por JS */
+      :global(.kase__pane){position:absolute;width:46%;aspect-ratio:16/10;overflow:hidden;border-radius:7px;border:1px solid var(--hair);
+        background:#0a0a0c;box-shadow:0 40px 90px rgba(0,0,0,.6);opacity:0;
+        transition:transform .85s var(--ease),opacity .55s var(--ease);will-change:transform,opacity}
+      :global(.kase__pane.show){opacity:1}
+      :global(.kase__pane::after){content:"";position:absolute;inset:0;pointer-events:none;border-radius:7px;
+        box-shadow:inset 1.6px 0 0 rgba(255,58,84,.45),inset -1.6px 0 0 rgba(36,226,232,.45)}
+      :global(.kase__pane img){width:100%;height:100%;object-fit:cover;display:block}
+      @media(max-width:860px){
+        .kase{place-items:start center}
+        .kase__board{grid-template-columns:1fr;gap:1.5rem}
+        .kase__collage{order:-1;width:min(86vw,24rem)}
+        .case__blurb{max-width:none}
+      }
 
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
@@ -97,7 +138,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
 
     <nav class="nav" aria-label="Navegación">
       <button type="button" class="nav__home" data-home>blopa</button>
-      <span>Buenos Aires</span>
+      <a class="nav__contact" href="mailto:blopave@pm.me">Pablo Vela <span aria-hidden="true">· blopave@pm.me ↗</span></a>
     </nav>
 
     <section class="index" data-index>
@@ -109,18 +150,26 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       ))}
     </section>
 
-    <section class="case" data-case aria-hidden="true">
-      <div class="case__bar"><button type="button" data-back>← galería</button><span>blopa</span></div>
-      <div class="case__panel">
-        <div class="case__head">
+    <section class="kase" data-case aria-hidden="true">
+      <div class="kase__board">
+        <div class="kase__info">
           <p class="case__eye" data-cat></p>
           <h2 class="case__title" data-name></h2>
-          <p class="case__role" data-role></p>
-          <p class="case__blurb" data-blurb></p>
+          <p class="case__approach" data-approach></p>
+          <p class="kase__slabel">Servicios</p>
+          <ul class="kase__stack" data-services></ul>
+          <p class="kase__slabel">Stack</p>
+          <ul class="kase__stack" data-stack></ul>
           <a class="case__live" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="case__shots" data-shots></div>
+        <div class="kase__collage" data-collage>
+          <div class="kase__stage" data-stage></div>
+        </div>
       </div>
+      <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Proyectos
+      </button>
     </section>
 
     <script define:vars={{ projects }}>
@@ -137,31 +186,63 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       enterEl.addEventListener('click', enter);
       enterEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } });
       addEventListener('wheel', (e) => { if (!entered && e.deltaY > 6) enter(); }, { passive: true });
-      // home: vuelve a la entrada (y cierra el case si estaba abierto)
-      const goHome = () => { body.classList.remove('in-case'); body.classList.remove('entered'); entered = false; };
-      document.querySelector('[data-home]').addEventListener('click', goHome);
 
-      // case
+      // case en el mismo lugar: la gema se rompe → ficha (izq) + collage (der)
+      let inCase = false, caseT0 = 0;
       const caseEl = document.querySelector('[data-case]');
       const catEl = caseEl.querySelector('[data-cat]'), nameEl = caseEl.querySelector('[data-name]'),
-        roleEl = caseEl.querySelector('[data-role]'), blurbEl = caseEl.querySelector('[data-blurb]'),
-        liveEl = caseEl.querySelector('[data-live]'), shotsEl = caseEl.querySelector('[data-shots]');
+        approachEl = caseEl.querySelector('[data-approach]'), servicesEl = caseEl.querySelector('[data-services]'),
+        liveEl = caseEl.querySelector('[data-live]'), stageEl = caseEl.querySelector('[data-stage]'),
+        stackEl = caseEl.querySelector('[data-stack]');
+      // arreglo liderado por la 1ª captura: hero grande al frente, el resto se abre hacia atrás
+      const fanLayout = (n) => Array.from({ length: n }, (_, i) => {
+        const t = n > 1 ? i / (n - 1) : 0;          // 0 = hero, 1 = la más atrás
+        return { l: 56 - t * 32, top: 60 - t * 34, rot: (i % 2 ? 1 : -1) * (2 + (i % 3) * 1.3),
+          z: -i * 62, s: 1.02 - i * 0.06, zi: n - i };
+      });
       const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
       const openCase = (slug) => {
         const p = projects.find((x) => x.slug === slug); if (!p) return;
         catEl.textContent = p.category + ' · ' + yearOf(p.ended);
-        nameEl.textContent = p.name; roleEl.textContent = p.role; blurbEl.textContent = p.blurb;
+        nameEl.textContent = p.name; approachEl.textContent = p.approach || '';
+        servicesEl.innerHTML = (p.services || []).map((s) => '<li>' + s + '</li>').join('');
+        stackEl.innerHTML = (p.stack || []).map((s) => '<li>' + s + '</li>').join('');
         if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; } else { liveEl.style.display = 'none'; }
-        shotsEl.innerHTML = ''; [1, 2, 3].forEach((n) => { const im = document.createElement('img'); im.src = '/img/src/' + slug + '-' + n + '.jpg'; im.alt = p.name + ' — ' + n; im.loading = 'lazy'; shotsEl.appendChild(im); });
-        body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false'); caseEl.scrollTop = 0;
+        // collage dinámico: un panel por captura (p.shots), en cascada con profundidad
+        const shots = p.shots || []; const lay = fanLayout(shots.length);
+        stageEl.innerHTML = '';
+        shots.forEach((url, i) => {
+          const pane = document.createElement('div'); pane.className = 'kase__pane';
+          const c = lay[i]; pane.style.left = c.l + '%'; pane.style.top = c.top + '%'; pane.style.zIndex = String(c.zi);
+          pane.dataset.tf = 'translate(-50%,-50%) translateZ(' + c.z.toFixed(0) + 'px) rotate(' + c.rot.toFixed(1) + 'deg) scale(' + c.s.toFixed(2) + ')';
+          pane.style.transform = 'translate(-50%,-50%) scale(.4)';   // colapsado (emerge del centro)
+          const im = document.createElement('img'); im.src = url; im.alt = p.name + ' — ' + (i + 1); im.loading = 'lazy';
+          pane.appendChild(im); stageEl.appendChild(pane);
+        });
+        // emerger escalonado (después del hold del estallido)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          stageEl.querySelectorAll('.kase__pane').forEach((pane, i) => {
+            pane.style.transitionDelay = (0.92 + i * 0.09).toFixed(2) + 's';
+            pane.style.transform = pane.dataset.tf; pane.classList.add('show');
+          });
+        }));
+        caseT0 = performance.now(); inCase = true; body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false');
       };
-      const closeCase = () => { body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true'); };
+      const closeCase = () => { inCase = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true'); };
+      // parallax del collage: inclina el stage; con la profundidad (translateZ) los paneles se separan en 3D
+      addEventListener('pointermove', (e) => { if (!inCase) return;
+        const rx = (0.5 - e.clientY / innerHeight) * 15, ry = (e.clientX / innerWidth - 0.5) * 22;
+        stageEl.style.setProperty('--rx', rx.toFixed(2) + 'deg'); stageEl.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+      });
       // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
       document.querySelectorAll('[data-row]').forEach((row) => {
         row.addEventListener('click', () => openCase(row.dataset.slug));
       });
       document.querySelector('[data-back]').addEventListener('click', closeCase);
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
+      // home: vuelve a la entrada (cierra el case y rearma la gema)
+      const goHome = () => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true'); };
+      document.querySelector('[data-home]').addEventListener('click', goHome);
 
       // ── cristal (entrada): icosaedro de hielo con "blopa", idle + parallax; al entrar se achica arriba ──
       const shard = document.querySelector('[data-shard]');
@@ -171,7 +252,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
         const FRAG = `precision highp float;
           uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
-          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime;
+          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
           #define PHI 1.61803398875
           float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
           float sdIco(vec3 p){ p=abs(p); float k=0.085;
@@ -180,7 +261,10 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
             d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
             return d-1.0; }
-          float sdC(vec3 p){ return sdIco(p) - (0.008 + 0.008*sin(uTime*0.7)); }
+          // fractura: al romperse, la superficie se agrieta con celdas de alta frecuencia que laten
+          float fracture(vec3 p){ return sin(9.0*p.x+uTime*5.0)*sin(9.0*p.y-uTime*3.0)*sin(9.0*p.z+uTime*2.0); }
+          float sdC(vec3 p){ float d=sdIco(p) - (0.008 + 0.008*sin(uTime*0.7));
+            d += uBreak*(0.30*fracture(p) + 0.15*fracture(p*2.3)); return d; }
           vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
             return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
           vec3 env(vec3 d){
@@ -198,11 +282,12 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
             float t=0.; float hit=-1.; float md=1e9;
             for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
               if(d<0.0008){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+            float bf=(1.0-smoothstep(0.35,0.9,uBreak));   // se apaga al romperse (sin fantasma)
             if(hit<0.){
               float e=smoothstep(0.014,0.0,md); float glow=smoothstep(0.17,0.0,md);
               if(e<=0.001&&glow<=0.001){ gl_FragColor=vec4(0.); return; }
               vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),step(0.,uv.x));
-              gl_FragColor=vec4(hc*e*0.5+vec3(0.12,0.16,0.24)*glow*glow*0.5, max(e*0.6,glow*glow*0.32)); return;
+              gl_FragColor=vec4((hc*e*0.5+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.6,glow*glow*0.32)*bf); return;
             }
             vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
             float ci=clamp(dot(-rd,nw),0.,1.); float fres=0.04+0.96*pow(1.0-ci,4.0);
@@ -229,6 +314,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
             }
             float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
+            al*=bf;   // al romperse, la gema se apaga (mismo ritmo que el borde)
             gl_FragColor=vec4(col,al);
           }`;
         const cmp = (ty, s) => { const sh = gl.createShader(ty); gl.shaderSource(sh, s); gl.compileShader(sh);
@@ -240,7 +326,7 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
         const U = (n) => gl.getUniformLocation(prog, n);
         const uRes = U('uRes'), uCenter = U('uCenter'), uScale = U('uScale'), uRot = U('uRot'), uAber = U('uAber'),
-          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime');
+          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime'), uBreak = U('uBreak');
         gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
         const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
@@ -263,13 +349,24 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         let mtx = 0, mty = 0, pmx = 0, pmy = 0;
         addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; });
 
-        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0;
+        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = 0;
         const render = () => {
           a += 0.0016;
           ent += (((entered ? 1 : 0)) - ent) * 0.06;   // 0 landing → 1 índice
+          // quiebre: 0 = gema entera · 1 = rota (case abierto). burst = violencia a mitad de transición
+          // línea de tiempo del quiebre: fractura (gema visible) → HOLD → se apaga + collage
+          const es = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+          let brkT = 0;
+          if (inCase) { const ts = (performance.now() - caseT0) / 1000;
+            if (ts < 0.4) brkT = es(ts / 0.4) * 0.5;                    // 1) se fractura, gema aún visible
+            else if (ts < 0.85) brkT = 0.5;                             // 2) HOLD: gema rota a la vista
+            else brkT = 0.5 + 0.5 * es(Math.min(1, (ts - 0.85) / 0.5)); // 3) se apaga (collage emerge)
+          }
+          brk += (brkT - brk) * (inCase ? 0.4 : 0.12);
+          const burst = brk * (1 - brk) * 4.0;
           const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
           // landing: grande y centrado; índice: la gema se corre a la derecha (nombres a la izquierda)
-          const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit;
+          const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit * (1 + brk * 0.75);
           sc += (scT - sc) * 0.06;
           const cxT = entered ? (mob ? 0 : 0.30) : 0;      // desktop: gema a la derecha
           cx += (cxT - cx) * 0.06;
@@ -278,14 +375,18 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
           const wt = (wordReady && !entered) ? 1 : 0; wordAmt += (wt - wordAmt) * 0.06;
           pmx += (mtx - pmx) * 0.06; pmy += (mty - pmy) * 0.06;
           const vel = Math.hypot(mtx - pmx, mty - pmy); aber += ((Math.min(1, vel * 30) * 0.5) - aber) * 0.1;
+          aber = Math.max(aber, burst * 1.4);   // estallido cromático al romperse
           // idle: mecido desincronizado + mira al cursor (menos parallax cuando es motivo chico)
           const pk = 1 - ent * 0.7;
-          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07) + pmx * 0.6 * pk;
-          const ax = (0.12 + Math.sin(a * 0.33) * 0.07) - pmy * 0.45 * pk;
+          // rotación orgánica: varias frecuencias desincronizadas (no mecánico) + parallax
+          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07 + Math.sin(a * 0.12 + 1.3) * 0.055) + pmx * 0.6 * pk;
+          const ax = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk;
           const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
           const m = new Float32Array([cyw, sxw * syw, -cxw * syw, 0, cxw, sxw, syw, -sxw * cyw, cxw * cyw]);
-          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx, cy); gl.uniform1f(uScale, sc);
+          const fx = Math.sin(a * 0.6) * 0.004, fy = Math.sin(a * 0.42 + 0.8) * 0.006;   // flotación suave
+          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx + fx, cy + fy); gl.uniform1f(uScale, sc);
           gl.uniform1f(uAber, aber); gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uTime, performance.now() * 0.001);
+          gl.uniform1f(uBreak, brk);
           gl.uniformMatrix3fv(uRot, false, m);
           gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
         };
