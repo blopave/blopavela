@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /ver
 Disallow: /tipos
+
+Sitemap: https://www.blopavela.com/sitemap.xml
