@@ -46,9 +46,10 @@ import { projects } from '../data/projects';
         text-shadow:-.7px 0 rgba(255,58,84,.5),.7px 0 rgba(36,226,232,.5)}   /* colores de la gema a través del mark */
       .nav__home:hover{color:var(--ink)}
       .nav__contact{text-transform:none;letter-spacing:.02em;color:var(--soft);white-space:nowrap;transition:color .25s var(--ease)}
-      .nav__contact span{color:var(--dim)}
-      .nav__contact:hover{color:var(--ink)} .nav__contact:hover span{color:var(--soft)}
-      @media(max-width:640px){ .nav__contact span{display:none} }
+      .nav__mail{color:var(--dim)}
+      .nav__contact:hover{color:var(--ink)} .nav__contact:hover .nav__mail{color:var(--soft)}
+      /* mobile: se oculta el nombre y queda el MAIL visible (contacto accionable, sin adivinar) */
+      @media(max-width:640px){ .nav__who{display:none} .nav__mail{color:var(--soft)} }
 
       /* landing: sólo el disparador; la gema es todo */
       .enter{position:fixed;inset:0;z-index:4;cursor:pointer}
@@ -172,7 +173,7 @@ import { projects } from '../data/projects';
 
     <nav class="nav" aria-label="Navegación">
       <button type="button" class="nav__home" data-home>blopa</button>
-      <a class="nav__contact" href="mailto:blopave@pm.me">Pablo Vela <span aria-hidden="true">· blopave@pm.me ↗</span></a>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela<span class="nav__sep" aria-hidden="true"> · </span></span><span class="nav__mail">blopave@pm.me ↗</span></a>
     </nav>
     <section class="index" data-index>
       {projects.map((p) => (
