@@ -8,7 +8,8 @@ import { projects } from '../data/projects';
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>blopa</title>
+    <title>blopa — laboratorio de efectos</title>
+    <meta name="robots" content="noindex" />
     <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
     <meta property="og:title" content="blopa" />
     <meta property="og:description" content="Portfolio de Pablo Vela — sitios con firma visual propia. Buenos Aires." />
@@ -163,12 +164,45 @@ import { projects } from '../data/projects';
         .kase__collage{order:-1;width:min(86vw,24rem)}
       }
 
+      /* ── LABORATORIO: panel de efectos (solo /lab) ── */
+      .fxbar{position:fixed;left:50%;top:1.6rem;transform:translateX(-50%);z-index:40;display:flex;gap:.3rem;flex-wrap:wrap;
+        justify-content:center;align-items:center;max-width:94vw;background:rgba(12,12,16,.72);backdrop-filter:blur(10px);
+        -webkit-backdrop-filter:blur(10px);border:1px solid var(--hair);border-radius:999px;padding:.35rem}
+      .fxbar__lbl{font-family:var(--mono);font-size:.55rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+        padding:0 .5rem 0 .7rem;white-space:nowrap}
+      .fxbar button{appearance:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+        white-space:nowrap;color:var(--soft);background:transparent;border:1px solid transparent;border-radius:999px;padding:.4rem .7rem;
+        transition:color .2s,background .2s,border-color .2s}
+      .fxbar button:hover{color:var(--ink)}
+      .fxbar button.on{color:#06131a;background:var(--aqua);border-color:var(--aqua)}
+      .fxbar__sep{width:1px;height:1.1rem;background:var(--hair);margin:0 .15rem}
+      .fxbar a{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);padding:.4rem .6rem}
+      .fxbar a:hover{color:var(--ink)}
+      @media(max-width:860px){ .fxbar{top:auto;bottom:.6rem;font-size:.55rem} .fxbar__lbl{display:none} }
+
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
   </head>
   <body>
     <canvas class="shard" data-shard aria-hidden="true"></canvas>
     <div class="enter" data-enter role="button" tabindex="0" aria-label="Entrar"></div>
+
+    <!-- LABORATORIO: interruptores de efectos (combinables en vivo) -->
+    <div class="fxbar" data-fxbar>
+      <span class="fxbar__lbl">Efectos</span>
+      <button type="button" data-fx="nombre">Nombre</button>
+      <button type="button" data-fx="cabeceo" class="on">Cabeceo</button>
+      <button type="button" data-fx="ventana" class="on">Ventana</button>
+      <button type="button" data-fx="caracter">Carácter</button>
+      <button type="button" data-fx="tension">Tensión</button>
+      <span class="fxbar__sep"></span>
+      <span class="fxbar__lbl">Ventana</span>
+      <button type="button" data-vmode="fija">Fija</button>
+      <button type="button" data-vmode="scroll" class="on">Scroll</button>
+      <button type="button" data-vmode="flash">Flash</button>
+      <span class="fxbar__sep"></span>
+      <a href="/">← home</a>
+    </div>
 
     <nav class="nav" aria-label="Navegación">
       <button type="button" class="nav__home" data-home>blopa</button>
@@ -258,9 +292,8 @@ import { projects } from '../data/projects';
         ((p && p.shots) || []).forEach((u) => { const im = new Image(); im.src = u; }); };
       // la gema dialoga con el índice: el hover tiñe su rim con el accent del proyecto (lo lee el render)
       const gemTint = { r: 1, g: 1, b: 1, amt: 0 };
-      // interacción pre-click gema↔proyecto (definida en /lab): cabeceo + ventana(scroll) + carácter.
-      // la tensión queda apagada: la fractura es exclusiva del click (no adelantar el estallido).
-      const FX = { nombre: false, cabeceo: true, ventana: true, caracter: true, tension: false, vmode: 'scroll' };
+      // ── LABORATORIO: efectos combinables (los lee el render) ──
+      const FX = { nombre: false, cabeceo: true, ventana: true, caracter: false, tension: false, vmode: 'scroll' };
       let hoverProj = null;    // proyecto señalado (o null)
       let hoverT0 = 0;         // cuándo empezó el hover (para la tensión que carga con el tiempo)
       // carácter (B): cómo se MUEVE la gema según el proyecto — no lo que muestra
@@ -389,6 +422,15 @@ import { projects } from '../data/projects';
         bootT0 = performance.now();   // volver al home rearma la gema (mismo idioma que la carga)
         if (push) pushHash(''); };
       document.querySelector('[data-home]').addEventListener('click', () => goHome());
+
+      // ── LABORATORIO: panel de efectos (toggle en vivo) ──
+      document.querySelectorAll('[data-fxbar] button[data-fx]').forEach((b) => {
+        b.addEventListener('click', () => { const k = b.dataset.fx; FX[k] = !FX[k]; b.classList.toggle('on', FX[k]); });
+      });
+      // modo de la ventana (radio: Fija / Scroll / Flash)
+      const vmodeBtns = document.querySelectorAll('[data-fxbar] button[data-vmode]');
+      vmodeBtns.forEach((b) => b.addEventListener('click', () => { FX.vmode = b.dataset.vmode;
+        vmodeBtns.forEach((x) => x.classList.toggle('on', x.dataset.vmode === FX.vmode)); }));
 
       // back/forward del navegador navegan los estados; la carga con hash entra directo
       addEventListener('popstate', () => {
