@@ -37,7 +37,10 @@ import { projects } from '../data/projects';
       .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:baseline;
         padding:var(--gut);font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);
         opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
-      body.entered .nav{opacity:1;pointer-events:auto;transition-delay:.3s}
+      /* la BARRA nunca captura clicks (taparía botones que queden bajo su franja de padding,
+         como el "‹ Proyectos" en desktop); sólo sus hijos son interactivos */
+      body.entered .nav{opacity:1;transition-delay:.3s}
+      body.entered .nav .nav__home,body.entered .nav .nav__contact{pointer-events:auto}
       .nav__home{appearance:none;background:none;border:0;font:inherit;letter-spacing:.16em;text-transform:uppercase;
         color:var(--soft);cursor:pointer;transition:color .25s var(--ease);
         text-shadow:-.7px 0 rgba(255,58,84,.5),.7px 0 rgba(36,226,232,.5)}   /* colores de la gema a través del mark */
@@ -149,8 +152,9 @@ import { projects } from '../data/projects';
 
       /* collage grande: 3 capturas con profundidad real (translateZ) + parallax */
       .kase__collage{position:relative;width:min(100%,56rem);aspect-ratio:16/11;justify-self:center;perspective:1700px}
+      /* el tilt se anima por lerp en el rAF (misma física que el WebGL), no por transition */
       .kase__stage{position:absolute;inset:0;transform-style:preserve-3d;
-        transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .2s ease-out;will-change:transform}
+        transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
       /* paneles dinámicos (N): posición/transform inline desde JS. Estilos :global porque se crean por JS */
       :global(.kase__pane){position:absolute;width:46%;aspect-ratio:16/10;overflow:hidden;border-radius:7px;border:1px solid var(--hair);
         background:#0a0a0c;box-shadow:0 40px 90px rgba(0,0,0,.6);opacity:0;
@@ -158,7 +162,15 @@ import { projects } from '../data/projects';
       :global(.kase__pane.show){opacity:1}
       :global(.kase__pane::after){content:"";position:absolute;inset:0;pointer-events:none;border-radius:7px;
         box-shadow:inset 1.6px 0 0 rgba(255,58,84,.45),inset -1.6px 0 0 rgba(36,226,232,.45)}
-      :global(.kase__pane img){width:100%;height:100%;object-fit:cover;display:block}
+      /* mientras la captura llega: shimmer con la firma cromática (el estallido nunca revela vacío) */
+      :global(.kase__pane::before){content:"";position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(100deg,transparent 32%,rgba(36,226,232,.09) 46%,rgba(255,58,84,.09) 54%,transparent 68%);
+        background-size:220% 100%;animation:shimmer 1.1s linear infinite;transition:opacity .45s var(--ease)}
+      :global(.kase__pane.loaded::before){opacity:0}
+      @keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+      :global(.kase__pane img){width:100%;height:100%;object-fit:cover;display:block;opacity:0;
+        transition:opacity .5s var(--ease)}
+      :global(.kase__pane img.ready){opacity:1}
       @media(max-width:860px){
         .kase{place-items:start center}
         .kase__board{grid-template-columns:1fr;gap:1.5rem}
@@ -234,10 +246,14 @@ import { projects } from '../data/projects';
 
       let entered = false;
       let bootT0 = performance.now();   // carga: la gema se ARMA (el quiebre del case, invertido)
-      // la URL refleja el estado (#proyectos / #slug) para que back/forward y los deep-links funcionen
+      // la URL refleja el estado (#proyectos / #slug) para que back/forward y los deep-links funcionen.
+      // Embebido (p.ej. en /ver, donde dos copias comparten el historial de la ventana) se usa
+      // replaceState: la URL del marco se mantiene sin apilar entradas cruzadas entre iframes.
+      const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
       const pushHash = (h) => { const target = h ? '#' + h : '';
         if (location.hash === target) return;
-        history.pushState(null, '', location.pathname + target); };
+        const url = location.pathname + target;
+        if (FRAMED) history.replaceState(null, '', url); else history.pushState(null, '', url); };
       const enter = (push = true) => { if (entered) return; entered = true; body.classList.add('entered');
         if (push) pushHash('proyectos'); };
       const enterEl = document.querySelector('[data-enter]');
@@ -246,13 +262,23 @@ import { projects } from '../data/projects';
       addEventListener('wheel', (e) => { if (!entered && e.deltaY > 6) enter(); }, { passive: true });
 
       // case en el mismo lugar: la gema se rompe → ficha (izq) + collage (der)
-      let inCase = false, caseT0 = 0;
+      let inCase = false, caseT0 = 0, gemBroken = false, closeT = 0;
       const caseEl = document.querySelector('[data-case]');
       const catEl = caseEl.querySelector('[data-cat]'), nameEl = caseEl.querySelector('[data-name]'),
         approachEl = caseEl.querySelector('[data-approach]'), servicesEl = caseEl.querySelector('[data-services]'),
         liveEl = caseEl.querySelector('[data-live]'), stageEl = caseEl.querySelector('[data-stage]'),
         stackEl = caseEl.querySelector('[data-stack]'), roleEl = caseEl.querySelector('[data-role]');
       const rows = Array.from(document.querySelectorAll('[data-row]'));
+      // precarga predictiva: al apuntar un proyecto ya se piden sus capturas
+      const preloaded = new Set();
+      const preloadShots = (slug) => { if (preloaded.has(slug)) return; preloaded.add(slug);
+        const p = projects.find((x) => x.slug === slug);
+        ((p && p.shots) || []).forEach((u) => { const im = new Image(); im.src = u; }); };
+      // la gema dialoga con el índice: el hover tiñe su rim con el accent del proyecto (lo lee el render)
+      const gemTint = { r: 1, g: 1, b: 1, amt: 0 };
+      const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+      // tilt del collage: targets que el rAF persigue con el mismo lerp del WebGL
+      const tilt = { tx: 0, ty: 0 };
       // arreglo liderado por la 1ª captura: hero grande al frente, el resto se abre hacia atrás
       const fanLayout = (n) => Array.from({ length: n }, (_, i) => {
         const t = n > 1 ? i / (n - 1) : 0;          // 0 = hero, 1 = la más atrás
@@ -263,6 +289,7 @@ import { projects } from '../data/projects';
       // instant = deep-link al cargar: sin re-animar el estallido (la gema entra ya rota)
       const openCase = (slug, { push = true, instant = false } = {}) => {
         const p = projects.find((x) => x.slug === slug); if (!p) return;
+        clearTimeout(closeT); gemBroken = true;
         catEl.textContent = p.category + ' · ' + yearOf(p.ended);
         nameEl.textContent = p.name; roleEl.textContent = p.role || ''; approachEl.textContent = p.approach || '';
         servicesEl.innerHTML = (p.services || []).map((s) => '<li>' + s + '</li>').join('');
@@ -276,7 +303,9 @@ import { projects } from '../data/projects';
           const c = lay[i]; pane.style.left = c.l + '%'; pane.style.top = c.top + '%'; pane.style.zIndex = String(c.zi);
           pane.dataset.tf = 'translate(-50%,-50%) translateZ(' + c.z.toFixed(0) + 'px) rotate(' + c.rot.toFixed(1) + 'deg) scale(' + c.s.toFixed(2) + ')';
           pane.style.transform = 'translate(-50%,-50%) scale(.4)';   // colapsado (emerge del centro)
-          const im = document.createElement('img'); im.src = url; im.alt = p.name + ' — ' + (i + 1); im.loading = 'lazy';
+          const im = document.createElement('img'); im.src = url; im.alt = p.name + ' — ' + (i + 1); im.decoding = 'async';
+          const ready = () => { im.classList.add('ready'); pane.classList.add('loaded'); };
+          if (im.complete) ready(); else im.addEventListener('load', ready, { once: true });
           pane.appendChild(im); stageEl.appendChild(pane);
         });
         // emerger escalonado (después del hold del estallido; instant = casi de una)
@@ -293,16 +322,28 @@ import { projects } from '../data/projects';
         document.title = 'blopa — ' + p.name;
         if (push) pushHash(slug);
       };
-      const closeCase = (push = true) => { inCase = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true');
-        rows.forEach((r, i) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = (0.3 + i * 0.05).toFixed(2) + 's'; });
-        // al terminar la vuelta, limpiar los delays para que el hover no quede retrasado
-        setTimeout(() => { if (!inCase) rows.forEach((r) => { r.style.transitionDelay = '0s'; }); }, 1000);
+      // cierre coreografiado: el collage se comprime de vuelta al centro (cascada inversa)
+      // y recién cuando llega el último pane la gema empieza a rearmarse
+      const closeCase = (push = true) => { if (!inCase) return;
+        inCase = false; tilt.tx = 0; tilt.ty = 0;
+        const panes = stageEl.querySelectorAll('.kase__pane'); const n = panes.length;
+        panes.forEach((pane, i) => {
+          pane.style.transition = 'transform .45s var(--ease),opacity .4s var(--ease)';
+          pane.style.transitionDelay = ((n - 1 - i) * 0.05).toFixed(2) + 's';
+          pane.style.transform = 'translate(-50%,-50%) scale(.4)'; pane.classList.remove('show');
+        });
+        clearTimeout(closeT);
+        closeT = setTimeout(() => {
+          gemBroken = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true');
+          rows.forEach((r, i) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = (0.15 + i * 0.05).toFixed(2) + 's'; });
+          // al terminar la vuelta, limpiar los delays para que el hover no quede retrasado
+          setTimeout(() => { if (!inCase) rows.forEach((r) => { r.style.transitionDelay = '0s'; }); }, 900);
+        }, n ? 400 : 0);
         document.title = 'blopa';
         if (push) pushHash('proyectos'); };
-      // parallax del collage: inclina el stage; con la profundidad (translateZ) los paneles se separan en 3D
+      // parallax del collage: el puntero sólo fija el TARGET; el rAF lo persigue con lerp
       addEventListener('pointermove', (e) => { if (!inCase) return;
-        const rx = (0.5 - e.clientY / innerHeight) * 15, ry = (e.clientX / innerWidth - 0.5) * 22;
-        stageEl.style.setProperty('--rx', rx.toFixed(2) + 'deg'); stageEl.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+        tilt.tx = (0.5 - e.clientY / innerHeight) * 15; tilt.ty = (e.clientX / innerWidth - 0.5) * 22;
       });
       // shared-element: el nombre clickeado VIAJA hasta convertirse en el título del case,
       // usando el hold del estallido como ventana; el crossfade final tapa el cambio de wrap
@@ -326,16 +367,24 @@ import { projects } from '../data/projects';
       };
       // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
       rows.forEach((row) => {
+        const tintOn = () => { const [r, g, b] = hexRGB(row.style.getPropertyValue('--c').trim());
+          gemTint.r = r; gemTint.g = g; gemTint.b = b; gemTint.amt = 1; preloadShots(row.dataset.slug); };
+        const tintOff = () => { gemTint.amt = 0; };
+        row.addEventListener('pointerenter', tintOn); row.addEventListener('focus', tintOn);
+        row.addEventListener('pointerleave', tintOff); row.addEventListener('blur', tintOff);
         row.addEventListener('click', () => {
           openCase(row.dataset.slug);
           flipName(row);   // mide el título recién ubicado, por eso va después de openCase
           row.style.transition = 'none'; row.style.opacity = '0';   // el ghost lo reemplaza al instante
+          gemTint.amt = 0;
         });
       });
       document.querySelector('[data-back]').addEventListener('click', () => closeCase());
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
       // home: vuelve a la entrada (cierra el case y rearma la gema)
-      const goHome = (push = true) => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
+      const goHome = (push = true) => { clearTimeout(closeT); inCase = false; gemBroken = false; entered = false;
+        tilt.tx = 0; tilt.ty = 0;
+        body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
         rows.forEach((r) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = '0s'; });
         document.title = 'blopa';
         bootT0 = performance.now();   // volver al home rearma la gema (mismo idioma que la carga)
@@ -362,6 +411,7 @@ import { projects } from '../data/projects';
         const FRAG = `precision highp float;
           uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
           uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
+          uniform vec3 uTint; uniform float uTintAmt;
           #define PHI 1.61803398875
           float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
           float sdIco(vec3 p){ p=abs(p); float k=0.072;
@@ -401,6 +451,7 @@ import { projects } from '../data/projects';
               float e=smoothstep(0.012,0.0,md); float glow=smoothstep(0.20,0.0,md);
               if(e<=0.001&&glow<=0.001){ return vec4(0.); }
               vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.08,0.08,uv.x));
+              hc=mix(hc,uTint,uTintAmt*0.85);
               return vec4((hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.8,glow*glow*0.32)*bf);
             }
             /* refina el impacto: estabiliza la normal en rayos rasantes (sin esto el borde "puntea") */
@@ -428,6 +479,7 @@ import { projects } from '../data/projects';
             float rim=pow(1.0-ci,2.6), rimT=pow(1.0-ci,4.0);
             float vsoft=1.0-0.55*smoothstep(0.10,0.55,dnn);
             vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x));
+            rimC=mix(rimC,uTint,uTintAmt*0.85);
             col+=(rim*0.34+rimT*0.92)*(1.0+uAber*2.6)*rimC*vsoft;
             /* glint de aristas: línea fina de luz donde se quiebran las facetas
                (apagado en la silueta, donde la normal gruesa es inestable y puntea) */
@@ -466,7 +518,8 @@ import { projects } from '../data/projects';
         const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
         const U = (n) => gl.getUniformLocation(prog, n);
         const uRes = U('uRes'), uCenter = U('uCenter'), uScale = U('uScale'), uRot = U('uRot'), uAber = U('uAber'),
-          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime'), uBreak = U('uBreak');
+          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime'), uBreak = U('uBreak'),
+          uTint = U('uTint'), uTintAmt = U('uTintAmt');
         gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
         const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
@@ -490,6 +543,7 @@ import { projects } from '../data/projects';
         addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; });
 
         let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = reduceMotion ? 0 : 0.85, last = 0, scInit = false;
+        let tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, tX = 0, tY = 0;
         // rotación completa (yaw+pitch+roll), transpuesta para llevar el rayo a espacio objeto
         const rotM = (ax, ay, az) => {
           const cX = Math.cos(ax), sX = Math.sin(ax), cY = Math.cos(ay), sY = Math.sin(ay), cZ = Math.cos(az), sZ = Math.sin(az);
@@ -509,7 +563,7 @@ import { projects } from '../data/projects';
           // línea de tiempo del quiebre: fractura (gema visible) → HOLD → se apaga + collage
           const es = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
           let brkT = 0;
-          if (inCase) { const ts = (performance.now() - caseT0) / 1000;
+          if (gemBroken) { const ts = (performance.now() - caseT0) / 1000;
             if (ts < 0.4) brkT = es(ts / 0.4) * 0.5;                    // 1) se fractura, gema aún visible
             else if (ts < 0.85) brkT = 0.5;                             // 2) HOLD: gema rota a la vista
             else brkT = 0.5 + 0.5 * es(Math.min(1, (ts - 0.85) / 0.5)); // 3) se apaga (collage emerge)
@@ -519,7 +573,11 @@ import { projects } from '../data/projects';
             const cs = (now - bootT0) / 1000;
             if (cs < 1.15) { const x = cs / 1.15; brkT = 0.85 * Math.pow(1 - x, 3); }
           }
-          brk += (brkT - brk) * lp(inCase ? 30 : 7.5);
+          // tinte del rim (accent del proyecto hovereado) + micro-pulso de fractura en hover
+          tintAmt += (gemTint.amt - tintAmt) * lp(6);
+          tintR += (gemTint.r - tintR) * lp(6); tintG += (gemTint.g - tintG) * lp(6); tintB += (gemTint.b - tintB) * lp(6);
+          if (!gemBroken) brkT = Math.max(brkT, tintAmt * 0.012);   // temblor apenas perceptible: el tinte es el evento
+          brk += (brkT - brk) * lp(gemBroken ? 30 : 7.5);
           const burst = brk * (1 - brk) * 4.0;
           // nacimiento: la gema se origina en el centro y crece hacia afuera mientras se arma
           // (uScale es inverso: más grande = gema más chica en pantalla)
@@ -548,9 +606,12 @@ import { projects } from '../data/projects';
           const az = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;   // roll sutil: tumble orgánico
           const m = rotM(ax, ay, az);
           const fx = Math.sin(a * 0.6) * 0.004, fy = Math.sin(a * 0.42 + 0.8) * 0.006;   // flotación suave
+          // tilt del collage: misma física exponencial que todo lo demás (nada de transition-chasing)
+          tX += (tilt.tx - tX) * lp(5.5); tY += (tilt.ty - tY) * lp(5.5);
+          stageEl.style.setProperty('--rx', tX.toFixed(2) + 'deg'); stageEl.style.setProperty('--ry', tY.toFixed(2) + 'deg');
           gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx + fx, cy + fy); gl.uniform1f(uScale, sc * birth);
           gl.uniform1f(uAber, aber); gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uTime, performance.now() * 0.001);
-          gl.uniform1f(uBreak, brk);
+          gl.uniform1f(uBreak, brk); gl.uniform3f(uTint, tintR, tintG, tintB); gl.uniform1f(uTintAmt, tintAmt);
           gl.uniformMatrix3fv(uRot, false, m);
           gl.clear(gl.COLOR_BUFFER_BIT);
           if (brk < 0.93) gl.drawArrays(gl.TRIANGLES, 0, 3);   // gema rota y apagada (case abierto): no raymarchear de fondo
