@@ -258,20 +258,12 @@ import { projects } from '../data/projects';
         ((p && p.shots) || []).forEach((u) => { const im = new Image(); im.src = u; }); };
       // la gema dialoga con el índice: el hover tiñe su rim con el accent del proyecto (lo lee el render)
       const gemTint = { r: 1, g: 1, b: 1, amt: 0 };
-      // interacción pre-click gema↔proyecto (definida en /lab): cabeceo + ventana(scroll) + carácter.
-      // la tensión queda apagada: la fractura es exclusiva del click (no adelantar el estallido).
-      const FX = { nombre: false, cabeceo: true, ventana: true, caracter: true, tension: false, vmode: 'scroll' };
+      // interacción pre-click gema↔proyecto (definida en /lab): la gema escucha (cabeceo),
+      // muestra el sitio refractado en scroll (ventana) y toma el temperamento del proyecto (carácter).
+      // la fractura queda exclusiva del click: el estallido al entrar.
       let hoverProj = null;    // proyecto señalado (o null)
-      let hoverT0 = 0;         // cuándo empezó el hover (para la tensión que carga con el tiempo)
-      // carácter (B): cómo se MUEVE la gema según el proyecto — no lo que muestra
-      //   spin = velocidad de giro · ripple = onda en la superficie (waveform) · pulse = latido · breathe = respiración
+      // carácter (B): el temperamento de cada proyecto vive en projects.ts (campo `character`)
       const NEUTRAL = { spin: 1, ripple: 0, pulse: 0, breathe: 0 };
-      const CHAR = {
-        valecasenave: { spin: 0.55, ripple: 0,   pulse: 0, breathe: 0.35 },  // editorial: lenta, contenida
-        pulz:         { spin: 1.6,  ripple: 0,   pulse: 1, breathe: 0    },  // running: late, eléctrica
-        basslayer:    { spin: 1.0,  ripple: 1,   pulse: 0, breathe: 0    },  // datos/música: ondula como waveform
-        beokey:       { spin: 0.6,  ripple: 0,   pulse: 0, breathe: 1    },  // bienestar: respira, en calma
-      };
       const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
       // tilt del collage: targets que el rAF persigue con el mismo lerp del WebGL
       const tilt = { tx: 0, ty: 0 };
@@ -366,7 +358,7 @@ import { projects } from '../data/projects';
         const proj = projects.find((x) => x.slug === row.dataset.slug);
         const tintOn = () => { const [r, g, b] = hexRGB(row.style.getPropertyValue('--c').trim());
           gemTint.r = r; gemTint.g = g; gemTint.b = b; gemTint.amt = 1;
-          hoverProj = proj || null; hoverT0 = performance.now();   // la gema registra qué señalás (y desde cuándo)
+          hoverProj = proj || null;   // la gema registra qué proyecto señalás
           preloadShots(row.dataset.slug); };
         const tintOff = () => { gemTint.amt = 0; hoverProj = null; };
         row.addEventListener('pointerenter', tintOn); row.addEventListener('focus', tintOn);
@@ -542,41 +534,29 @@ import { projects } from '../data/projects';
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.uniform1i(uWord, 0);
         let wordReady = false, fontsReady = false, currentWord = null;
+        // sube cualquier fuente (canvas o img) a la textura que la gema refracta
+        const uploadTex = (src) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); wordReady = true; };
         // dibuja una palabra en la textura que la gema refracta (ajustando el cuerpo al ancho del cristal)
         const uploadWord = (text) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
           x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '8px';
           let size = 300; x.font = '400 ' + size + 'px "Bebas Neue", sans-serif';
           const w = x.measureText(text).width, maxW = 900;   // nombres largos (BASSLAYER, VALE CASENAVE) se achican para entrar
           if (w > maxW) { size = Math.max(88, Math.floor(size * maxW / w)); x.font = '400 ' + size + 'px "Bebas Neue", sans-serif'; }
-          x.fillText(text, 512, 200);
-          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; };
-        const initFonts = () => { fontsReady = true; if ((currentWord || 'blopa').indexOf('img:') !== 0) uploadWord(currentWord || 'blopa'); };
+          x.fillText(text, 512, 200); uploadTex(c); };
+        // sólo dibuja el wordmark si seguimos mostrando texto (no pisar la ventana si ya se hovereó)
+        const initFonts = () => { fontsReady = true; if (!currentWord || currentWord === 'blopa') uploadWord('blopa'); };
         if (document.fonts && document.fonts.load) document.fonts.load('400 300px "Bebas Neue"').then(initFonts).catch(initFonts); else initFonts();
 
-        // ── ventana (A): el sitio real refractado dentro del cristal (fija / scroll / flash) ──
+        // ── ventana (A): el sitio real refractado dentro del cristal, recorrido en scroll ──
         let wordMode = 0;    // 0 = texto · 1 = imagen (lo lee el shader)
-        let flashKick = 0;   // timestamp del último corte (flash) → golpe cromático
         const imgEl = {};    // cache de <img> por 'slug:idx'
-        const stripCanvas = {};   // cache de la tira apilada por slug (scroll)
+        const stripCanvas = {};   // cache de la tira apilada por slug
         const projBySlug = (s) => projects.find((x) => x.slug === s);
         const imgOf = (slug, idx) => { const k = slug + ':' + idx; let im = imgEl[k];
           if (!im) { im = new Image(); im.src = projBySlug(slug).shots[idx]; imgEl[k] = im; } return im; };
-        // sube cualquier fuente (canvas o img) a la textura de la gema
-        const uploadTex = (src) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
-          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); wordReady = true; };
-        // una captura, cover-fit en 1024² (modos fija / flash)
-        const uploadShot = (im) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 1024; const x = c.getContext('2d');
-          x.clearRect(0, 0, 1024, 1024);
-          const iw = im.naturalWidth || im.width, ih = im.naturalHeight || im.height;
-          const s = Math.max(1024 / iw, 1024 / ih), dw = iw * s, dh = ih * s;
-          x.filter = 'blur(3px)';   // disuelve: la captura se vuelve materia difusa, no screenshot
-          x.drawImage(im, (1024 - dw) / 2, (1024 - dh) / 2, dw, dh); uploadTex(c); };
-        const drawShot = (proj, idx, token) => { const im = imgOf(proj.slug, idx);
-          if (im.complete && (im.naturalWidth || 0) > 0) uploadShot(im);
-          else im.addEventListener('load', () => { if (currentWord === token) uploadShot(im); }, { once: true }); };
-        // la tira: todas las capturas apiladas en vertical → la gema la recorre (scroll)
+        // la tira: todas las capturas apiladas en vertical → la gema la recorre (scroll), disuelta con blur
         const drawStrip = (proj, token) => {
           if (stripCanvas[proj.slug]) { uploadTex(stripCanvas[proj.slug]); return; }
           const ims = proj.shots.map((_, i) => imgOf(proj.slug, i));
@@ -584,7 +564,7 @@ import { projects } from '../data/projects';
             const bands = ims.map((im) => { const iw = im.naturalWidth || 1600, ih = im.naturalHeight || 1000;
               const h = Math.round(Wt * (ih / iw)); const b = { im, y, h }; y += h; return b; });
             const c = document.createElement('canvas'); c.width = Wt; c.height = y; const x = c.getContext('2d');
-            x.filter = 'blur(3px)';   // disuelve la tira igual que la captura fija
+            x.filter = 'blur(3px)';   // disuelve: la tira se vuelve materia difusa, no screenshot
             bands.forEach((b) => x.drawImage(b.im, 0, b.y, Wt, b.h));
             stripCanvas[proj.slug] = c; if (currentWord === token) uploadTex(c); };
           if (ims.every((im) => im.complete && im.naturalWidth)) build();
@@ -596,11 +576,8 @@ import { projects } from '../data/projects';
           if (token === currentWord) return;
           currentWord = token;
           if (!token) return;
-          if (mode === 1 && proj) {
-            if (token.indexOf('strip:') === 0) drawStrip(proj, token);
-            else { const idx = parseInt(token.split(':')[2] || '0', 10); drawShot(proj, idx, token);
-              if (FX.vmode === 'flash') flashKick = performance.now(); }
-          } else if (fontsReady) uploadWord(token);
+          if (mode === 1 && proj) drawStrip(proj, token);
+          else if (fontsReady) uploadWord(token);
         };
 
         const SS = coarse ? 1.2 : 1.5; let W = 0, H = 0;   // el AA de silueta permite bajar el supersampling global
@@ -628,10 +605,10 @@ import { projects } from '../data/projects';
           const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
           const lp = (r) => 1 - Math.exp(-r * dt);   // easing independiente del framerate
           // ② atención (cabeceo): al señalar, la gema "escucha" — se orienta y frena su idle
-          const attT = (entered && hoverProj && FX.cabeceo && !gemBroken) ? 1 : 0;
+          const attT = (entered && hoverProj && !gemBroken) ? 1 : 0;
           att += (attT - att) * lp(5);
           // carácter (B): la gema toma el temperamento del proyecto señalado (o neutro)
-          const ch = (FX.caracter && hoverProj && CHAR[hoverProj.slug]) ? CHAR[hoverProj.slug] : NEUTRAL;
+          const ch = (hoverProj && hoverProj.character) ? hoverProj.character : NEUTRAL;
           chSpin += (ch.spin - chSpin) * lp(4); chRip += (ch.ripple - chRip) * lp(4);
           chPulse += (ch.pulse - chPulse) * lp(4); chBreath += (ch.breathe - chBreath) * lp(4);
           a += 0.096 * dt * (1 - att * 0.7) * chSpin;   // idle desacelera al escuchar; el carácter cambia su velocidad
@@ -654,11 +631,6 @@ import { projects } from '../data/projects';
           tintAmt += (gemTint.amt - tintAmt) * lp(6);
           tintR += (gemTint.r - tintR) * lp(6); tintG += (gemTint.g - tintG) * lp(6); tintB += (gemTint.b - tintB) * lp(6);
           if (!gemBroken) brkT = Math.max(brkT, tintAmt * 0.012);   // temblor apenas perceptible: el tinte es el evento
-          // tensión (C): sostener la atención carga la fractura hacia el estallido (recompensa la curiosidad)
-          if (FX.tension && entered && hoverProj && !gemBroken) {
-            const tension = Math.min(1, (now - hoverT0) / 1300);
-            brkT = Math.max(brkT, tension * 0.42);
-          }
           brk += (brkT - brk) * lp(gemBroken ? 30 : 7.5);
           const burst = brk * (1 - brk) * 4.0;
           // nacimiento: la gema se origina en el centro y crece hacia afuera mientras se arma
@@ -675,27 +647,21 @@ import { projects } from '../data/projects';
           cx += (cxT - cx) * lp(3.7);
           const cyT = entered ? (mob ? MOB_CY : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
           cy += (cyT - cy) * lp(3.7);
-          // qué sostiene la gema (según FX): landing = 'blopa'; índice = ventana (fija/scroll/flash) o nombre
+          // qué sostiene la gema: landing = wordmark 'blopa'; índice = ventana (el sitio en scroll)
           let token = null, tmode = 0, winFracV = 1, scrollV = 0;
           if (!entered) { token = 'blopa'; tmode = 0; }
           else if (hoverProj && !gemBroken) {
-            if (FX.ventana) {
-              tmode = 1; const N = (hoverProj.shots || []).length || 1;
-              if (FX.vmode === 'flash') { const idx = Math.floor(now / 480) % N; token = 'shot:' + hoverProj.slug + ':' + idx; }
-              else if (FX.vmode === 'scroll') { token = 'strip:' + hoverProj.slug;
-                winFracV = 0.42; const ph = ((now / 1000) / 6.5) % 1;   // recorre la tira: ping-pong suave arriba↔abajo
-                scrollV = (1 - winFracV) * (0.5 - 0.5 * Math.cos(ph * 6.28318)); }
-              else { token = 'shot:' + hoverProj.slug + ':0'; }   // fija
-            } else if (FX.nombre) { token = hoverProj.name; tmode = 0; }
+            tmode = 1; token = 'strip:' + hoverProj.slug;
+            winFracV = 0.42; const ph = ((now / 1000) / 6.5) % 1;   // recorre la tira: ping-pong suave arriba↔abajo
+            scrollV = (1 - winFracV) * (0.5 - 0.5 * Math.cos(ph * 6.28318));
           }
           applyTexture(token, tmode, hoverProj);
-          const wt = (wordReady && token && !gemBroken && brk < 0.55) ? 1 : 0;   // tolera la pre-fractura de tensión
+          const wt = (wordReady && token && !gemBroken && brk < 0.12) ? 1 : 0;
           wordAmt += (wt - wordAmt) * lp(entered ? 8.5 : 3.7);
           pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
           const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
           aber += ((Math.min(1, vel * 30) * 0.5) - aber) * lp(6.3);
           aber = Math.max(aber, burst * 1.4);   // estallido cromático al romperse
-          aber = Math.max(aber, Math.max(0, 1 - (now - flashKick) / 260) * 0.6);   // golpe cromático en cada corte (flash)
           // idle: mecido desincronizado + mira al cursor (menos parallax cuando es motivo chico)
           // al escuchar (att), sigue al cursor con más ganas: se "clava" en el nombre señalado
           const pk = (1 - ent * 0.7) * (1 + att * 1.3);
