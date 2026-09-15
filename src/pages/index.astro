@@ -96,10 +96,11 @@ import { projects } from '../data/projects';
          en la banda libre bajo la gema — --gemclear lo calcula el JS con la posición/escala reales */
       @media(orientation:portrait){
         /* la meta baja a una 2ª línea alineada con el nombre (a la derecha no entra) */
-        .prow__meta{flex-basis:100%;margin-left:2.2rem}
+        .prow__meta{flex-basis:100%;margin-left:2.2rem;margin-top:-.15rem}
+        .prow{padding:.4rem 0}
         .index{max-width:none;justify-content:center;
           padding-top:calc(var(--gemclear,46svh) + .6rem);
-          padding-bottom:clamp(3rem,7vh,4.5rem)}   /* despeja la línea .sig del pie */
+          padding-bottom:clamp(4rem,9vh,5.5rem)}   /* despeja la línea .sig del pie */
       }
 
       /* case como UNA composición: info + stack + collage, centrado, tras el estallido */
