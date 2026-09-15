@@ -74,8 +74,12 @@ import { projects } from '../data/projects';
       .prow__arrow{opacity:0;color:var(--c);transform:translateX(-6px);
         transition:opacity .3s var(--ease),transform .3s var(--ease)}
       .prow:hover .prow__arrow{opacity:1;transform:translateX(0)}
-      @media(max-width:860px){
-        .index{max-width:none;padding-top:clamp(4rem,9vh,7rem);justify-content:flex-end;padding-bottom:clamp(3rem,10vh,6rem)}
+      /* portrait: la gema queda arriba (mismo criterio W<H del render); los nombres se centran
+         en la banda libre bajo la gema — --gemclear lo calcula el JS con la posición/escala reales */
+      @media(orientation:portrait){
+        .index{max-width:none;justify-content:center;
+          padding-top:calc(var(--gemclear,46svh) + .6rem);
+          padding-bottom:clamp(2rem,6vh,4rem)}
       }
 
       /* case como UNA composición: info + stack + collage, centrado, tras el estallido */
@@ -183,6 +187,19 @@ import { projects } from '../data/projects';
       const DPR = Math.min(coarse ? 1.4 : 2, window.devicePixelRatio || 1);
 
       // ── entrada / galería / case ──
+      // balance del índice en portrait: los nombres se centran en la banda libre bajo la gema.
+      // MOB_SC / MOB_CY son la escala y altura de la gema en el índice mobile (las usa también el render).
+      const MOB_SC = 2.1, MOB_CY = 0.28;
+      const indexEl = document.querySelector('[data-index]');
+      const balanceIndex = () => {
+        const W = innerWidth, H = innerHeight;
+        if (W >= H) { indexEl.style.removeProperty('--gemclear'); return; }
+        const fit = 0.6 + 0.7 * (H / W);
+        const gemBottom = (0.5 - MOB_CY + 1 / (MOB_SC * fit)) * H;   // borde inferior de la gema, en px
+        indexEl.style.setProperty('--gemclear', Math.round(gemBottom) + 'px');
+      };
+      balanceIndex(); addEventListener('resize', balanceIndex);
+
       let entered = false;
       let bootT0 = performance.now();   // carga: la gema se ARMA (el quiebre del case, invertido)
       const enter = () => { if (entered) return; entered = true; body.classList.add('entered'); };
@@ -424,12 +441,12 @@ import { projects } from '../data/projects';
             if (cs < 1.15) { const g = 1 - Math.pow(1 - cs / 1.15, 3); birth = 1 / (0.06 + 0.94 * g); } }
           const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
           // landing: grande y centrado; índice: la gema se corre a la derecha (nombres a la izquierda)
-          const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit * (1 + brk * 0.75);
+          const scT = (entered ? (mob ? MOB_SC : 2.05) : (mob ? 2.2 : 1.95)) * fit * (1 + brk * 0.75);
           if (!scInit) { sc = scT; scInit = true; }   // sin zoom-lerp inicial: el nacimiento manda
           sc += (scT - sc) * lp(3.7);
           const cxT = entered ? (mob ? 0 : 0.30) : 0;      // desktop: gema a la derecha
           cx += (cxT - cx) * lp(3.7);
-          const cyT = entered ? (mob ? 0.28 : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
+          const cyT = entered ? (mob ? MOB_CY : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
           cy += (cyT - cy) * lp(3.7);
           const wt = (wordReady && !entered && brk < 0.08) ? 1 : 0; wordAmt += (wt - wordAmt) * lp(3.7);   // el BLOPA revela después de que la gema cierra
           pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);

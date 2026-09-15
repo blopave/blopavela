@@ -13,6 +13,7 @@ const targets = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>blopa — mobile + desktop</title>
     <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
       :root { --bg:#0a0a0c; --panel:#131317; --ink:#e9eaee; --soft:#8a8c95; --hair:#26262e; --acc:#24e2e8;
         --mono:ui-monospace,'SF Mono',Menlo,monospace; }
@@ -39,8 +40,8 @@ const targets = [
 
       .col--mobile { flex:0 0 auto; }
       .col--mobile .screen { border-radius:26px; padding:0; }
-      .col--desktop { flex:1 1 auto; max-width:70%; }
-      .col--desktop .screen { border-radius:8px; width:100%; }
+      .col--desktop { flex:0 0 auto; }
+      .col--desktop .screen { border-radius:8px; }
     </style>
   </head>
   <body>
@@ -78,17 +79,25 @@ const targets = [
       dFrame.style.width = DW + 'px'; dFrame.style.height = DH + 'px';
 
       function fit() {
-        // mobile: alto disponible manda
-        const mAvailH = mScreen.parentElement.clientHeight - 30;
-        const mScale = Math.min(1, mAvailH / MH);
+        const stage = document.querySelector('.stage');
+        const sc = getComputedStyle(stage);
+        const availW = stage.clientWidth - parseFloat(sc.paddingLeft) - parseFloat(sc.paddingRight);
+        const availH = stage.clientHeight - parseFloat(sc.paddingTop) - parseFloat(sc.paddingBottom);
+        const gap = parseFloat(sc.columnGap) || 0;
+        // espacio vertical que queda para el marco: columna menos etiqueta + su gap, medidos
+        const frameH = (screen) => {
+          const col = screen.parentElement;
+          const cap = col.querySelector('.cap').getBoundingClientRect().height;
+          return availH - cap - (parseFloat(getComputedStyle(col).rowGap) || 0);
+        };
+        // mobile primero: lo manda el alto (en ventanas angostas, también el ancho)
+        const mScale = Math.max(0.05, Math.min(1, frameH(mScreen) / MH, (availW * 0.3) / MW));
         mFrame.style.transform = `scale(${mScale})`;
         mScreen.style.width = MW * mScale + 'px';
         mScreen.style.height = MH * mScale + 'px';
-        // desktop: ancho de la columna manda (mostramos 1440 escalado)
-        const dCol = dScreen.parentElement;
-        const dAvailW = dCol.clientWidth;
-        const dAvailH = dCol.clientHeight - 30;
-        const dScale = Math.min(dAvailW / DW, dAvailH / DH);
+        // desktop: usa el ancho restante y el alto disponible, lo que limite primero
+        const dAvailW = availW - MW * mScale - gap;
+        const dScale = Math.max(0.05, Math.min(dAvailW / DW, frameH(dScreen) / DH));
         dFrame.style.transform = `scale(${dScale})`;
         dScreen.style.width = DW * dScale + 'px';
         dScreen.style.height = DH * dScale + 'px';
@@ -104,6 +113,7 @@ const targets = [
       btns.forEach((b) => b.addEventListener('click', () => load(b.dataset.href)));
       document.querySelector('[data-reload]').addEventListener('click', () => { mFrame.src = current; dFrame.src = current; });
       addEventListener('resize', fit);
+      new ResizeObserver(fit).observe(document.documentElement);
       load(current); fit();
     </script>
   </body>
