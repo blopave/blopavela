@@ -66,10 +66,10 @@ import { projects } from '../data/projects';
         gap:.2rem;padding:clamp(5rem,12vh,9rem) var(--gut) 4rem;max-width:min(46vw,40rem);
         opacity:0;pointer-events:none;transition:opacity .7s var(--ease)}
       body.entered .index{opacity:1;pointer-events:auto;transition-delay:.3s}
-      body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
+      body.in-case .index{pointer-events:none}
       .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;
         display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem 1rem;padding:.55rem 0;position:relative;isolation:isolate;
-        transition:padding .35s var(--ease)}
+        transition:padding .35s var(--ease),opacity .45s var(--ease),transform .45s var(--ease)}
       .prow:hover{padding-left:1rem}
       /* jerarquía: el contenido primario descansa en ink; la aberración cromática es un EVENTO
          (hover/focus), no el estado de reposo — y los hermanos se apagan al elegir uno */
@@ -103,7 +103,8 @@ import { projects } from '../data/projects';
       .kase{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:clamp(4rem,10vh,7rem) var(--gut) clamp(3.5rem,9vh,6rem);
         opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease)}
       body.in-case .kase{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.82s}
-      body.in-case .index{opacity:0;pointer-events:none}   /* al abrir, los nombres se van */
+      /* al abrir, los nombres se van UNO a UNO (stagger por JS), no en fade grupal */
+      body.in-case .prow{opacity:0;transform:translateX(-16px)}
 
       .kase__board{width:min(95vw,84rem);display:grid;grid-template-columns:minmax(0,20rem) 1fr;
         gap:clamp(1.5rem,3vw,3.5rem);align-items:center}
@@ -121,7 +122,12 @@ import { projects } from '../data/projects';
       .case__eye{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
       /* entrar a un proyecto tiene que sentirse MÁS grande que la lista, no igual */
       .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,5.5rem);line-height:.9;
-        letter-spacing:.01em;margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
+        letter-spacing:.01em;margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua);
+        transition:opacity .3s var(--ease)}
+      /* shared-element: mientras el ghost del nombre viaja, el título real espera */
+      .kase.flip .case__title{opacity:0}
+      :global(.flip-name){position:fixed;z-index:10;margin:0;pointer-events:none;font-family:var(--display);
+        font-weight:400;line-height:1.0;color:var(--ink);white-space:nowrap;transform-origin:top left;will-change:transform}
       .case__role{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
         color:var(--soft);margin-top:.7rem}
       .case__approach{margin-top:1rem;color:#c9cbd2;line-height:1.5;font-size:.92rem;max-width:38ch}
@@ -228,9 +234,14 @@ import { projects } from '../data/projects';
 
       let entered = false;
       let bootT0 = performance.now();   // carga: la gema se ARMA (el quiebre del case, invertido)
-      const enter = () => { if (entered) return; entered = true; body.classList.add('entered'); };
+      // la URL refleja el estado (#proyectos / #slug) para que back/forward y los deep-links funcionen
+      const pushHash = (h) => { const target = h ? '#' + h : '';
+        if (location.hash === target) return;
+        history.pushState(null, '', location.pathname + target); };
+      const enter = (push = true) => { if (entered) return; entered = true; body.classList.add('entered');
+        if (push) pushHash('proyectos'); };
       const enterEl = document.querySelector('[data-enter]');
-      enterEl.addEventListener('click', enter);
+      enterEl.addEventListener('click', () => enter());
       enterEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } });
       addEventListener('wheel', (e) => { if (!entered && e.deltaY > 6) enter(); }, { passive: true });
 
@@ -241,6 +252,7 @@ import { projects } from '../data/projects';
         approachEl = caseEl.querySelector('[data-approach]'), servicesEl = caseEl.querySelector('[data-services]'),
         liveEl = caseEl.querySelector('[data-live]'), stageEl = caseEl.querySelector('[data-stage]'),
         stackEl = caseEl.querySelector('[data-stack]'), roleEl = caseEl.querySelector('[data-role]');
+      const rows = Array.from(document.querySelectorAll('[data-row]'));
       // arreglo liderado por la 1ª captura: hero grande al frente, el resto se abre hacia atrás
       const fanLayout = (n) => Array.from({ length: n }, (_, i) => {
         const t = n > 1 ? i / (n - 1) : 0;          // 0 = hero, 1 = la más atrás
@@ -248,7 +260,8 @@ import { projects } from '../data/projects';
           z: -i * 62, s: 1.02 - i * 0.06, zi: n - i };
       });
       const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
-      const openCase = (slug) => {
+      // instant = deep-link al cargar: sin re-animar el estallido (la gema entra ya rota)
+      const openCase = (slug, { push = true, instant = false } = {}) => {
         const p = projects.find((x) => x.slug === slug); if (!p) return;
         catEl.textContent = p.category + ' · ' + yearOf(p.ended);
         nameEl.textContent = p.name; roleEl.textContent = p.role || ''; approachEl.textContent = p.approach || '';
@@ -266,31 +279,79 @@ import { projects } from '../data/projects';
           const im = document.createElement('img'); im.src = url; im.alt = p.name + ' — ' + (i + 1); im.loading = 'lazy';
           pane.appendChild(im); stageEl.appendChild(pane);
         });
-        // emerger escalonado (después del hold del estallido)
+        // emerger escalonado (después del hold del estallido; instant = casi de una)
         requestAnimationFrame(() => requestAnimationFrame(() => {
           stageEl.querySelectorAll('.kase__pane').forEach((pane, i) => {
-            pane.style.transitionDelay = (0.92 + i * 0.09).toFixed(2) + 's';
+            pane.style.transitionDelay = ((instant ? 0.15 : 0.92) + i * 0.09).toFixed(2) + 's';
             pane.style.transform = pane.dataset.tf; pane.classList.add('show');
           });
         }));
-        caseT0 = performance.now(); inCase = true; body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false');
+        // los nombres se van uno a uno hacia la izquierda
+        rows.forEach((r, i) => { r.style.transitionDelay = instant ? '0s' : (i * 0.045).toFixed(3) + 's'; });
+        caseT0 = performance.now() - (instant ? 1400 : 0);
+        inCase = true; body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false');
+        document.title = 'blopa — ' + p.name;
+        if (push) pushHash(slug);
       };
-      const closeCase = () => { inCase = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true'); };
+      const closeCase = (push = true) => { inCase = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true');
+        rows.forEach((r, i) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = (0.3 + i * 0.05).toFixed(2) + 's'; });
+        // al terminar la vuelta, limpiar los delays para que el hover no quede retrasado
+        setTimeout(() => { if (!inCase) rows.forEach((r) => { r.style.transitionDelay = '0s'; }); }, 1000);
+        document.title = 'blopa';
+        if (push) pushHash('proyectos'); };
       // parallax del collage: inclina el stage; con la profundidad (translateZ) los paneles se separan en 3D
       addEventListener('pointermove', (e) => { if (!inCase) return;
         const rx = (0.5 - e.clientY / innerHeight) * 15, ry = (e.clientX / innerWidth - 0.5) * 22;
         stageEl.style.setProperty('--rx', rx.toFixed(2) + 'deg'); stageEl.style.setProperty('--ry', ry.toFixed(2) + 'deg');
       });
+      // shared-element: el nombre clickeado VIAJA hasta convertirse en el título del case,
+      // usando el hold del estallido como ventana; el crossfade final tapa el cambio de wrap
+      const flipName = (row) => {
+        if (reduceMotion) return;
+        const src = row.querySelector('.prow__name');
+        const a = src.getBoundingClientRect(), b = nameEl.getBoundingClientRect();
+        if (!a.width || !b.width) return;
+        const cs = getComputedStyle(src);
+        const g = document.createElement('span'); g.className = 'flip-name'; g.textContent = src.textContent;
+        g.style.left = a.left + 'px'; g.style.top = a.top + 'px';
+        g.style.fontSize = cs.fontSize; g.style.letterSpacing = cs.letterSpacing;
+        document.body.appendChild(g); caseEl.classList.add('flip');
+        const dur = 850, ease = 'cubic-bezier(.22,1,.36,1)';
+        g.animate([{ transform: 'translate(0,0) scale(1)' },
+          { transform: 'translate(' + (b.left - a.left) + 'px,' + (b.top - a.top) + 'px) scale(' + (b.width / a.width) + ')' }],
+          { duration: dur, easing: ease, fill: 'forwards' });
+        g.animate([{ opacity: 1 }, { opacity: 1, offset: .7 }, { opacity: 0 }], { duration: dur + 150, easing: 'linear', fill: 'forwards' });
+        setTimeout(() => caseEl.classList.remove('flip'), dur - 120);
+        setTimeout(() => g.remove(), dur + 200);
+      };
       // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
-      document.querySelectorAll('[data-row]').forEach((row) => {
-        row.addEventListener('click', () => openCase(row.dataset.slug));
+      rows.forEach((row) => {
+        row.addEventListener('click', () => {
+          openCase(row.dataset.slug);
+          flipName(row);   // mide el título recién ubicado, por eso va después de openCase
+          row.style.transition = 'none'; row.style.opacity = '0';   // el ghost lo reemplaza al instante
+        });
       });
-      document.querySelector('[data-back]').addEventListener('click', closeCase);
+      document.querySelector('[data-back]').addEventListener('click', () => closeCase());
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
       // home: vuelve a la entrada (cierra el case y rearma la gema)
-      const goHome = () => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
-        bootT0 = performance.now(); };   // volver al home rearma la gema (mismo idioma que la carga)
-      document.querySelector('[data-home]').addEventListener('click', goHome);
+      const goHome = (push = true) => { inCase = false; entered = false; body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
+        rows.forEach((r) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = '0s'; });
+        document.title = 'blopa';
+        bootT0 = performance.now();   // volver al home rearma la gema (mismo idioma que la carga)
+        if (push) pushHash(''); };
+      document.querySelector('[data-home]').addEventListener('click', () => goHome());
+
+      // back/forward del navegador navegan los estados; la carga con hash entra directo
+      addEventListener('popstate', () => {
+        const h = location.hash.replace('#', '');
+        if (projects.some((x) => x.slug === h)) { if (!entered) enter(false); openCase(h, { push: false }); }
+        else if (h === 'proyectos') { if (inCase) closeCase(false); else enter(false); }
+        else goHome(false);
+      });
+      { const h = location.hash.replace('#', '');
+        if (h === 'proyectos') enter(false);
+        else if (projects.some((x) => x.slug === h)) { enter(false); openCase(h, { push: false, instant: true }); } }
 
       // ── cristal (entrada): icosaedro de hielo con "blopa", idle + parallax; al entrar se achica arriba ──
       const shard = document.querySelector('[data-shard]');
