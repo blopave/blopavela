@@ -27,10 +27,13 @@ import { projects } from '../data/projects';
          así que el tracking ajustado antes se mantiene. Versión 1.21 del repo oficial (Google Fonts sirve la 1.011),
          subset latin + latin-ext + flechas (↗ → ‹ ·) */
       @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
-      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
         --aqua:#24e2e8; --red:#ff3a54;
         --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
         --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
+      /* textos chicos: 3 niveles de color (ink 17.7:1 · mid 7.4:1 · soft 4.8:1, todos ≥ WCAG AA 4.5:1; --dim sólo para
+         bordes/filetes), 2 tamaños de mono (11px etiquetas · 12px lo accionable, piso de Apple HIG / M3 / Carbon) y un único
+         tracking de mayúsculas .08em (Butterick: +5–12%); el wordmark conserva su .16em como firma */
       *{box-sizing:border-box;margin:0}
       body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow-x:hidden;
         -webkit-font-smoothing:antialiased;line-height:1.5}
@@ -41,21 +44,21 @@ import { projects } from '../data/projects';
 
       /* nav: sólo aparece dentro (proyectos/case); la ENTRADA queda limpia, sólo la gema */
       .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:baseline;
-        padding:var(--gut);font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);
+        padding:var(--gut);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);
         opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
       /* la BARRA nunca captura clicks (taparía botones que queden bajo su franja de padding,
          como el "‹ Proyectos" en desktop); sólo sus hijos son interactivos */
       body.entered .nav{opacity:1;transition-delay:.3s}
       body.entered .nav .nav__home,body.entered .nav .nav__contact{pointer-events:auto}
-      .nav__home{appearance:none;background:none;border:0;font:inherit;letter-spacing:.16em;text-transform:uppercase;
-        color:var(--soft);cursor:pointer;transition:color .25s var(--ease);
+      .nav__home{appearance:none;background:none;border:0;font:inherit;font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;
+        color:var(--mid);cursor:pointer;transition:color .25s var(--ease);
         text-shadow:-.7px 0 rgba(255,58,84,.5),.7px 0 rgba(36,226,232,.5)}   /* colores de la gema a través del mark */
       .nav__home:hover{color:var(--ink)}
-      .nav__contact{text-transform:none;letter-spacing:.02em;color:var(--soft);white-space:nowrap;transition:color .25s var(--ease)}
-      .nav__mail{color:var(--dim)}
-      .nav__contact:hover{color:var(--ink)} .nav__contact:hover .nav__mail{color:var(--soft)}
+      .nav__contact{text-transform:none;letter-spacing:0;color:var(--mid);white-space:nowrap;transition:color .25s var(--ease)}
+      .nav__mail{color:var(--mid)}
+      .nav__contact:hover{color:var(--ink)} .nav__contact:hover .nav__mail{color:var(--ink)}
       /* mobile: se oculta el nombre y queda el MAIL visible (contacto accionable, sin adivinar) */
-      @media(max-width:640px){ .nav__who{display:none} .nav__mail{color:var(--soft)} }
+      @media(max-width:640px){ .nav__who{display:none} }
 
       /* landing: sólo el disparador; la gema es todo */
       .enter{position:fixed;inset:0;z-index:4;cursor:pointer}
@@ -116,14 +119,14 @@ import { projects } from '../data/projects';
       .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;
         display:inline-flex;align-items:center;gap:.55rem;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
         border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-        font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
+        font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);
         opacity:0;visibility:hidden;pointer-events:none;
         transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
       .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
       .kase__back:hover{color:var(--ink);border-color:var(--soft);background:rgba(20,20,26,.7)}
 
       .kase__info{min-width:0}
-      .case__eye{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
+      .case__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
       /* entrar a un proyecto tiene que sentirse MÁS grande que la lista, no igual */
       .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,5.5rem);line-height:.9;
         letter-spacing:.01em;margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua);
@@ -132,22 +135,22 @@ import { projects } from '../data/projects';
       .kase.flip .case__title{opacity:0}
       :global(.flip-name){position:fixed;z-index:10;margin:0;pointer-events:none;font-family:var(--display);
         font-weight:400;line-height:1.0;color:var(--ink);white-space:nowrap;transform-origin:top left;will-change:transform}
-      .case__role{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
-        color:var(--soft);margin-top:.7rem}
+      .case__role{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--mid);margin-top:.7rem}
       .case__approach{margin-top:1rem;color:#c9cbd2;line-height:1.5;font-size:.92rem;max-width:38ch}
-      .kase__slabel{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+      .kase__slabel{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);
         margin:1.6rem 0 .6rem;display:flex;align-items:center;gap:.7rem}
       .kase__slabel::after{content:"";flex:1;height:1px;background:var(--hair)}
       /* jerarquía real: servicios (lo que hiciste) = chips presentes; stack (con qué) = una línea mono terciaria */
       .kase__stack{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;margin:0;padding:0}
-      :global(.kase__stack li){font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);
+      :global(.kase__stack li){font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
         border:1px solid #2e2e38;border-radius:6px;padding:.42rem .7rem;white-space:nowrap;
         background:rgba(255,255,255,.02);transition:border-color .25s var(--ease),color .25s var(--ease)}
       :global(.kase__stack li:hover){border-color:var(--soft)}
-      .kase__stackline{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
-        color:var(--dim);margin:0}
-      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.5rem;font-family:var(--mono);font-size:.7rem;
-        letter-spacing:.14em;text-transform:uppercase;color:var(--ink);border:1px solid rgba(242,243,245,.26);border-radius:999px;
+      .kase__stackline{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--mid);margin:0}
+      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.5rem;font-family:var(--mono);font-size:.75rem;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--ink);border:1px solid rgba(242,243,245,.26);border-radius:999px;
         padding:.7rem 1.2rem;transition:border-color .3s var(--ease)}
       .case__live span{color:var(--aqua)} .case__live:hover{border-color:var(--aqua)}
 
