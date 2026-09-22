@@ -91,13 +91,20 @@ import { projects } from '../data/projects';
       }
 
       /* case como UNA composición: info + stack + collage, centrado, tras el estallido */
-      .kase{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:clamp(4rem,10vh,7rem) var(--gut) clamp(3.5rem,9vh,6rem);
+      /* el case SCROLLEA cuando no entra (pantallas bajas / mobile): la franja superior queda reservada
+         para nav + "‹ Proyectos" (--top) y el contenido se desvanece al pasar por debajo, nunca se pisa */
+      .kase{--top:calc(var(--gut) + 5.4rem);position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;
+        overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+        padding:var(--top) var(--gut) calc(clamp(2.5rem,7vh,5rem) + env(safe-area-inset-bottom,0px));
+        -webkit-mask-image:linear-gradient(to bottom,transparent calc(var(--top) - 1.4rem),#000 calc(var(--top) - .2rem));
+        mask-image:linear-gradient(to bottom,transparent calc(var(--top) - 1.4rem),#000 calc(var(--top) - .2rem));
         opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease)}
-      body.in-case .kase{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.82s}
+      body.in-case .kase,body.in-case .kase__back{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.82s}
       /* al abrir, los nombres se van UNO a UNO (stagger por JS), no en fade grupal */
       body.in-case .prow{opacity:0;transform:translateX(-16px)}
 
-      .kase__board{width:min(95vw,84rem);display:grid;grid-template-columns:minmax(0,20rem) 1fr;
+      /* margin:auto centra cuando entra y, cuando no, deja scrollear sin recortar el borde superior */
+      .kase__board{margin:auto;flex:none;width:min(100%,84rem);display:grid;grid-template-columns:minmax(0,20rem) 1fr;
         gap:clamp(1.5rem,3vw,3.5rem);align-items:center}
 
       /* la nav (marca + contacto) queda visible también en el case; el volver va debajo de la marca */
@@ -105,7 +112,8 @@ import { projects } from '../data/projects';
         display:inline-flex;align-items:center;gap:.55rem;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
         border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
         font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
-        transition:color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
+        opacity:0;visibility:hidden;pointer-events:none;
+        transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
       .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
       .kase__back:hover{color:var(--ink);border-color:var(--soft);background:rgba(20,20,26,.7)}
 
@@ -160,8 +168,7 @@ import { projects } from '../data/projects';
         transition:opacity .5s var(--ease)}
       :global(.kase__pane img.ready){opacity:1}
       @media(max-width:860px){
-        .kase{place-items:start center}
-        .kase__board{grid-template-columns:1fr;gap:1.5rem}
+        .kase__board{margin:0 auto;grid-template-columns:1fr;gap:1.5rem}
         .kase__collage{order:-1;width:min(86vw,24rem)}
       }
 
@@ -235,11 +242,11 @@ import { projects } from '../data/projects';
           <div class="kase__stage" data-stage></div>
         </div>
       </div>
-      <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Proyectos
-      </button>
     </section>
+    <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proyectos
+    </button>
 
     <script define:vars={{ projects }}>
       const body = document.body;
@@ -312,7 +319,7 @@ import { projects } from '../data/projects';
       // instant = deep-link al cargar: sin re-animar el estallido (la gema entra ya rota)
       const openCase = (slug, { push = true, instant = false } = {}) => {
         const p = projects.find((x) => x.slug === slug); if (!p) return;
-        clearTimeout(closeT); gemBroken = true;
+        clearTimeout(closeT); gemBroken = true; caseEl.scrollTop = 0;
         catEl.textContent = p.category + ' · ' + yearOf(p.ended);
         nameEl.textContent = p.name; roleEl.textContent = p.role || ''; approachEl.textContent = p.approach || '';
         servicesEl.innerHTML = (p.services || []).map((s) => '<li>' + s + '</li>').join('');
