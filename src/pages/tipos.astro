@@ -1,31 +1,56 @@
 ---
+// TIPOS (noindex) — el home actual con un selector de tipografía display en vivo, para comparar candidatas
+// contra Bebas. Las candidatas viven en src/data/tipos.ts. En /ver los dos marcos se sincronizan (BroadcastChannel).
 // HOME — la gema es la ENTRADA; al hacer click se corre y aparecen los proyectos
 // (nombres a la izquierda, gema ambiente a la derecha). Click en un nombre abre el case.
 import { projects } from '../data/projects';
-const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
+import { tipos, monos } from '../data/tipos';
+const faces = tipos.flatMap((t) => (t.files || []).map((f) =>
+  `@font-face{font-family:'${t.family}';src:url('${f.src}') format('woff2');font-weight:${f.weight || t.weight};${f.stretch ? `font-stretch:${f.stretch};` : ''}font-display:swap}`)).join('') + monos.flatMap((m) => (m.files || []).map((f) =>
+  `@font-face{font-family:'${m.family}';src:url('${f.src}') format('woff2');font-weight:${f.weight};font-display:swap}`)).join('');
 ---
 <!doctype html>
 <html lang="es">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>blopa — selector de tipografía</title>
+    <title>blopa</title>
+    <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta property="og:title" content="blopa" />
+    <meta property="og:description" content="Portfolio de Pablo Vela — sitios con firma visual propia. Buenos Aires." />
+    <meta property="og:image" content="https://www.blopavela.com/img/og.jpg" />
+    <meta property="og:url" content="https://www.blopavela.com/" />
+    <meta property="og:type" content="website" />
     <meta name="robots" content="noindex" />
-    <link rel="preload" href="/fonts/ClashDisplay-600.woff2" as="font" type="font/woff2" crossorigin />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style is:inline set:html={faces}></style>
+    <!-- escala NUEVA de textos chicos (se activa con html.esc desde el selector): 3 colores, 2 tamaños de mono, 1 tracking.
+         Fuentes: Apple HIG (mín 11pt), M3 labelSmall 11px, Carbon/Geist 12px, Butterick (mayús +5–12%), WCAG 1.4.3 (4.5:1) -->
+    <style is:inline>
+      html.esc{--ink2:#9c9ea7;--ink3:#7b7d86}
+      html.esc .nav{font-size:.6875rem;letter-spacing:.08em}
+      html.esc .nav__home{font-size:.75rem;letter-spacing:.16em;color:var(--ink2)}
+      html.esc .nav__home:hover{color:var(--ink)}
+      html.esc .nav__contact{letter-spacing:0;color:var(--ink2)}
+      html.esc .nav__mail{color:var(--ink2)}
+      html.esc .nav__contact:hover,html.esc .nav__contact:hover .nav__mail{color:var(--ink)}
+      html.esc .kase__back{font-size:.6875rem;letter-spacing:.08em;color:var(--ink2)}
+      html.esc .case__eye{font-size:.6875rem;letter-spacing:.08em;color:var(--ink2)}
+      html.esc .case__role{font-size:.6875rem;letter-spacing:.08em;color:var(--ink2)}
+      html.esc .kase__slabel{font-size:.6875rem;letter-spacing:.08em;color:var(--ink3)}
+      html.esc .kase__stack li{font-size:.75rem;letter-spacing:.08em;color:var(--ink)}
+      html.esc .kase__stackline{font-size:.6875rem;letter-spacing:.08em;color:var(--ink2)}
+      html.esc .case__live{font-size:.75rem;letter-spacing:.08em}
+    </style>
     <style>
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
       @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-500.woff2') format('woff2'); font-weight:500; font-display:swap; }
-      @font-face { font-family:'Clash Display'; src:url('/fonts/ClashDisplay-600.woff2') format('woff2'); font-weight:600; font-display:swap; }
-      /* candidatas del selector */
       @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
-      @font-face { font-family:'Space Mono'; src:url('/fonts/space-mono-latin-700-normal.woff2') format('woff2'); font-weight:700; font-display:swap; }
-      @font-face { font-family:'Zilla Slab'; src:url('/fonts/zilla-slab-latin-600-normal.woff2') format('woff2'); font-weight:600; font-display:swap; }
-      @font-face { font-family:'Chakra Petch'; src:url('/fonts/chakra-petch-latin-600-normal.woff2') format('woff2'); font-weight:600; font-display:swap; }
-      @font-face { font-family:'Darker Grotesque'; src:url('/fonts/darker-grotesque-latin-700-normal.woff2') format('woff2'); font-weight:700; font-display:swap; }
-      @font-face { font-family:'Anton'; src:url('/fonts/anton-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
       :root{ --bg:#0b0b0e; --ink:#f2f3f5; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
         --aqua:#24e2e8; --red:#ff3a54;
-        --display:'Clash Display',Georgia,serif; --body:'Satoshi',-apple-system,sans-serif;
+        --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
         --mono:ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
       *{box-sizing:border-box;margin:0}
       body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow-x:hidden;
@@ -33,19 +58,27 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       a{color:inherit;text-decoration:none}
       canvas.shard{position:fixed;inset:0;z-index:1;pointer-events:none}
 
-      .top{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:baseline;
-        padding:var(--gut);font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--soft)}
-      .top a:hover{color:var(--ink)}
+      /* nav: sólo aparece dentro (proyectos/case); la ENTRADA queda limpia, sólo la gema */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:baseline;
+        padding:var(--gut);font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);
+        opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
+      /* la BARRA nunca captura clicks (taparía botones que queden bajo su franja de padding,
+         como el "‹ Proyectos" en desktop); sólo sus hijos son interactivos */
+      body.entered .nav{opacity:1;transition-delay:.3s}
+      body.entered .nav .nav__home,body.entered .nav .nav__contact{pointer-events:auto}
+      .nav__home{appearance:none;background:none;border:0;font:inherit;letter-spacing:.16em;text-transform:uppercase;
+        color:var(--soft);cursor:pointer;transition:color .25s var(--ease);
+        text-shadow:-.7px 0 rgba(255,58,84,.5),.7px 0 rgba(36,226,232,.5)}   /* colores de la gema a través del mark */
+      .nav__home:hover{color:var(--ink)}
+      .nav__contact{text-transform:none;letter-spacing:.02em;color:var(--soft);white-space:nowrap;transition:color .25s var(--ease)}
+      .nav__mail{color:var(--dim)}
+      .nav__contact:hover{color:var(--ink)} .nav__contact:hover .nav__mail{color:var(--soft)}
+      /* mobile: se oculta el nombre y queda el MAIL visible (contacto accionable, sin adivinar) */
+      @media(max-width:640px){ .nav__who{display:none} .nav__mail{color:var(--soft)} }
 
-      /* landing: sólo el disparador (la palabra "blopa" vive dentro del cristal) */
+      /* landing: sólo el disparador; la gema es todo */
       .enter{position:fixed;inset:0;z-index:4;cursor:pointer}
       body.entered .enter{pointer-events:none}
-      .hint{position:fixed;left:0;right:0;bottom:clamp(3rem,10vh,6rem);z-index:5;text-align:center;pointer-events:none;
-        font-family:var(--mono);font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--soft);
-        opacity:0;transition:opacity .6s var(--ease)}
-      body:not(.entered):not(.pre) .hint{opacity:.75}
-      .hint span{display:inline-block;margin-left:.35em;animation:nudge 1.5s var(--ease) infinite}
-      @keyframes nudge{0%,100%{transform:translateX(0);opacity:.55}50%{transform:translateX(6px);opacity:1}}
 
       /* la gema es la ENTRADA y permanece: al entrar se corre a la derecha y deja los nombres a la izquierda */
       canvas.shard{transition:opacity .8s var(--ease)}
@@ -55,81 +88,140 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         gap:.2rem;padding:clamp(5rem,12vh,9rem) var(--gut) 4rem;max-width:min(46vw,40rem);
         opacity:0;pointer-events:none;transition:opacity .7s var(--ease)}
       body.entered .index{opacity:1;pointer-events:auto;transition-delay:.3s}
-      body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
+      body.in-case .index{pointer-events:none}
       .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;
-        display:flex;align-items:baseline;gap:1rem;padding:.55rem 0;position:relative;
-        transition:padding .35s var(--ease)}
+        display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem 1rem;padding:.55rem 0;position:relative;isolation:isolate;
+        transition:padding .35s var(--ease),opacity .45s var(--ease),transform .45s var(--ease)}
       .prow:hover{padding-left:1rem}
-      .prow__name{font-family:var(--display);font-weight:var(--dw,600);font-size:var(--dps,clamp(1.9rem,3.8vw,3.1rem));
-        letter-spacing:-.03em;line-height:1.02;color:var(--soft);transition:color .35s var(--ease),text-shadow .35s var(--ease)}
-      .prow:hover .prow__name{color:var(--ink);text-shadow:-1.4px 0 var(--red),1.4px 0 var(--aqua)}
+      /* jerarquía: el contenido primario descansa en ink; la aberración cromática es un EVENTO
+         (hover/focus), no el estado de reposo — y los hermanos se apagan al elegir uno */
+      .prow__name{font-family:var(--display);font-weight:var(--dw,400);font-stretch:var(--dst,100%);font-size:var(--dps,clamp(2.6rem,5.4vw,4.4rem));
+        letter-spacing:var(--dls,.01em);line-height:1.0;color:var(--ink);white-space:nowrap;
+        transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+      .index:hover .prow:not(:hover) .prow__name{color:var(--soft)}
+      .prow:hover .prow__name,.prow:focus-visible .prow__name{color:var(--ink);
+        text-shadow:-2px 0 var(--red),2px 0 var(--aqua)}
+      .prow:focus-visible{outline:none}
       .prow__arrow{opacity:0;color:var(--c);transform:translateX(-6px);
         transition:opacity .3s var(--ease),transform .3s var(--ease)}
       .prow:hover .prow__arrow{opacity:1;transform:translateX(0)}
-      @media(max-width:860px){
-        .index{max-width:none;padding-top:clamp(4rem,9vh,7rem);justify-content:flex-end;padding-bottom:clamp(3rem,10vh,6rem)}
+      /* portrait: la gema queda arriba (mismo criterio W<H del render); los nombres se centran
+         en la banda libre bajo la gema — --gemclear lo calcula el JS con la posición/escala reales */
+      @media(orientation:portrait){
+        .prow{padding:.4rem 0}
+        .index{max-width:none;justify-content:center;
+          padding-top:calc(var(--gemclear,46svh) + .6rem);
+          padding-bottom:clamp(4rem,9vh,5.5rem)}
       }
 
-      /* selector de tipografía en vivo (herramienta de comparación) */
-      .fontpick{position:fixed;left:50%;top:2.4rem;transform:translateX(-50%);z-index:30;display:flex;gap:.3rem;flex-wrap:wrap;
-        justify-content:center;max-width:92vw;background:rgba(12,12,16,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-        border:1px solid var(--hair);border-radius:999px;padding:.35rem}
-      .fontpick button{appearance:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
-        white-space:nowrap;color:var(--soft);background:transparent;border:0;border-radius:999px;padding:.4rem .7rem;transition:color .2s,background .2s}
-      .fontpick button:hover{color:var(--ink)}
-      .fontpick button.on{color:#06131a;background:var(--aqua)}
-      @media(max-width:860px){ .fontpick{top:auto;bottom:.6rem;font-size:.55rem} }
+      /* case como UNA composición: info + stack + collage, centrado, tras el estallido */
+      /* el case SCROLLEA cuando no entra (pantallas bajas / mobile): la franja superior queda reservada
+         para nav + "‹ Proyectos" (--top) y el contenido se desvanece al pasar por debajo, nunca se pisa */
+      .kase{--top:calc(var(--gut) + 5.4rem);position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;
+        overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+        padding:var(--top) var(--gut) calc(clamp(2.5rem,7vh,5rem) + env(safe-area-inset-bottom,0px));
+        -webkit-mask-image:linear-gradient(to bottom,transparent calc(var(--top) - 1.4rem),#000 calc(var(--top) - .2rem));
+        mask-image:linear-gradient(to bottom,transparent calc(var(--top) - 1.4rem),#000 calc(var(--top) - .2rem));
+        opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease)}
+      body.in-case .kase,body.in-case .kase__back{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.82s}
+      /* al abrir, los nombres se van UNO a UNO (stagger por JS), no en fade grupal */
+      body.in-case .prow{opacity:0;transform:translateX(-16px)}
 
-      /* case (reusa el patrón editorial) */
-      .case{position:fixed;inset:0;z-index:6;background:#0b0b08;overflow-y:auto;opacity:0;visibility:hidden;pointer-events:none;
-        transition:opacity .5s var(--ease),visibility .5s var(--ease)}
-      body.in-case .case{opacity:1;visibility:visible;pointer-events:auto}
-      .case__bar{position:sticky;top:0;display:flex;justify-content:space-between;padding:var(--gut);
-        font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
-        background:linear-gradient(#0b0b08 60%,transparent)}
-      .case__bar button{appearance:none;background:none;border:0;font:inherit;color:var(--soft);cursor:pointer;letter-spacing:.14em}
-      .case__bar button:hover{color:var(--ink)}
-      .case__panel{max-width:84rem;margin:0 auto;padding:clamp(1rem,4vh,3rem) var(--gut) 6rem;
-        display:grid;grid-template-columns:minmax(0,26rem) 1fr;gap:clamp(2rem,5vw,5rem);align-items:start}
-      @media(max-width:860px){.case__panel{grid-template-columns:1fr}}
-      .case__head{position:sticky;top:6rem}
-      @media(max-width:860px){.case__head{position:static}}
-      .case__eye{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
-      .case__title{font-family:var(--display);font-weight:var(--dw,600);font-size:var(--dcs,clamp(2.4rem,6vw,4.5rem));line-height:.95;
-        letter-spacing:-.03em;margin:.5rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua)}
-      .case__role{margin-top:.6rem;color:#c9cbd2;font-size:.9rem}
-      .case__blurb{margin-top:1rem;color:var(--soft);line-height:1.55;max-width:34ch}
-      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.4rem;font-family:var(--mono);font-size:.72rem;
+      /* margin:auto centra cuando entra y, cuando no, deja scrollear sin recortar el borde superior */
+      .kase__board{margin:auto;flex:none;width:min(100%,84rem);display:grid;grid-template-columns:minmax(0,20rem) 1fr;
+        gap:clamp(1.5rem,3vw,3.5rem);align-items:center}
+
+      /* la nav (marca + contacto) queda visible también en el case; el volver va debajo de la marca */
+      .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;
+        display:inline-flex;align-items:center;gap:.55rem;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
+        border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+        font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
+        opacity:0;visibility:hidden;pointer-events:none;
+        transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s var(--ease),border-color .25s var(--ease),background .25s var(--ease)}
+      .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
+      .kase__back:hover{color:var(--ink);border-color:var(--soft);background:rgba(20,20,26,.7)}
+
+      .kase__info{min-width:0}
+      .case__eye{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--soft)}
+      /* entrar a un proyecto tiene que sentirse MÁS grande que la lista, no igual */
+      .case__title{font-family:var(--display);font-weight:var(--dw,400);font-stretch:var(--dst,100%);font-size:var(--dcs,clamp(3.2rem,6vw,5.5rem));line-height:.9;
+        letter-spacing:var(--dls,.01em);margin:.4rem 0 0;text-shadow:-1.5px 0 var(--red),1.5px 0 var(--aqua);
+        transition:opacity .3s var(--ease)}
+      /* shared-element: mientras el ghost del nombre viaja, el título real espera */
+      .kase.flip .case__title{opacity:0}
+      :global(.flip-name){position:fixed;z-index:10;margin:0;pointer-events:none;font-family:var(--display);
+        font-weight:var(--dw,400);font-stretch:var(--dst,100%);line-height:1.0;color:var(--ink);white-space:nowrap;transform-origin:top left;will-change:transform}
+      .case__role{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+        color:var(--soft);margin-top:.7rem}
+      .case__approach{margin-top:1rem;color:#c9cbd2;line-height:1.5;font-size:.92rem;max-width:38ch}
+      .kase__slabel{font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);
+        margin:1.6rem 0 .6rem;display:flex;align-items:center;gap:.7rem}
+      .kase__slabel::after{content:"";flex:1;height:1px;background:var(--hair)}
+      /* jerarquía real: servicios (lo que hiciste) = chips presentes; stack (con qué) = una línea mono terciaria */
+      .kase__stack{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;margin:0;padding:0}
+      :global(.kase__stack li){font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);
+        border:1px solid #2e2e38;border-radius:6px;padding:.42rem .7rem;white-space:nowrap;
+        background:rgba(255,255,255,.02);transition:border-color .25s var(--ease),color .25s var(--ease)}
+      :global(.kase__stack li:hover){border-color:var(--soft)}
+      .kase__stackline{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
+        color:var(--dim);margin:0}
+      .case__live{display:inline-flex;align-items:center;gap:.5rem;margin-top:1.5rem;font-family:var(--mono);font-size:.7rem;
         letter-spacing:.14em;text-transform:uppercase;color:var(--ink);border:1px solid rgba(242,243,245,.26);border-radius:999px;
         padding:.7rem 1.2rem;transition:border-color .3s var(--ease)}
       .case__live span{color:var(--aqua)} .case__live:hover{border-color:var(--aqua)}
-      .case__shots{display:flex;flex-direction:column;gap:clamp(1rem,2.5vh,2rem)}
-      .case__shots img{width:100%;height:auto;border:1px solid rgba(242,243,245,.1);border-radius:4px;display:block;
-        box-shadow:0 30px 80px rgba(0,0,0,.5)}
 
+      /* collage grande: 3 capturas con profundidad real (translateZ) + parallax */
+      .kase__collage{position:relative;width:min(100%,56rem);aspect-ratio:16/11;justify-self:center;perspective:1700px}
+      /* el tilt se anima por lerp en el rAF (misma física que el WebGL), no por transition */
+      .kase__stage{position:absolute;inset:0;transform-style:preserve-3d;
+        transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));will-change:transform}
+      /* paneles dinámicos (N): posición/transform inline desde JS. Estilos :global porque se crean por JS */
+      :global(.kase__pane){position:absolute;width:46%;aspect-ratio:16/10;overflow:hidden;border-radius:7px;border:1px solid var(--hair);
+        background:#0a0a0c;box-shadow:0 40px 90px rgba(0,0,0,.6);opacity:0;
+        transition:transform .85s var(--ease),opacity .55s var(--ease);will-change:transform,opacity}
+      :global(.kase__pane.show){opacity:1}
+      :global(.kase__pane::after){content:"";position:absolute;inset:0;pointer-events:none;border-radius:7px;
+        box-shadow:inset 1.6px 0 0 rgba(255,58,84,.45),inset -1.6px 0 0 rgba(36,226,232,.45)}
+      /* mientras la captura llega: shimmer con la firma cromática (el estallido nunca revela vacío) */
+      :global(.kase__pane::before){content:"";position:absolute;inset:0;pointer-events:none;
+        background:linear-gradient(100deg,transparent 32%,rgba(36,226,232,.09) 46%,rgba(255,58,84,.09) 54%,transparent 68%);
+        background-size:220% 100%;animation:shimmer 1.1s linear infinite;transition:opacity .45s var(--ease)}
+      :global(.kase__pane.loaded::before){opacity:0}
+      @keyframes shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+      :global(.kase__pane img){width:100%;height:100%;object-fit:cover;display:block;opacity:0;
+        transition:opacity .5s var(--ease)}
+      :global(.kase__pane img.ready){opacity:1}
+      @media(max-width:860px){
+        .kase__board{margin:0 auto;grid-template-columns:1fr;gap:1.5rem}
+        .kase__collage{order:-1;width:min(86vw,24rem)}
+      }
+
+      /* selector de tipografía (sólo /tipos) */
+      .tpick{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);z-index:30;display:flex;gap:.25rem;flex-wrap:wrap;
+        justify-content:center;max-width:94vw;background:rgba(12,12,16,.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+        border:1px solid var(--hair);border-radius:1.2rem;padding:.35rem}
+      .tpick button{appearance:none;font-family:var(--mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
+        white-space:nowrap;color:var(--soft);background:transparent;border:0;border-radius:999px;padding:.45rem .7rem;transition:color .2s,background .2s}
+      .tpick button:hover{color:var(--ink)}
+      .tpick button.on{color:#06131a;background:var(--aqua)}
+      .tpick__row{display:flex;gap:.25rem;flex-wrap:wrap;justify-content:center;align-items:center;width:100%}
+      .tpick__k{font-family:ui-monospace,monospace;font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:0 .4rem}
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
   </head>
-  <body class="pre">
+  <body>
     <canvas class="shard" data-shard aria-hidden="true"></canvas>
     <div class="enter" data-enter role="button" tabindex="0" aria-label="Entrar"></div>
 
-    <div class="top">
-      <span class="top__mark">blopa</span>
-      <span>Buenos Aires · <time data-clock>—</time></span>
+    <div class="tpick" data-tpick data-tipos={JSON.stringify(tipos)} data-monos={JSON.stringify(monos)} aria-label="Tipografía">
+      <div class="tpick__row"><span class="tpick__k">Nombres</span>{tipos.map((t) => <button type="button" data-t={t.id} title={t.note || ''}>{t.label}</button>)}</div>
+      <div class="tpick__row"><span class="tpick__k">Escala</span><button type="button" data-e="actual">Actual</button><button type="button" data-e="nueva">Nueva</button></div>
+      <div class="tpick__row"><span class="tpick__k">Detalles</span>{monos.map((m) => <button type="button" data-m={m.id} title={m.note || ''}>{m.label}</button>)}</div>
     </div>
-
-    <div class="fontpick" data-fontpick>
-      <button type="button" data-f="clash" class="on">Clash</button>
-      <button type="button" data-f="d1">Bebas</button>
-      <button type="button" data-f="d2">Space Mono</button>
-      <button type="button" data-f="d3">Zilla</button>
-      <button type="button" data-f="d4">Chakra</button>
-      <button type="button" data-f="d5">Darker</button>
-      <button type="button" data-f="d6">Anton</button>
-    </div>
-    <div class="hint" data-hint>entrá <span>→</span></div>
-
+    <nav class="nav" aria-label="Navegación">
+      <button type="button" class="nav__home" data-home>blopa</button>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela<span class="nav__sep" aria-hidden="true"> · </span></span><span class="nav__mail">blopave@pm.me ↗</span></a>
+    </nav>
     <section class="index" data-index>
       {projects.map((p) => (
         <button type="button" class="prow" data-row data-slug={p.slug} style={`--c:${p.accent}`}>
@@ -139,108 +231,280 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
       ))}
     </section>
 
-    <section class="case" data-case aria-hidden="true">
-      <div class="case__bar"><button type="button" data-back>← galería</button><span>blopa</span></div>
-      <div class="case__panel">
-        <div class="case__head">
+    <section class="kase" data-case aria-hidden="true">
+      <div class="kase__board">
+        <div class="kase__info">
           <p class="case__eye" data-cat></p>
           <h2 class="case__title" data-name></h2>
           <p class="case__role" data-role></p>
-          <p class="case__blurb" data-blurb></p>
+          <p class="case__approach" data-approach></p>
+          <p class="kase__slabel">Servicios</p>
+          <ul class="kase__stack" data-services></ul>
+          <p class="kase__slabel">Stack</p>
+          <p class="kase__stackline" data-stack></p>
           <a class="case__live" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="case__shots" data-shots></div>
+        <div class="kase__collage" data-collage>
+          <div class="kase__stage" data-stage></div>
+        </div>
       </div>
     </section>
+    <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proyectos
+    </button>
 
     <script define:vars={{ projects }}>
       const body = document.body;
       const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const coarse = matchMedia('(pointer: coarse)').matches;
       const DPR = Math.min(coarse ? 1.4 : 2, window.devicePixelRatio || 1);
-      requestAnimationFrame(() => body.classList.remove('pre'));
-
-      // reloj vivo de Buenos Aires (top-right)
-      const clockEl = document.querySelector('[data-clock]');
-      if (clockEl) {
-        const tick = () => { clockEl.textContent = new Intl.DateTimeFormat('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()); };
-        tick(); setInterval(tick, 15000);
-      }
 
       // ── entrada / galería / case ──
+      // balance del índice en portrait: los nombres se centran en la banda libre bajo la gema.
+      // MOB_SC / MOB_CY son la escala y altura de la gema en el índice mobile (las usa también el render).
+      const MOB_SC = 2.1, MOB_CY = 0.28;
+      const indexEl = document.querySelector('[data-index]');
+      const balanceIndex = () => {
+        const W = innerWidth, H = innerHeight;
+        if (W >= H) { indexEl.style.removeProperty('--gemclear'); return; }
+        const fit = 0.6 + 0.7 * (H / W);
+        const gemBottom = (0.5 - MOB_CY + 1 / (MOB_SC * fit)) * H;   // borde inferior de la gema, en px
+        indexEl.style.setProperty('--gemclear', Math.round(gemBottom) + 'px');
+      };
+      balanceIndex(); addEventListener('resize', balanceIndex);
+
       let entered = false;
-      const enter = () => { if (entered) return; entered = true; body.classList.add('entered'); };
+      let bootT0 = performance.now();   // carga: la gema se ARMA (el quiebre del case, invertido)
+      // la URL refleja el estado (#proyectos / #slug) para que back/forward y los deep-links funcionen.
+      // Embebido (p.ej. en /ver, donde dos copias comparten el historial de la ventana) se usa
+      // replaceState: la URL del marco se mantiene sin apilar entradas cruzadas entre iframes.
+      const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+      const pushHash = (h) => { const target = h ? '#' + h : '';
+        if (location.hash === target) return;
+        const url = location.pathname + target;
+        if (FRAMED) history.replaceState(null, '', url); else history.pushState(null, '', url); };
+      const enter = (push = true) => { if (entered) return; entered = true; body.classList.add('entered');
+        if (push) pushHash('proyectos'); };
       const enterEl = document.querySelector('[data-enter]');
-      enterEl.addEventListener('click', enter);
+      enterEl.addEventListener('click', () => enter());
       enterEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } });
       addEventListener('wheel', (e) => { if (!entered && e.deltaY > 6) enter(); }, { passive: true });
 
-      // case
+      // case en el mismo lugar: la gema se rompe → ficha (izq) + collage (der)
+      let inCase = false, caseT0 = 0, gemBroken = false, closeT = 0;
       const caseEl = document.querySelector('[data-case]');
       const catEl = caseEl.querySelector('[data-cat]'), nameEl = caseEl.querySelector('[data-name]'),
-        roleEl = caseEl.querySelector('[data-role]'), blurbEl = caseEl.querySelector('[data-blurb]'),
-        liveEl = caseEl.querySelector('[data-live]'), shotsEl = caseEl.querySelector('[data-shots]');
-      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
-      const openCase = (slug) => {
-        const p = projects.find((x) => x.slug === slug); if (!p) return;
-        catEl.textContent = p.category + ' · ' + yearOf(p.ended);
-        nameEl.textContent = p.name; roleEl.textContent = p.role; blurbEl.textContent = p.blurb;
-        if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; } else { liveEl.style.display = 'none'; }
-        shotsEl.innerHTML = ''; [1, 2, 3].forEach((n) => { const im = document.createElement('img'); im.src = '/img/src/' + slug + '-' + n + '.jpg'; im.alt = p.name + ' — ' + n; im.loading = 'lazy'; shotsEl.appendChild(im); });
-        body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false'); caseEl.scrollTop = 0;
-      };
-      const closeCase = () => { body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true'); };
-      // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
-      document.querySelectorAll('[data-row]').forEach((row) => {
-        row.addEventListener('click', () => openCase(row.dataset.slug));
+        approachEl = caseEl.querySelector('[data-approach]'), servicesEl = caseEl.querySelector('[data-services]'),
+        liveEl = caseEl.querySelector('[data-live]'), stageEl = caseEl.querySelector('[data-stage]'),
+        stackEl = caseEl.querySelector('[data-stack]'), roleEl = caseEl.querySelector('[data-role]');
+      const rows = Array.from(document.querySelectorAll('[data-row]'));
+      // precarga predictiva: al apuntar un proyecto ya se piden sus capturas
+      const preloaded = new Set();
+      const preloadShots = (slug) => { if (preloaded.has(slug)) return; preloaded.add(slug);
+        const p = projects.find((x) => x.slug === slug);
+        ((p && p.shots) || []).forEach((u) => { const im = new Image(); im.src = u; }); };
+      // la gema dialoga con el índice: el hover tiñe su rim con el accent del proyecto (lo lee el render)
+      const gemTint = { r: 1, g: 1, b: 1, amt: 0 };
+      // interacción pre-click gema↔proyecto (definida en /lab): la gema escucha (cabeceo),
+      // muestra el sitio refractado en scroll (ventana) y toma el temperamento del proyecto (carácter).
+      // la fractura queda exclusiva del click: el estallido al entrar.
+      let hoverProj = null;    // proyecto señalado (o null)
+      // carácter (B): el temperamento de cada proyecto vive en projects.ts (campo `character`)
+      const NEUTRAL = { spin: 1, ripple: 0, pulse: 0, breathe: 0 };
+      const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+      // tilt del collage: targets que el rAF persigue con el mismo lerp del WebGL
+      const tilt = { tx: 0, ty: 0 };
+      // arreglo liderado por la 1ª captura: hero grande al frente, el resto se abre hacia atrás
+      const fanLayout = (n) => Array.from({ length: n }, (_, i) => {
+        const t = n > 1 ? i / (n - 1) : 0;          // 0 = hero, 1 = la más atrás
+        return { l: 56 - t * 32, top: 60 - t * 34, rot: (i % 2 ? 1 : -1) * (2 + (i % 3) * 1.3),
+          z: -i * 62, s: 1.02 - i * 0.06, zi: n - i };
       });
-      document.querySelector('[data-back]').addEventListener('click', closeCase);
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      // instant = deep-link al cargar: sin re-animar el estallido (la gema entra ya rota)
+      const openCase = (slug, { push = true, instant = false } = {}) => {
+        const p = projects.find((x) => x.slug === slug); if (!p) return;
+        clearTimeout(closeT); gemBroken = true; caseEl.scrollTop = 0;
+        catEl.textContent = p.category + ' · ' + yearOf(p.ended);
+        nameEl.textContent = p.name; roleEl.textContent = p.role || ''; approachEl.textContent = p.approach || '';
+        servicesEl.innerHTML = (p.services || []).map((s) => '<li>' + s + '</li>').join('');
+        stackEl.textContent = (p.stack || []).join(' · ');
+        if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; } else { liveEl.style.display = 'none'; }
+        // collage dinámico: un panel por captura (p.shots), en cascada con profundidad
+        const shots = p.shots || []; const lay = fanLayout(shots.length);
+        stageEl.innerHTML = '';
+        shots.forEach((url, i) => {
+          const pane = document.createElement('div'); pane.className = 'kase__pane';
+          const c = lay[i]; pane.style.left = c.l + '%'; pane.style.top = c.top + '%'; pane.style.zIndex = String(c.zi);
+          pane.dataset.tf = 'translate(-50%,-50%) translateZ(' + c.z.toFixed(0) + 'px) rotate(' + c.rot.toFixed(1) + 'deg) scale(' + c.s.toFixed(2) + ')';
+          pane.style.transform = 'translate(-50%,-50%) scale(.4)';   // colapsado (emerge del centro)
+          const im = document.createElement('img'); im.src = url; im.alt = p.name + ' — ' + (i + 1); im.decoding = 'async';
+          const ready = () => { im.classList.add('ready'); pane.classList.add('loaded'); };
+          if (im.complete) ready(); else im.addEventListener('load', ready, { once: true });
+          pane.appendChild(im); stageEl.appendChild(pane);
+        });
+        // emerger escalonado (después del hold del estallido; instant = casi de una)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          stageEl.querySelectorAll('.kase__pane').forEach((pane, i) => {
+            pane.style.transitionDelay = ((instant ? 0.15 : 0.92) + i * 0.09).toFixed(2) + 's';
+            pane.style.transform = pane.dataset.tf; pane.classList.add('show');
+          });
+        }));
+        // los nombres se van uno a uno hacia la izquierda
+        rows.forEach((r, i) => { r.style.transitionDelay = instant ? '0s' : (i * 0.045).toFixed(3) + 's'; });
+        caseT0 = performance.now() - (instant ? 1400 : 0);
+        inCase = true; body.classList.add('in-case'); caseEl.setAttribute('aria-hidden', 'false');
+        document.title = 'blopa — ' + p.name;
+        if (push) pushHash(slug);
+      };
+      // cierre coreografiado: el collage se comprime de vuelta al centro (cascada inversa)
+      // y recién cuando llega el último pane la gema empieza a rearmarse
+      const closeCase = (push = true) => { if (!inCase) return;
+        inCase = false; tilt.tx = 0; tilt.ty = 0;
+        const panes = stageEl.querySelectorAll('.kase__pane'); const n = panes.length;
+        panes.forEach((pane, i) => {
+          pane.style.transition = 'transform .45s var(--ease),opacity .4s var(--ease)';
+          pane.style.transitionDelay = ((n - 1 - i) * 0.05).toFixed(2) + 's';
+          pane.style.transform = 'translate(-50%,-50%) scale(.4)'; pane.classList.remove('show');
+        });
+        clearTimeout(closeT);
+        closeT = setTimeout(() => {
+          gemBroken = false; body.classList.remove('in-case'); caseEl.setAttribute('aria-hidden', 'true');
+          rows.forEach((r, i) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = (0.15 + i * 0.05).toFixed(2) + 's'; });
+          // al terminar la vuelta, limpiar los delays para que el hover no quede retrasado
+          setTimeout(() => { if (!inCase) rows.forEach((r) => { r.style.transitionDelay = '0s'; }); }, 900);
+        }, n ? 400 : 0);
+        document.title = 'blopa';
+        if (push) pushHash('proyectos'); };
+      // parallax del collage: el puntero sólo fija el TARGET; el rAF lo persigue con lerp
+      addEventListener('pointermove', (e) => { if (!inCase) return;
+        tilt.tx = (0.5 - e.clientY / innerHeight) * 15; tilt.ty = (e.clientX / innerWidth - 0.5) * 22;
+      });
+      // shared-element: el nombre clickeado VIAJA hasta convertirse en el título del case,
+      // usando el hold del estallido como ventana; el crossfade final tapa el cambio de wrap
+      const flipName = (row) => {
+        if (reduceMotion) return;
+        const src = row.querySelector('.prow__name');
+        const a = src.getBoundingClientRect(), b = nameEl.getBoundingClientRect();
+        if (!a.width || !b.width) return;
+        const cs = getComputedStyle(src);
+        const g = document.createElement('span'); g.className = 'flip-name'; g.textContent = src.textContent;
+        g.style.left = a.left + 'px'; g.style.top = a.top + 'px';
+        g.style.fontSize = cs.fontSize; g.style.letterSpacing = cs.letterSpacing;
+        document.body.appendChild(g); caseEl.classList.add('flip');
+        const dur = 850, ease = 'cubic-bezier(.22,1,.36,1)';
+        g.animate([{ transform: 'translate(0,0) scale(1)' },
+          { transform: 'translate(' + (b.left - a.left) + 'px,' + (b.top - a.top) + 'px) scale(' + (b.width / a.width) + ')' }],
+          { duration: dur, easing: ease, fill: 'forwards' });
+        g.animate([{ opacity: 1 }, { opacity: 1, offset: .7 }, { opacity: 0 }], { duration: dur + 150, easing: 'linear', fill: 'forwards' });
+        setTimeout(() => caseEl.classList.remove('flip'), dur - 120);
+        setTimeout(() => g.remove(), dur + 200);
+      };
+      // índice: nombres a la izquierda; la gema queda a la derecha (ambiente). click → case
+      rows.forEach((row) => {
+        const proj = projects.find((x) => x.slug === row.dataset.slug);
+        const tintOn = () => { const [r, g, b] = hexRGB(row.style.getPropertyValue('--c').trim());
+          gemTint.r = r; gemTint.g = g; gemTint.b = b; gemTint.amt = 1;
+          hoverProj = proj || null;   // la gema registra qué proyecto señalás
+          preloadShots(row.dataset.slug); };
+        const tintOff = () => { gemTint.amt = 0; hoverProj = null; };
+        row.addEventListener('pointerenter', tintOn); row.addEventListener('focus', tintOn);
+        row.addEventListener('pointerleave', tintOff); row.addEventListener('blur', tintOff);
+        row.addEventListener('click', () => {
+          openCase(row.dataset.slug);
+          flipName(row);   // mide el título recién ubicado, por eso va después de openCase
+          row.style.transition = 'none'; row.style.opacity = '0';   // el ghost lo reemplaza al instante
+          gemTint.amt = 0; hoverProj = null;   // suelta: se rompe y el ghost del DOM toma la posta
+        });
+      });
+      document.querySelector('[data-back]').addEventListener('click', () => closeCase());
       addEventListener('keydown', (e) => { if (e.key === 'Escape' && body.classList.contains('in-case')) closeCase(); });
+      // home: vuelve a la entrada (cierra el case y rearma la gema)
+      const goHome = (push = true) => { clearTimeout(closeT); inCase = false; gemBroken = false; entered = false;
+        tilt.tx = 0; tilt.ty = 0;
+        body.classList.remove('in-case'); body.classList.remove('entered'); caseEl.setAttribute('aria-hidden', 'true');
+        rows.forEach((r) => { r.style.transition = ''; r.style.opacity = ''; r.style.transitionDelay = '0s'; });
+        document.title = 'blopa';
+        bootT0 = performance.now();   // volver al home rearma la gema (mismo idioma que la carga)
+        if (push) pushHash(''); };
+      document.querySelector('[data-home]').addEventListener('click', () => goHome());
+
+      // back/forward del navegador navegan los estados; la carga con hash entra directo
+      addEventListener('popstate', () => {
+        const h = location.hash.replace('#', '');
+        if (projects.some((x) => x.slug === h)) { if (!entered) enter(false); openCase(h, { push: false }); }
+        else if (h === 'proyectos') { if (inCase) closeCase(false); else enter(false); }
+        else goHome(false);
+      });
+      { const h = location.hash.replace('#', '');
+        if (h === 'proyectos') enter(false);
+        else if (projects.some((x) => x.slug === h)) { enter(false); openCase(h, { push: false, instant: true }); } }
 
       // ── cristal (entrada): icosaedro de hielo con "blopa", idle + parallax; al entrar se achica arriba ──
       const shard = document.querySelector('[data-shard]');
       const gl = shard.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: true, powerPreference: 'low-power' });
       if (gl) {
-        const STEPS = coarse ? 60 : 92, INSTEPS = coarse ? 26 : 42;
+        const STEPS = coarse ? 72 : 110, INSTEPS = coarse ? 26 : 42;
         const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
         const FRAG = `precision highp float;
           uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
-          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime;
+          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
+          uniform vec3 uTint; uniform float uTintAmt;
+          uniform float uWordMode;   // 0 = texto (nombre) · 1 = imagen del sitio (ventana)
+          uniform float uRipple;     // onda de superficie (carácter: waveform)
+          uniform float uWinFrac;    // alto de la ventana visible dentro del strip (1 = imagen entera)
+          uniform float uScroll;     // desplazamiento vertical (scroll del sitio dentro de la gema)
           #define PHI 1.61803398875
           float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
-          float sdIco(vec3 p){ p=abs(p); float k=0.085;
+          float sdIco(vec3 p){ p=abs(p); float k=0.072;
             float d=dot(p,normalize(vec3(1.,1.,1.)));
             d=smax(d,dot(p,normalize(vec3(0.,1.,PHI+1.))),k);
             d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
             d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
             return d-1.0; }
-          float sdC(vec3 p){ return sdIco(p) - (0.008 + 0.008*sin(uTime*0.7)); }
+          // fractura: al romperse, la superficie se agrieta con celdas de alta frecuencia que laten
+          float fracture(vec3 p){ return sin(9.0*p.x+uTime*5.0)*sin(9.0*p.y-uTime*3.0)*sin(9.0*p.z+uTime*2.0); }
+          float sdC(vec3 p){ float d=sdIco(p) - (0.008 + 0.008*sin(uTime*0.7));
+            d += uBreak*(0.30*fracture(p) + 0.15*fracture(p*2.3));
+            d += uRipple*0.025*sin(9.0*p.y + uTime*5.0);   // carácter: onda viajera (waveform)
+            return d; }
           vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
+            return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
+          // normal "gruesa": donde diverge de la fina hay una arista → línea de facetado
+          vec3 nrmC(vec3 p){ vec2 e=vec2(0.05,0.);
             return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
           vec3 env(vec3 d){
             float ea=uTime*0.06; float ec=cos(ea), es=sin(ea); d.xz=mat2(ec,-es,es,ec)*d.xz;
             vec3 c=vec3(0.040,0.043,0.055);
+            c+=mix(vec3(0.020,0.024,0.036),vec3(0.125,0.15,0.20),clamp(d.y*0.6+0.5,0.,1.));
             c+=vec3(0.70,0.84,0.98)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),7.0)*0.60;
             c+=vec3(0.90,0.94,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),15.0)*0.52;
             c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),22.0)*0.45;
             c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*uAber*1.8;
             c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*uAber*1.8;
             return c; }
-          void main(){
-            vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
+          vec4 shade(vec2 frag, out float ef){ ef=0.;
+            vec2 uv=(frag-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
             vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
             float t=0.; float hit=-1.; float md=1e9;
             for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
-              if(d<0.0008){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+              if(d<0.0008+0.0007*t){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+            float bf=(1.0-smoothstep(0.35,0.9,uBreak));   // se apaga al romperse (sin fantasma)
             if(hit<0.){
-              float e=smoothstep(0.014,0.0,md); float glow=smoothstep(0.17,0.0,md);
-              if(e<=0.001&&glow<=0.001){ gl_FragColor=vec4(0.); return; }
-              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),step(0.,uv.x));
-              gl_FragColor=vec4(hc*e*0.5+vec3(0.12,0.16,0.24)*glow*glow*0.5, max(e*0.6,glow*glow*0.32)); return;
+              ef=step(md,0.02);
+              float e=smoothstep(0.012,0.0,md); float glow=smoothstep(0.20,0.0,md);
+              if(e<=0.001&&glow<=0.001){ return vec4(0.); }
+              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.08,0.08,uv.x));
+              hc=mix(hc,uTint,uTintAmt*0.85);
+              return vec4((hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.8,glow*glow*0.32)*bf);
             }
+            /* refina el impacto: estabiliza la normal en rayos rasantes (sin esto el borde "puntea") */
+            for(int i=0;i<3;i++){ hit+=sdC(uRot*(ro+rd*hit))*0.8; }
             vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
             float ci=clamp(dot(-rd,nw),0.,1.); float fres=0.04+0.96*pow(1.0-ci,4.0);
-            float iorG=1.47; float disp=0.03+uAber*0.11; vec3 col;
+            ef=1.0-smoothstep(0.10,0.17,ci);   // sólo el rasante extremo (la silueta misma)
+            float iorG=1.47; float disp=0.045+uAber*0.11; vec3 col;
             vec3 rin=refract(rd,nw,1.0/iorG);
             if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
             else{
@@ -250,20 +514,54 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
               vec3 oR=refract(rin,neW,iorG+disp),oG=refract(rin,neW,iorG),oB=refract(rin,neW,iorG-disp);
               if(length(oR)<0.5)oR=reflect(rin,neW); if(length(oG)<0.5)oG=reflect(rin,neW); if(length(oB)<0.5)oB=reflect(rin,neW);
               col=vec3(env(oR).r,env(oG).g,env(oB).b);
-              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.5);
+              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.32)*1.15;
             }
             vec3 rfl=env(reflect(rd,nw)); col=mix(col,rfl,fres*0.7);
-            float rim=pow(1.0-ci,2.2);
-            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.28,0.28,nw.x));
-            col+=rim*(0.44+uAber*1.3)*rimC;
+            /* curvatura (fina vs gruesa): alta en vértices y uniones de aristas */
+            float dnn=1.0-dot(n,nrmC(po));
+            /* rim en dos capas: halo suave + línea tensa; atenuado en vértices para que
+               las uniones se fundan en vez de "pinchar" con un punto caliente */
+            float rim=pow(1.0-ci,2.6), rimT=pow(1.0-ci,4.0);
+            float vsoft=1.0-0.55*smoothstep(0.10,0.55,dnn);
+            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x));
+            rimC=mix(rimC,uTint,uTintAmt*0.85);
+            col+=(rim*0.34+rimT*0.92)*(1.0+uAber*2.6)*rimC*vsoft;
+            /* glint de aristas: línea fina de luz donde se quiebran las facetas
+               (apagado en la silueta, donde la normal gruesa es inestable y puntea) */
+            float eg=smoothstep(0.06,0.5,dnn)*smoothstep(0.0,0.25,ci);
+            col+=eg*(0.33+uAber*0.7)*mix(rimC,vec3(0.9,0.95,1.0),0.6);
             if(uWordAmt>0.001){
-              vec2 wuv=uv*vec2(1.0,2.7)+rin.xy*0.05+vec2(0.5,0.5);
+              float vsc = uWordMode > 0.5 ? 1.0 : 2.7;   // imagen: mapeo cuadrado · texto: comprimido
+              vec2 wuv=uv*vec2(1.0,vsc)+rin.xy*0.05+vec2(0.5,0.5);
               float so=0.005+uAber*0.012;
-              float wr=texture2D(uWord,wuv+vec2(so,0.)).r, wg=texture2D(uWord,wuv).r, wb=texture2D(uWord,wuv-vec2(so,0.)).r;
-              col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
+              if(uWordMode > 0.5){
+                /* ventana (A): captura real del sitio; uWinFrac+uScroll recortan y desplazan (scroll del strip) */
+                wuv.y = wuv.y * uWinFrac + uScroll;
+                vec3 wc=vec3(texture2D(uWord,wuv+vec2(so,0.)).r, texture2D(uWord,wuv).g, texture2D(uWord,wuv-vec2(so,0.)).b);
+                col+=uWordAmt*wc*0.68;   // disuelto: una insinuación del sitio, no un cartel
+              } else {
+                /* nombre: texto blanco, dispersado */
+                float wr=texture2D(uWord,wuv+vec2(so,0.)).r, wg=texture2D(uWord,wuv).r, wb=texture2D(uWord,wuv-vec2(so,0.)).r;
+                col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
+              }
             }
             float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
-            gl_FragColor=vec4(col,al);
+            al*=bf;   // al romperse, la gema se apaga (mismo ritmo que el borde)
+            return vec4(col,al);
+          }
+          void main(){
+            /* AA adaptativo: sólo en la silueta (rasante o casi-impacto) se promedian
+               5 muestras subpixel en grid rotado — elimina el punteado del borde */
+            float ef; vec4 c=shade(gl_FragCoord.xy,ef);
+            if(ef>0.35){
+              vec3 acc=c.rgb*c.a; float aa=c.a; float e2; vec4 s;
+              s=shade(gl_FragCoord.xy+vec2(0.45,0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.15,0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(0.15,-0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.45,-0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              c=vec4(acc/max(aa,1e-4),aa*0.2);
+            }
+            gl_FragColor=c;
           }`;
         const cmp = (ty, s) => { const sh = gl.createShader(ty); gl.shaderSource(sh, s); gl.compileShader(sh);
           if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(sh)); return null; } return sh; };
@@ -274,46 +572,110 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
         const U = (n) => gl.getUniformLocation(prog, n);
         const uRes = U('uRes'), uCenter = U('uCenter'), uScale = U('uScale'), uRot = U('uRot'), uAber = U('uAber'),
-          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime');
+          uWord = U('uWord'), uWordAmt = U('uWordAmt'), uTime = U('uTime'), uBreak = U('uBreak'),
+          uTint = U('uTint'), uTintAmt = U('uTintAmt'), uWordMode = U('uWordMode'), uRipple = U('uRipple'),
+          uWinFrac = U('uWinFrac'), uScroll = U('uScroll');
         gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.clearColor(0, 0, 0, 0);
         const wordTex = gl.createTexture(); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.uniform1i(uWord, 0);
-        let wordReady = false;
-        let wmW = 600, wmFam = 'Clash Display', wmFB = 'sans-serif', wmLs = 20, wmSize = 260;
-        const drawWord = () => { const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
-          x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-          x.font = wmW + ' ' + wmSize + 'px "' + wmFam + '", ' + wmFB; x.letterSpacing = wmLs + 'px'; x.fillText('blopa', 512, 200);
-          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; };
-        const loadAndDraw = () => { if (document.fonts && document.fonts.load) document.fonts.load(wmW + ' 300px "' + wmFam + '"').then(drawWord).catch(drawWord); else drawWord(); };
-        loadAndDraw();
-        // ── selector de tipografía en vivo (cambia nombres + wordmark sin recargar) ──
-        const FONTS = {
-          clash: { stack:"'Clash Display',Georgia,serif",        w:600, fam:'Clash Display',    fb:'sans-serif', ls:20, prow:'clamp(1.9rem,3.8vw,3.1rem)', casesz:'clamp(2.4rem,6vw,4.5rem)' },
-          d1:    { stack:"'Bebas Neue',sans-serif",              w:400, fam:'Bebas Neue',       fb:'sans-serif', ls:4,  prow:'clamp(2.6rem,5.4vw,4.4rem)', casesz:'clamp(3.2rem,8vw,6rem)' },
-          d2:    { stack:"'Space Mono',ui-monospace,monospace",  w:700, fam:'Space Mono',       fb:'monospace',  ls:2,  prow:'clamp(1.5rem,3.0vw,2.5rem)', casesz:'clamp(1.9rem,4.4vw,3.4rem)' },
-          d3:    { stack:"'Zilla Slab',Georgia,serif",           w:600, fam:'Zilla Slab',       fb:'serif',      ls:6,  prow:'clamp(2.0rem,4.1vw,3.4rem)', casesz:'clamp(2.6rem,6.4vw,4.9rem)' },
-          d4:    { stack:"'Chakra Petch',sans-serif",            w:600, fam:'Chakra Petch',     fb:'sans-serif', ls:2,  prow:'clamp(1.8rem,3.6vw,3.0rem)', casesz:'clamp(2.3rem,5.6vw,4.3rem)' },
-          d5:    { stack:"'Darker Grotesque',sans-serif",        w:700, fam:'Darker Grotesque', fb:'sans-serif', ls:2,  prow:'clamp(2.6rem,5.4vw,4.4rem)', casesz:'clamp(3.2rem,7.8vw,5.8rem)' },
-          d6:    { stack:"'Anton',sans-serif",                   w:400, fam:'Anton',            fb:'sans-serif', ls:2,  prow:'clamp(2.3rem,4.8vw,3.9rem)', casesz:'clamp(2.9rem,7vw,5.3rem)' },
-        };
-        const rootEl = document.documentElement;
-        const pickBtns = Array.from(document.querySelectorAll('[data-fontpick] button'));
-        const pickFont = (id) => { const f = FONTS[id]; if (!f) return;
-          rootEl.style.setProperty('--display', f.stack);
-          rootEl.style.setProperty('--dw', f.w);
-          rootEl.style.setProperty('--dps', f.prow);
-          rootEl.style.setProperty('--dcs', f.casesz);
-          wmW = f.w; wmFam = f.fam; wmFB = f.fb; wmLs = f.ls;
-          loadAndDraw();
-          pickBtns.forEach((b) => b.classList.toggle('on', b.dataset.f === id));
-        };
-        pickBtns.forEach((b) => b.addEventListener('click', () => pickFont(b.dataset.f)));
+        let wordReady = false, fontsReady = false, currentWord = null;
+        // sube cualquier fuente (canvas o img) a la textura que la gema refracta
+        const uploadTex = (src) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); wordReady = true; };
+        // dibuja una palabra en la textura que la gema refracta (ajustando el cuerpo al ancho del cristal)
+        const uploadWord = (text) => { const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
+          x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '8px';
+          text = text.toUpperCase(); const T = wmFont; if (x.fontStretch !== undefined) x.fontStretch = T.stretch && T.stretch < 100 ? (T.stretch <= 62.5 ? 'extra-condensed' : T.stretch <= 75 ? 'condensed' : 'semi-condensed') : 'normal';
+          let size = 300; x.font = T.weight + ' ' + size + 'px "' + T.family + '", sans-serif';
+          const w = x.measureText(text).width, maxW = 900;   // nombres largos (BASSLAYER, VALE CASENAVE) se achican para entrar
+          if (w > maxW) { size = Math.max(88, Math.floor(size * maxW / w)); x.font = T.weight + ' ' + size + 'px "' + T.family + '", sans-serif'; }
+          x.fillText(text, 512, 200); uploadTex(c); };
+        // sólo dibuja el wordmark si seguimos mostrando texto (no pisar la ventana si ya se hovereó)
+        const initFonts = () => { fontsReady = true; if (!currentWord || currentWord === 'blopa') uploadWord('blopa'); };
 
-        const SS = coarse ? 1.3 : 1.8; let W = 0, H = 0;
+        // ── selector de tipografía (/tipos): nombres, título del case y wordmark; ← → recorren; ?t= la fija ──
+        const pickEl = document.querySelector('[data-tpick]');
+        const TIPOS = JSON.parse(pickEl.dataset.tipos);
+        const tBtns = Array.from(pickEl.querySelectorAll('button[data-t]'));
+        const MONOS = JSON.parse(pickEl.dataset.monos);
+        const mBtns = Array.from(pickEl.querySelectorAll('button[data-m]'));
+        const eBtns = Array.from(pickEl.querySelectorAll('button[data-e]'));
+        const applyEsc = (id, echo) => {
+          const on = id === 'nueva'; document.documentElement.classList.toggle('esc', on);
+          eBtns.forEach((b) => b.classList.toggle('on', b.dataset.e === (on ? 'nueva' : 'actual')));
+          const u = new URL(location.href); u.searchParams.set('e', on ? 'nueva' : 'actual'); history.replaceState(history.state, '', u);
+          if (echo && chan) chan.postMessage({ e: id });
+        };
+        const applyMono = (id, echo) => {
+          const M = MONOS.find((m) => m.id === id) || MONOS[0];
+          document.documentElement.style.setProperty('--mono', M.stack);
+          mBtns.forEach((b) => b.classList.toggle('on', b.dataset.m === M.id));
+          const u = new URL(location.href); u.searchParams.set('m', M.id); history.replaceState(history.state, '', u);
+          if (echo && chan) chan.postMessage({ m: M.id });
+        };
+        let wmFont = TIPOS[0];
+        const chan = 'BroadcastChannel' in window ? new BroadcastChannel('blopa-tipos') : null;
+        const applyTipo = (id, echo) => {
+          const T = TIPOS.find((t) => t.id === id) || TIPOS[0]; wmFont = T;
+          const rs = document.documentElement.style;
+          rs.setProperty('--display', "'" + T.family + "', sans-serif"); rs.setProperty('--dw', T.weight);
+          rs.setProperty('--dst', (T.stretch || 100) + '%'); rs.setProperty('--dls', T.tracking);
+          rs.setProperty('--dps', T.prow); rs.setProperty('--dcs', T.title);
+          tBtns.forEach((b) => b.classList.toggle('on', b.dataset.t === T.id));
+          const u = new URL(location.href); u.searchParams.set('t', T.id); history.replaceState(history.state, '', u);
+          const redraw = () => { fontsReady = true; if (!currentWord || currentWord === 'blopa') uploadWord('blopa'); };
+          if (document.fonts && document.fonts.load) document.fonts.load(T.weight + ' 300px "' + T.family + '"').then(redraw).catch(redraw); else redraw();
+          if (echo && chan) chan.postMessage(T.id);
+        };
+        tBtns.forEach((b) => b.addEventListener('click', () => applyTipo(b.dataset.t, true)));
+        mBtns.forEach((b) => b.addEventListener('click', () => applyMono(b.dataset.m, true)));
+        eBtns.forEach((b) => b.addEventListener('click', () => applyEsc(b.dataset.e, true)));
+        if (chan) chan.onmessage = (e) => (e.data && e.data.m ? applyMono(e.data.m, false) : e.data && e.data.e ? applyEsc(e.data.e, false) : applyTipo(e.data, false));
+        addEventListener('keydown', (e) => {
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+          const i = TIPOS.indexOf(wmFont), n = TIPOS.length;
+          applyTipo(TIPOS[(i + (e.key === 'ArrowRight' ? 1 : n - 1)) % n].id, true);
+        });
+        applyTipo(new URL(location.href).searchParams.get('t') || TIPOS[0].id, false);
+        applyMono(new URL(location.href).searchParams.get('m') || 'fragment', false);
+        applyEsc(new URL(location.href).searchParams.get('e') || 'actual', false);
+
+        // ── ventana (A): el sitio real refractado dentro del cristal, recorrido en scroll ──
+        let wordMode = 0;    // 0 = texto · 1 = imagen (lo lee el shader)
+        const imgEl = {};    // cache de <img> por 'slug:idx'
+        const stripCanvas = {};   // cache de la tira apilada por slug
+        const projBySlug = (s) => projects.find((x) => x.slug === s);
+        const imgOf = (slug, idx) => { const k = slug + ':' + idx; let im = imgEl[k];
+          if (!im) { im = new Image(); im.src = projBySlug(slug).shots[idx]; imgEl[k] = im; } return im; };
+        // la tira: todas las capturas apiladas en vertical → la gema la recorre (scroll), disuelta con blur
+        const drawStrip = (proj, token) => {
+          if (stripCanvas[proj.slug]) { uploadTex(stripCanvas[proj.slug]); return; }
+          const ims = proj.shots.map((_, i) => imgOf(proj.slug, i));
+          const build = () => { const Wt = 1024; let y = 0;
+            const bands = ims.map((im) => { const iw = im.naturalWidth || 1600, ih = im.naturalHeight || 1000;
+              const h = Math.round(Wt * (ih / iw)); const b = { im, y, h }; y += h; return b; });
+            const c = document.createElement('canvas'); c.width = Wt; c.height = y; const x = c.getContext('2d');
+            x.filter = 'blur(3px)';   // disuelve: la tira se vuelve materia difusa, no screenshot
+            bands.forEach((b) => x.drawImage(b.im, 0, b.y, Wt, b.h));
+            stripCanvas[proj.slug] = c; if (currentWord === token) uploadTex(c); };
+          if (ims.every((im) => im.complete && im.naturalWidth)) build();
+          else Promise.all(ims.map((im) => im.complete ? Promise.resolve() : new Promise((r) => im.addEventListener('load', r, { once: true })))).then(() => { if (currentWord === token) build(); });
+        };
+        // aplica lo que la gema sostiene; sólo re-sube la textura cuando cambia el token (no cada frame)
+        const applyTexture = (token, mode, proj) => {
+          wordMode = mode;
+          if (token === currentWord) return;
+          currentWord = token;
+          if (!token) return;
+          if (mode === 1 && proj) drawStrip(proj, token);
+          else if (fontsReady) uploadWord(token);
+        };
+
+        const SS = coarse ? 1.2 : 1.5; let W = 0, H = 0;   // el AA de silueta permite bajar el supersampling global
         const resize = () => { W = innerWidth; H = innerHeight; shard.width = Math.round(W * DPR * SS); shard.height = Math.round(H * DPR * SS);
           shard.style.width = W + 'px'; shard.style.height = H + 'px'; gl.viewport(0, 0, shard.width, shard.height); };
         resize(); addEventListener('resize', resize);
@@ -321,34 +683,110 @@ const yearOf = (ended: string) => (ended ? ended.split('-')[0] : 'En curso');
         let mtx = 0, mty = 0, pmx = 0, pmy = 0;
         addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; });
 
-        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0;
-        const render = () => {
-          a += 0.0016;
-          ent += (((entered ? 1 : 0)) - ent) * 0.06;   // 0 landing → 1 índice
+        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = reduceMotion ? 0 : 0.85, last = 0, scInit = false, att = 0;
+        let chSpin = 1, chRip = 0, chPulse = 0, chBreath = 0;   // carácter (B) suavizado
+        let tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, tX = 0, tY = 0;
+        // rotación completa (yaw+pitch+roll), transpuesta para llevar el rayo a espacio objeto
+        const rotM = (ax, ay, az) => {
+          const cX = Math.cos(ax), sX = Math.sin(ax), cY = Math.cos(ay), sY = Math.sin(ay), cZ = Math.cos(az), sZ = Math.sin(az);
+          const rxy = [[cY, 0, sY], [sX * sY, cX, -sX * cY], [-cX * sY, sX, cX * cY]];
+          const rz = [[cZ, -sZ, 0], [sZ, cZ, 0], [0, 0, 1]];
+          const m = [];
+          for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let s = 0; for (let k = 0; k < 3; k++) s += rz[r][k] * rxy[k][c]; m[r * 3 + c] = s; }
+          return new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+        };
+        const render = (now) => {
+          now = now || performance.now();
+          const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
+          const lp = (r) => 1 - Math.exp(-r * dt);   // easing independiente del framerate
+          // ② atención (cabeceo): al señalar, la gema "escucha" — se orienta y frena su idle
+          const attT = (entered && hoverProj && !gemBroken) ? 1 : 0;
+          att += (attT - att) * lp(5);
+          // carácter (B): la gema toma el temperamento del proyecto señalado (o neutro)
+          const ch = (hoverProj && hoverProj.character) ? hoverProj.character : NEUTRAL;
+          chSpin += (ch.spin - chSpin) * lp(4); chRip += (ch.ripple - chRip) * lp(4);
+          chPulse += (ch.pulse - chPulse) * lp(4); chBreath += (ch.breathe - chBreath) * lp(4);
+          a += 0.096 * dt * (1 - att * 0.7) * chSpin;   // idle desacelera al escuchar; el carácter cambia su velocidad
+          ent += (((entered ? 1 : 0)) - ent) * lp(3.7);   // 0 landing → 1 índice
+          // quiebre: 0 = gema entera · 1 = rota (case abierto). burst = violencia a mitad de transición
+          // línea de tiempo del quiebre: fractura (gema visible) → HOLD → se apaga + collage
+          const es = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+          let brkT = 0;
+          if (gemBroken) { const ts = (performance.now() - caseT0) / 1000;
+            if (ts < 0.4) brkT = es(ts / 0.4) * 0.5;                    // 1) se fractura, gema aún visible
+            else if (ts < 0.85) brkT = 0.5;                             // 2) HOLD: gema rota a la vista
+            else brkT = 0.5 + 0.5 * es(Math.min(1, (ts - 0.85) / 0.5)); // 3) se apaga (collage emerge)
+          } else if (!reduceMotion) {
+            // carga / vuelta al home: quiebre invertido — de rota (0.85) a entera, rápido al
+            // principio y asentando al final (el burst cromático del medio sale gratis)
+            const cs = (now - bootT0) / 1000;
+            if (cs < 1.15) { const x = cs / 1.15; brkT = 0.85 * Math.pow(1 - x, 3); }
+          }
+          // tinte del rim (accent del proyecto hovereado) + micro-pulso de fractura en hover
+          tintAmt += (gemTint.amt - tintAmt) * lp(6);
+          tintR += (gemTint.r - tintR) * lp(6); tintG += (gemTint.g - tintG) * lp(6); tintB += (gemTint.b - tintB) * lp(6);
+          if (!gemBroken) brkT = Math.max(brkT, tintAmt * 0.012);   // temblor apenas perceptible: el tinte es el evento
+          brk += (brkT - brk) * lp(gemBroken ? 30 : 7.5);
+          const burst = brk * (1 - brk) * 4.0;
+          // nacimiento: la gema se origina en el centro y crece hacia afuera mientras se arma
+          // (uScale es inverso: más grande = gema más chica en pantalla)
+          let birth = 1;
+          if (!inCase && !reduceMotion) { const cs = (now - bootT0) / 1000;
+            if (cs < 1.15) { const g = 1 - Math.pow(1 - cs / 1.15, 3); birth = 1 / (0.06 + 0.94 * g); } }
           const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
           // landing: grande y centrado; índice: la gema se corre a la derecha (nombres a la izquierda)
-          const scT = (entered ? (mob ? 2.1 : 2.05) : (mob ? 2.2 : 1.95)) * fit;
-          sc += (scT - sc) * 0.06;
-          const cxT = entered ? (mob ? 0 : 0.30) : 0;      // desktop: gema a la derecha
-          cx += (cxT - cx) * 0.06;
-          const cyT = entered ? (mob ? 0.28 : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
-          cy += (cyT - cy) * 0.06;
-          const wt = (wordReady && !entered) ? 1 : 0; wordAmt += (wt - wordAmt) * 0.06;
-          pmx += (mtx - pmx) * 0.06; pmy += (mty - pmy) * 0.06;
-          const vel = Math.hypot(mtx - pmx, mty - pmy); aber += ((Math.min(1, vel * 30) * 0.5) - aber) * 0.1;
+          const scT = (entered ? (mob ? MOB_SC : 2.05) : (mob ? 2.2 : 1.95)) * fit * (1 + brk * 0.75);
+          if (!scInit) { sc = scT; scInit = true; }   // sin zoom-lerp inicial: el nacimiento manda
+          sc += (scT - sc) * lp(3.7);
+          const cxT = entered ? (mob ? 0 : 0.30 - att * 0.05) : 0;   // desktop: gema a la derecha; se recuesta hacia los nombres al escuchar
+          cx += (cxT - cx) * lp(3.7);
+          const cyT = entered ? (mob ? MOB_CY : 0.0) : 0.02; // mobile: gema arriba, nombres despejados abajo
+          cy += (cyT - cy) * lp(3.7);
+          // qué sostiene la gema: landing = wordmark 'blopa'; índice = ventana (el sitio en scroll)
+          let token = null, tmode = 0, winFracV = 1, scrollV = 0;
+          if (!entered) { token = 'blopa'; tmode = 0; }
+          else if (hoverProj && !gemBroken) {
+            tmode = 1; token = 'strip:' + hoverProj.slug;
+            winFracV = 0.42; const ph = ((now / 1000) / 6.5) % 1;   // recorre la tira: ping-pong suave arriba↔abajo
+            scrollV = (1 - winFracV) * (0.5 - 0.5 * Math.cos(ph * 6.28318));
+          }
+          applyTexture(token, tmode, hoverProj);
+          const wt = (wordReady && token && !gemBroken && brk < 0.12) ? 1 : 0;
+          wordAmt += (wt - wordAmt) * lp(entered ? 8.5 : 3.7);
+          pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
+          const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
+          aber += ((Math.min(1, vel * 30) * 0.5) - aber) * lp(6.3);
+          aber = Math.max(aber, burst * 1.4);   // estallido cromático al romperse
           // idle: mecido desincronizado + mira al cursor (menos parallax cuando es motivo chico)
-          const pk = 1 - ent * 0.7;
-          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07) + pmx * 0.6 * pk;
-          const ax = (0.12 + Math.sin(a * 0.33) * 0.07) - pmy * 0.45 * pk;
-          const cyw = Math.cos(ay), syw = Math.sin(ay), cxw = Math.cos(ax), sxw = Math.sin(ax);
-          const m = new Float32Array([cyw, sxw * syw, -cxw * syw, 0, cxw, sxw, syw, -sxw * cyw, cxw * cyw]);
-          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx, cy); gl.uniform1f(uScale, sc);
+          // al escuchar (att), sigue al cursor con más ganas: se "clava" en el nombre señalado
+          const pk = (1 - ent * 0.7) * (1 + att * 1.3);
+          // sesgo de orientación hacia los nombres: desktop están a la izquierda (yaw); mobile abajo (pitch)
+          const aimYaw = mob ? 0 : -0.5 * att;
+          const aimPitch = mob ? 0.32 * att : 0;
+          // rotación orgánica: varias frecuencias desincronizadas (no mecánico) + parallax + atención
+          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07 + Math.sin(a * 0.12 + 1.3) * 0.055) + pmx * 0.6 * pk + aimYaw;
+          const ax = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk + aimPitch;
+          const az = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;   // roll sutil: tumble orgánico
+          const m = rotM(ax, ay, az);
+          const fx = Math.sin(a * 0.6) * 0.004, fy = Math.sin(a * 0.42 + 0.8) * 0.006;   // flotación suave
+          // tilt del collage: misma física exponencial que todo lo demás (nada de transition-chasing)
+          tX += (tilt.tx - tX) * lp(5.5); tY += (tilt.ty - tY) * lp(5.5);
+          stageEl.style.setProperty('--rx', tX.toFixed(2) + 'deg'); stageEl.style.setProperty('--ry', tY.toFixed(2) + 'deg');
+          // carácter: latido (pulse) y respiración (breathe) modulan la escala (uScale es inverso: menor = gema más grande)
+          const beat = chPulse * Math.pow(Math.max(0, Math.sin(now * 0.006)), 8.0);
+          const breathe = chBreath * Math.sin(now * 0.0016);
+          const scMod = 1 - beat * 0.06 + breathe * 0.045;
+          gl.uniform2f(uRes, shard.width, shard.height); gl.uniform2f(uCenter, cx + fx, cy + fy); gl.uniform1f(uScale, sc * birth * scMod);
           gl.uniform1f(uAber, aber); gl.uniform1f(uWordAmt, wordAmt); gl.uniform1f(uTime, performance.now() * 0.001);
+          gl.uniform1f(uBreak, brk); gl.uniform3f(uTint, tintR, tintG, tintB); gl.uniform1f(uTintAmt, tintAmt);
+          gl.uniform1f(uWordMode, wordMode); gl.uniform1f(uRipple, chRip * 0.7);
+          gl.uniform1f(uWinFrac, winFracV); gl.uniform1f(uScroll, scrollV);
           gl.uniformMatrix3fv(uRot, false, m);
-          gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          if (brk < 0.93) gl.drawArrays(gl.TRIANGLES, 0, 3);   // gema rota y apagada (case abierto): no raymarchear de fondo
         };
         if (reduceMotion) { const d = () => render(); d(); addEventListener('resize', d); enterEl.addEventListener('click', () => { let n = 0; const l = () => { render(); if (n++ < 60) requestAnimationFrame(l); }; l(); }); }
-        else { const loop = () => { render(); requestAnimationFrame(loop); }; loop(); }
+        else { const loop = (t) => { render(t); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
       }
     </script>
   </body>
