@@ -9,3 +9,5 @@ y volver a agregarlo en `src/data/versiones.ts`.
 - mesura.astro — aberración sólo como evento + case con visor grande y ficha en filas
 - metamorfosis.astro — la gema se transforma en una lámina de cristal con el video adentro
 - lupa.astro — muro apagado de los 4 sitios + gema-lupa que los revela (archivada 2026-11-04, ronda 6)
+- anterior.astro — el home publicado hasta noviembre 2026 (gema + índice + collage). Archivado 2026-11-04 al publicar Prisma:
+  regla de Pablo = cada evolución es el nuevo punto de partida, no se compara contra lo superado.
