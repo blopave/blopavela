@@ -1,0 +1,921 @@
+---
+// VERSIÓN cine (exploración, ver src/data/versiones.ts) — cambio de FORMATO: el sitio es una SALA.
+// Entrada = la gema (nacimiento + BLOPA), siempre. Al entrar, cada proyecto es un PLANO a pantalla completa con
+// el video de su sitio (desde su home), créditos de película y el texto del case. Rueda / flechas / swipe pasan
+// de plano. La transición es la firma: la gema actúa de OBTURADOR — de ella sale una fractura radial-concéntrica
+// que se propaga por el cuadro; cada esquirla es una pieza 3D (cuaternión, normal propia, fresnel/especular en el
+// canto, motion blur por velocidad) con física semi-implícita (gravedad + arrastre) y despega cuando la grieta pasa.
+// Todo en UN contexto WebGL: film + esquirlas + gema (la gema chica se dibuja con scissor).
+import { projects } from '../data/projects';
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>blopa</title>
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta property="og:title" content="blopa" />
+    <meta property="og:description" content="Portfolio de Pablo Vela — sitios con firma visual propia. Buenos Aires." />
+    <meta property="og:image" content="https://www.blopavela.com/img/og.jpg" />
+    <meta property="og:url" content="https://www.blopavela.com/" />
+    <meta property="og:type" content="website" />
+    <link rel="canonical" href="https://www.blopavela.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
+        --aqua:#24e2e8; --red:#ff3a54;
+        --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem);
+        --bt:clamp(56px,7vh,72px); --bb:var(--bt); }
+      /* vertical: header reservado sobre el video (nav + índice), sin barra inferior */
+      @media(orientation:portrait){ :root{ --bt:calc(3.4rem + 46px); --bb:0px } }
+      .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+      *{box-sizing:border-box;margin:0}
+      [hidden]{display:none!important}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5;
+        overscroll-behavior:none;touch-action:none}
+      a{color:inherit;text-decoration:none}
+      .mono{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;font-feature-settings:"case"}
+      :focus-visible{outline:1px solid var(--aqua);outline-offset:3px;border-radius:4px}
+
+      canvas.gl{position:fixed;inset:0;z-index:1;pointer-events:none}
+      .enter{position:fixed;inset:0;z-index:4;cursor:pointer;appearance:none;border:0;background:none;padding:0;color:inherit}
+      .enter:focus-visible{outline-offset:-8px}
+      body.entered .enter{pointer-events:none}
+
+      /* la franja sólida de créditos, el header reservado y el letterbox se dibujan en el GL: así la gema-sello,
+         que vive en el mismo canvas, queda por encima de ellos */
+
+      .nav{position:fixed;top:0;left:0;right:0;z-index:9;display:flex;justify-content:space-between;align-items:center;
+        height:var(--bt);padding:0 var(--gut);color:var(--mid);opacity:0;transition:opacity .6s var(--ease)}
+      body.entered .nav{opacity:1;transition-delay:.5s}
+      .nav__home{appearance:none;background:none;border:0;cursor:pointer;color:var(--mid);letter-spacing:.16em;font-size:.75rem;
+        min-height:44px;transition:color .25s}
+      .nav__home:hover{color:var(--ink)}
+      .nav__mail{text-transform:none;letter-spacing:0;font-size:.75rem;color:var(--mid);min-height:44px;display:inline-flex;align-items:center;transition:color .25s}
+      .nav__mail:hover{color:var(--ink)}
+      /* el nombre acompaña al mail en desktop (como en las otras versiones); en mobile queda sólo el mail */
+      @media(max-width:640px){ .nav__who{display:none} }
+
+      /* índice del rollo: DENTRO de la barra negra superior (centrado en apaisado; 2ª fila del header en vertical) */
+      .cnt{position:fixed;left:50%;transform:translateX(-50%);top:0;height:var(--bt);z-index:10;display:flex;align-items:center;gap:.9rem;
+        opacity:0;transition:opacity .6s var(--ease)}
+      body.entered .cnt{opacity:1;transition-delay:.7s}
+      .cnt__n{color:var(--ink);min-width:4.2em}
+      .cnt__n span{color:var(--soft)}
+      .cnt__ticks{display:flex}
+      .cnt__ticks button{appearance:none;background:none;border:0;cursor:pointer;width:44px;height:44px;display:grid;place-items:center;color:var(--soft)}
+      .cnt__ticks button i{display:block;width:22px;height:2px;background:currentColor;border-radius:1px;transition:width .45s var(--ease),background .3s}
+      .cnt__ticks button:hover{color:var(--mid)}
+      .cnt__ticks button.on{color:var(--ink)} .cnt__ticks button.on i{width:34px}
+
+      /* créditos del plano */
+      /* tercio inferior: nombre + qué se hizo a la izquierda, la idea y las acciones a la derecha */
+      .cred{position:fixed;left:var(--gut);right:var(--gut);bottom:calc(var(--bb) + clamp(1.2rem,3.2vh,2.4rem));z-index:3;
+        display:grid;grid-template-columns:minmax(0,1fr) minmax(0,44ch);column-gap:3rem;align-items:end}
+      .cred__eye{color:var(--mid);margin-bottom:.4rem}
+      .cred__role{color:#d9dbe0;margin-top:.7rem}
+      .cred__role b{font-weight:400;color:var(--aqua)}
+      .cred__name{font-family:var(--display);font-weight:400;font-size:clamp(3rem,7.4vw,8.4rem);line-height:.84;letter-spacing:.005em;
+        white-space:nowrap;margin-left:-.04em;outline:none}
+      .ln{display:block;overflow:hidden;padding-top:.06em}
+      .ch{display:inline-block;transform:translateY(105%);transition:transform .9s var(--ease)}
+      .cred.on .ch{transform:none}
+      .cred__body{min-height:4.6em}
+      .cred__app{max-width:44ch;color:#dcdee3;font-size:.95rem;line-height:1.5}
+      .cred__dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1.2rem;max-width:44ch;font-size:.9rem;line-height:1.45}
+      .cred__dl dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.2em}
+      .cred__dl dd{margin:0;color:#e6e7eb}
+      .cred__body>*{opacity:0;transform:translateY(10px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+      .cred.on .cred__body>*{opacity:1;transform:none;transition-delay:.3s}
+      .cred__row{display:flex;align-items:center;gap:.6rem;margin-top:1.1rem;flex-wrap:wrap;opacity:0;transform:translateY(10px);
+        transition:opacity .7s var(--ease),transform .7s var(--ease)}
+      .cred.on .cred__row{opacity:1;transform:none;transition-delay:.42s}
+      .cred__role{opacity:0;transition:opacity .7s var(--ease)} .cred.on .cred__role{opacity:1;transition-delay:.25s}
+      .btn{display:inline-flex;gap:.5rem;align-items:center;min-height:44px;padding:0 1.15rem;border:1px solid rgba(242,243,245,.32);border-radius:999px;
+        color:var(--ink);background:rgba(10,10,14,.4);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;
+        transition:border-color .3s,background .3s}
+      .btn:hover{border-color:var(--ink)}
+      .btn span{color:var(--aqua)}
+      .btn--ghost{border-color:transparent;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;color:var(--mid)}
+      .btn--ghost:hover{color:var(--ink);border-color:rgba(242,243,245,.2)}
+      .btn--ghost[aria-pressed="true"]{color:var(--ink);border-color:rgba(242,243,245,.32)}
+      .btn kbd{font:inherit;color:var(--dim);border:1px solid var(--hair);border-radius:4px;padding:0 .3em;font-size:.9em}
+      .cred.out .ch{transform:translateY(-105%);transition-duration:.45s;transition-delay:0s!important}
+      /* durante el corte, los créditos viajan DENTRO de las esquirlas (textura); el DOM se apaga en seco */
+      .cred.gone{visibility:hidden}
+
+      /* la gema chica es un SELLO (≈40px) y un botón: abre el índice */
+      .gembtn{position:fixed;z-index:8;transform:translate(-50%,-50%);border-radius:50%;appearance:none;border:0;background:none;cursor:pointer;
+        width:48px;height:48px}
+
+      .idx{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:.1rem;
+        background:rgba(6,6,9,.84);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);opacity:0;visibility:hidden;
+        transition:opacity .45s var(--ease),visibility .45s}
+      body.idx-open .idx{opacity:1;visibility:visible;transition:opacity .45s var(--ease),visibility 0s}   /* visible ya: el foco puede entrar */
+      .idx button{appearance:none;background:none;border:0;cursor:pointer;color:var(--ink);display:flex;align-items:baseline;gap:1rem;
+        font-family:var(--display);font-size:clamp(2.8rem,8vw,6.5rem);line-height:1;padding:.15rem .4rem;transition:color .3s,text-shadow .3s}
+      .idx button small{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;color:var(--soft)}
+      .idx:hover button:not(:hover){color:var(--dim)}
+      .idx button:hover,.idx button:focus-visible{text-shadow:-2px 0 var(--red),2px 0 var(--aqua)}
+      .idx__hint{margin-top:1.6rem;color:var(--soft)}
+
+      @media (pointer:coarse){ .idx__hint,.btn kbd{display:none} }
+      @media(orientation:portrait){
+        .nav{height:3.4rem}
+        .cnt{left:var(--gut);transform:none;top:3.4rem;height:46px}
+        .cred{display:block;right:var(--gut);bottom:calc(4.4rem + env(safe-area-inset-bottom,0px))}
+        .cred__body{margin-top:.9rem;min-height:0}
+        .cred__row{margin-top:.9rem}
+        .cred__name{font-size:clamp(3rem,15vw,6rem)}
+        .cred__app,.cred__dl{font-size:.88rem}
+      }
+      .vids{position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden;left:0;top:0}
+
+      /* sin WebGL (o sin JS): los planos como HTML con su póster */
+      .fallback{display:none;padding:var(--gut);max-width:70rem;margin:0 auto}
+      .fallback__brand{font-family:var(--display);font-weight:400;font-size:4rem;letter-spacing:.16em;margin:1rem 0 2rem}
+      .fallback article{margin:0 0 3.5rem}
+      .fallback img{width:100%;height:auto;border-radius:6px;display:block}
+      .fallback h2{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,8vw,5rem);line-height:.9;margin:1rem 0 .6rem}
+      .fallback p{max-width:44ch;color:#d4d6dc}
+      .fallback a{display:inline-block;margin-top:.8rem;color:var(--aqua)}
+      body.nogl{overflow:auto;touch-action:auto}
+      body.nogl>*:not(main),body.nogl main>*:not(.fallback){display:none!important}
+      body.nogl .fallback{display:block}
+      @media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;transition-delay:0s!important;animation:none!important}}
+    </style>
+    <noscript><style>body{overflow:auto;touch-action:auto} body>*:not(main),main>*:not(.fallback){display:none!important} .fallback{display:block!important}</style></noscript>
+  </head>
+  <body>
+    <canvas class="gl" data-gl aria-hidden="true"></canvas>
+    <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
+
+    <nav class="nav mono" aria-label="Navegación" data-ui>
+      <button type="button" class="nav__home mono" data-home>blopa</button>
+      <a class="nav__mail" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span>blopave@pm.me ↗</a>
+    </nav>
+
+    <div class="cnt mono" data-ui data-cnt>
+      <span class="cnt__n" data-num aria-live="polite"></span>
+      <div class="cnt__ticks" role="group" aria-label="Proyectos">
+        {projects.map((p, i) => (
+          <button type="button" data-go={i} aria-label={`${String(i + 1).padStart(2, '0')} — ${p.name}`}><i></i></button>
+        ))}
+      </div>
+    </div>
+
+    <main>
+    <h1 class="sr">blopa — portfolio de Pablo Vela: sitios con firma visual propia</h1>
+    <section class="cred" data-cred data-ui aria-label="Proyecto">
+      <div class="cred__head">
+        <p class="cred__eye mono" data-cat></p>
+        <h2 class="cred__name" data-name tabindex="-1"></h2>
+        <p class="cred__role mono" data-kind></p>
+      </div>
+      <div class="cred__side">
+      <div class="cred__body">
+        <p class="cred__app" data-app></p>
+        <dl class="cred__dl" data-credits id="creditos" hidden>
+          <dt>Rol</dt><dd data-role></dd>
+          <dt>Servicios</dt><dd data-services></dd>
+          <dt>Stack</dt><dd data-stack></dd>
+        </dl>
+      </div>
+      <div class="cred__row">
+        <a class="btn mono" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
+        <button type="button" class="btn btn--ghost mono" data-crbtn aria-pressed="false" aria-controls="creditos">Créditos <kbd aria-hidden="true">C</kbd></button>
+      </div>
+      </div>
+    </section>
+
+    <button type="button" class="gembtn" data-gembtn data-ui aria-label="Índice de proyectos" aria-haspopup="dialog"></button>
+    <div class="idx" data-idx role="dialog" aria-modal="true" aria-label="Índice de proyectos">
+      {projects.map((p, i) => (
+        <button type="button" data-go={i}><small>{String(i + 1).padStart(2, '0')}</small>{p.name}</button>
+      ))}
+      <p class="idx__hint mono">Esc para volver</p>
+    </div>
+    <div class="vids" data-vids aria-hidden="true"></div>
+
+    <section class="fallback" aria-label="Proyectos">
+      <p class="fallback__brand">BLOPA</p>
+      {projects.map((p) => (
+        <article>
+          <img src={`/img/poster/${p.slug}.jpg`} alt={`${p.name} — home del sitio`} width="1280" height="800" loading="lazy" />
+          <h2>{p.name}</h2>
+          <p>{p.approach}</p>
+          {p.url && <a href={p.url} target="_blank" rel="noopener">Ver en vivo ↗</a>}
+        </article>
+      ))}
+      <p><a href="mailto:blopave@pm.me">blopave@pm.me</a></p>
+    </section>
+    </main>
+
+    <script define:vars={{ projects }}>
+      const body = document.body;
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const N = projects.length;
+      const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+      // entre planos se REEMPLAZA (Atrás sale de la sala, no recorre cada paso); entrar/salir sí apila
+      const pushHash = (h, replace = false) => { const target = h ? '#' + h : ''; if (location.hash === target) return;
+        const url = location.pathname + target; if (FRAMED || replace) history.replaceState(null, '', url); else history.pushState(null, '', url); };
+
+      // ── estado ──
+      let entered = false, cur = 0, busy = false, pending = null, bootT0 = performance.now(), burstT = -9;
+      let kick = () => {};   // pide un cuadro (con movimiento reducido no hay rAF continuo)
+      const $ = (s) => document.querySelector(s);
+      const credEl = $('[data-cred]'), nameEl = $('[data-name]'), numEl = $('[data-num]'), catEl = $('[data-cat]'),
+        appEl = $('[data-app]'), liveEl = $('[data-live]'), dlEl = $('[data-credits]'), crBtn = $('[data-crbtn]'),
+        roleEl = $('[data-role]'), servEl = $('[data-services]'), stackEl = $('[data-stack]'),
+        idxEl = $('[data-idx]'), gembtn = $('[data-gembtn]'), enterEl = $('[data-enter]'), kindEl = $('[data-kind]');
+      // qué fue: encargo o producto propio + el rol (visible bajo el título, no escondido en "Créditos")
+      const OWN = ['pulz', 'basslayer'];
+      const tickBtns = Array.from(document.querySelectorAll('.cnt [data-go]'));
+      const uiEls = Array.from(document.querySelectorAll('[data-ui]'));
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      const pad = (n) => String(n).padStart(2, '0');
+
+      // accesibilidad: lo invisible no es alcanzable (inert)
+      const setInert = () => {
+        const idxOpen = body.classList.contains('idx-open');
+        uiEls.forEach((el) => { el.inert = !entered || (idxOpen && el !== $('.nav')); });
+        idxEl.inert = !idxOpen; enterEl.inert = entered; };
+      setInert();
+
+      const setCred = (i) => { const p = projects[i];
+        numEl.innerHTML = pad(i + 1) + ' <span>/ ' + pad(N) + '</span>';
+        catEl.textContent = p.category + ' · ' + yearOf(p.ended);
+        nameEl.innerHTML = '<span class="ln" aria-hidden="true">' + Array.from(p.name).map((c, k) =>
+          '<span class="ch" style="transition-delay:' + (k * 0.028).toFixed(3) + 's">' + (c === ' ' ? '&nbsp;' : c) + '</span>').join('') + '</span>';
+        nameEl.setAttribute('aria-label', p.name);
+        appEl.textContent = p.approach || '';
+        kindEl.innerHTML = '<b>' + (OWN.includes(p.slug) ? 'Producto propio' : 'Encargo') + '</b> · ' + (p.role || '').replace(/\s*&\s*/g, ' + ');
+        roleEl.textContent = p.role || ''; servEl.textContent = (p.services || []).join(', '); stackEl.textContent = (p.stack || []).join(', ');
+        if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; liveEl.setAttribute('aria-label', 'Ver ' + p.name + ' en vivo'); } else liveEl.style.display = 'none';
+        tickBtns.forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+        document.title = 'blopa — ' + p.name; };
+      const credIn = () => { credEl.classList.remove('out', 'gone'); void credEl.offsetWidth; credEl.classList.add('on'); };
+      // créditos de película (Rol / Servicios / Stack): conmutan con la idea sin romper el plano
+      const showCredits = (on) => { dlEl.hidden = !on; appEl.hidden = on; crBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+      crBtn.addEventListener('click', () => showCredits(dlEl.hidden));
+
+      // ── videos: sólo el actual decodifica; el siguiente baja metadatos; en táctil, la versión de 640 ──
+      // vertical: la versión MOBILE real de cada sitio (720×1558, nativa); apaisado táctil: 640; desktop: 1280
+      const PORT = () => innerWidth < innerHeight;
+      const sufOf = () => (PORT() ? '-m' : coarse ? '-640' : '');
+      let VSUF = sufOf();
+      // tramo con contenido (todos empiezan por su home; fin antes de colas vacías)
+      // PULZ arranca pasada su animación de logo (si no, el nombre se lee doble) · (los verticales: PULZ corta antes del titular "Encontrá tu…" que cae justo detrás de los créditos)
+      const SPAN = { valecasenave: [0, 13], pulz: [2.9, 14.4], basslayer: [0, 18.4], beokey: [0, 15.6] };
+      const SPAN_M = { valecasenave: [0, 14.2], pulz: [3.6, 12.8], basslayer: [0, 16], beokey: [0, 15.3] };
+      const spanOf = (i) => (VSUF === '-m' ? SPAN_M : SPAN)[projects[i].slug] || [0, 1e9];
+      const vidBox = $('[data-vids]');
+      const vids = projects.map((p, i) => { const v = document.createElement('video');
+        v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+        v.preload = 'none'; v.poster = '/img/poster/' + p.slug + (VSUF === '-m' ? '-m' : '') + '.jpg'; v.src = '/video/' + p.slug + VSUF + '.mp4';
+        v.addEventListener('timeupdate', () => { const [a, b] = spanOf(i); if (v.currentTime > b) v.currentTime = a; });
+        vidBox.appendChild(v); return v; });
+      // al rotar el teléfono cambia la fuente (vertical nativa ↔ apaisada)
+      const reSource = () => { const nv = sufOf(); if (nv === VSUF) return; VSUF = nv;
+        vids.forEach((v, k) => { const pre = v.preload; v.poster = '/img/poster/' + projects[k].slug + (VSUF === '-m' ? '-m' : '') + '.jpg';
+          v.src = '/video/' + projects[k].slug + VSUF + '.mp4'; v.preload = pre; if (pre !== 'none') v.load(); });
+        if (typeof onReSource === 'function') onReSource(); if (entered) playOnly(cur); };
+      let onReSource = null, onPlayHook = null;
+      addEventListener('resize', reSource);
+      const playOnly = (i) => {
+        vids.forEach((v, k) => { if (k !== i) { v.pause(); if (v.preload === 'auto') v.preload = 'metadata'; } });
+        if (reduceMotion) return;   // movimiento reducido: el plano queda quieto (póster)
+        const v = vids[i]; v.preload = 'auto'; try { v.currentTime = spanOf(i)[0]; } catch {} v.play().catch(() => {});
+        if (typeof onPlayHook === 'function') onPlayHook(i);
+        const nx = vids[(i + 1) % N]; if (nx.preload === 'none') { nx.preload = 'metadata'; nx.load(); } };
+
+      // ── navegación entre planos (con cola: la última intención durante el corte no se pierde) ──
+      let film = null;
+      const go = (i, { push = true, instant = false } = {}) => {
+        i = ((i % N) + N) % N;
+        if (busy) { pending = i; return; }
+        toggleIdx(false, false);                     // elegir el plano actual desde el índice también lo cierra
+        if (entered && i === cur && !instant) return;
+        const from = cur; cur = i;
+        if (push) pushHash(projects[i].slug, true);
+        playOnly(i);
+        if (instant || !film || !film.ok() || reduceMotion) { setCred(i); credIn(); if (film) film.cut(i); kick(); return; }
+        busy = true; burstT = performance.now();
+        const hadFocus = credEl.contains(document.activeElement);
+        film.snapCred();                                   // los créditos salientes pasan a la textura de las esquirlas
+        credEl.classList.add('gone'); credEl.classList.remove('on', 'out');
+        film.shatter(from, i, () => { busy = false;
+            if (pending !== null) { const p = pending; pending = null; if (p !== cur) go(p); } },
+          () => { setCred(i); credIn(); if (hadFocus) liveEl.focus({ preventScroll: true }); });   // el entrante entra cuando se revela su plano
+      };
+      const step = (d) => go((busy && pending !== null ? pending : cur) + d);
+      const enter = ({ push = true, at = 0 } = {}) => { if (entered) return; entered = true; body.classList.add('entered');
+        cur = at; setCred(at); playOnly(at); setInert(); burstT = performance.now();
+        const show = () => { credIn(); nameEl.focus({ preventScroll: true }); };
+        if (film && film.ok() && !reduceMotion) { busy = true; credEl.classList.add('gone');
+          film.enterBreak(at, () => { busy = false; if (pending !== null) { const p = pending; pending = null; if (p !== cur) go(p); } }, show); }
+        else { if (film) film.cut(at); show(); }
+        if (push) pushHash(projects[at].slug); kick(); };
+      const goHome = (push = true) => { if (!entered) return; entered = false; busy = false; pending = null;
+        body.classList.remove('entered', 'idx-open'); credEl.classList.remove('on'); vids.forEach((v) => v.pause());
+        document.title = 'blopa'; bootT0 = performance.now(); setInert(); enterEl.focus({ preventScroll: true });
+        if (push) pushHash(''); kick(); };
+
+      // la versión SIEMPRE carga en la entrada; si vino con #slug, entrar lleva a ese plano
+      // el video NO baja en la entrada (la gema refracta el póster): metadatos en reposo, y el primero en serio al primer toque
+      const warmFirst = (lvl) => { const v = vids[hashAt()]; if (v.preload === 'none' || (lvl === 'auto' && v.preload !== 'auto')) { v.preload = lvl; v.load(); } };
+      (window.requestIdleCallback || ((f) => setTimeout(f, 1800)))(() => { if (!entered) warmFirst('metadata'); }, { timeout: 3000 });
+      addEventListener('pointerdown', () => { if (!entered) warmFirst('auto'); }, { once: true, passive: true });
+      const hashAt = () => { const k = projects.findIndex((x) => x.slug === location.hash.replace('#', '')); return k < 0 ? 0 : k; };
+      enterEl.addEventListener('click', () => enter({ at: hashAt() }));
+      $('[data-home]').addEventListener('click', () => goHome());
+      document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(+b.dataset.go)));
+      function toggleIdx(on, focus = true) { if (on === body.classList.contains('idx-open')) return;
+        body.classList.toggle('idx-open', on); setInert();
+        // el foco se mueve cuando el índice ya es visible (visibility se resuelve en el cuadro siguiente)
+        if (focus) requestAnimationFrame(() => { void getComputedStyle(idxEl).visibility;
+          (on ? idxEl.querySelector('button') : gembtn).focus({ preventScroll: true }); }); }
+      gembtn.addEventListener('click', () => toggleIdx(!body.classList.contains('idx-open')));
+      idxEl.addEventListener('click', (e) => { if (e.target === idxEl) toggleIdx(false); });
+
+      // rueda: un plano por gesto; durante el corte, queda guardada UNA intención
+      let acc = 0, accT = 0;
+      addEventListener('wheel', (e) => {
+        if (!entered) { if (e.deltaY > 6) enter({ at: hashAt() }); return; }
+        if (body.classList.contains('idx-open')) return;
+        const now = performance.now(); if (now - accT > 220) acc = 0; accT = now;
+        acc += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+        if (acc > 60 || acc < -60) { const d = acc > 0 ? 1 : -1; acc = -1e4 * d;   // un paso por gesto (hasta que la rueda frene)
+          if (busy) { if (pending === null) pending = ((cur + d) % N + N) % N; } else go(cur + d); }
+      }, { passive: true });
+      addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { if (entered) toggleIdx(!body.classList.contains('idx-open')); return; }
+        if (!entered || body.classList.contains('idx-open')) return;
+        if (e.target.closest && e.target.closest('a,button') && (e.key === ' ' || e.key === 'Enter')) return;
+        if (['ArrowDown', 'ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); step(1); }
+        if (['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); step(-1); }
+        if (e.key === 'c' || e.key === 'C') showCredits(dlEl.hidden);
+      });
+      let tx0 = 0, ty0 = 0, tOn = false;
+      addEventListener('touchstart', (e) => { const t = e.touches[0]; tx0 = t.clientX; ty0 = t.clientY; tOn = true; }, { passive: true });
+      addEventListener('touchend', (e) => { if (!tOn) return; tOn = false; const t = e.changedTouches[0];
+        const dx = t.clientX - tx0, dy = t.clientY - ty0; const d = Math.abs(dy) > Math.abs(dx) ? dy : dx;
+        if (!entered) { if (dy < -45) enter({ at: hashAt() }); return; }   // swipe hacia arriba en la entrada = entrar
+        if (Math.abs(d) > 45 && !body.classList.contains('idx-open')) step(d < 0 ? 1 : -1); }, { passive: true });
+      addEventListener('popstate', () => { const h = location.hash.replace('#', ''); const k = projects.findIndex((x) => x.slug === h);
+        if (k >= 0) { if (entered) go(k, { push: false }); else enter({ push: false, at: k }); }
+        else if (h === '' ) goHome(false); });
+
+      // ══ UN contexto WebGL: film (video graduado) + esquirlas + gema ══
+      const cv = $('[data-gl]');
+      const gl = cv.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: false, powerPreference: 'high-performance' });
+      if (!gl) { body.classList.add('nogl'); }
+      else {
+        // escala del canvas: presupuesto ~2,5 Mpx (no DPR×1.25) y calidad adaptativa si el fps cae
+        let SCALE = 1, qual = 1;
+        const calcScale = () => Math.max(0.6, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.5e6 / (innerWidth * innerHeight))) * qual);
+        let W = 0, H = 0;
+        const STEPS = coarse ? 72 : 110, INSTEPS = coarse ? 26 : 42;
+        const GEMFRAG = `precision highp float;
+          uniform vec2 uRes; uniform vec2 uCenter; uniform float uScale; uniform mat3 uRot; uniform float uAber;
+          uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
+          uniform vec3 uTint; uniform float uTintAmt;
+          uniform float uWordMode;   // 0 = texto (nombre) · 1 = imagen del sitio (ventana)
+          uniform float uRipple;     // onda de superficie (carácter: waveform)
+          uniform float uWinFrac;    // alto de la ventana visible dentro del strip (1 = imagen entera)
+          uniform float uScroll;     // desplazamiento vertical (scroll del sitio dentro de la gema)
+          // CINE: el primer plano espera DETRÁS de la gema (refractado); micro-grietas de luz la recorren
+          uniform sampler2D uPlate; uniform float uPlateAmt; uniform float uPlateAsp;
+          uniform float uCrack; uniform float uSweep; uniform float uAlpha; uniform float uRing; uniform float uRingA;
+          vec3 h3(vec3 p){ p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6))); return fract(sin(p)*43758.5453); }
+          float vedge(vec3 p){ vec3 i=floor(p), f=fract(p); float d1=8., d2=8.;
+            for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++) for(int z=-1;z<=1;z++){ vec3 g=vec3(float(x),float(y),float(z));
+              vec3 r=g+h3(i+g)-f; float d=dot(r,r); if(d<d1){ d2=d1; d1=d; } else if(d<d2) d2=d; }
+            return sqrt(d2)-sqrt(d1); }
+          #define PHI 1.61803398875
+          float smax(float a,float b,float k){ float h=clamp(0.5+0.5*(a-b)/k,0.,1.); return mix(b,a,h)+k*h*(1.0-h); }
+          float sdIco(vec3 p){ p=abs(p); float k=0.072;
+            float d=dot(p,normalize(vec3(1.,1.,1.)));
+            d=smax(d,dot(p,normalize(vec3(0.,1.,PHI+1.))),k);
+            d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
+            d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
+            return d-1.0; }
+          // fractura: al romperse, la superficie se agrieta con celdas de alta frecuencia que laten
+          float fracture(vec3 p){ return sin(9.0*p.x+uTime*5.0)*sin(9.0*p.y-uTime*3.0)*sin(9.0*p.z+uTime*2.0); }
+          float sdC(vec3 p){ float d=sdIco(p) - (0.008 + 0.008*sin(uTime*0.7));
+            d += uBreak*(0.30*fracture(p) + 0.15*fracture(p*2.3));
+            d += uRipple*0.025*sin(9.0*p.y + uTime*5.0);   // carácter: onda viajera (waveform)
+            return d; }
+          vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
+            return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
+          // normal "gruesa": donde diverge de la fina hay una arista → línea de facetado
+          vec3 nrmC(vec3 p){ vec2 e=vec2(0.05,0.);
+            return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
+          vec3 env(vec3 d){
+            float ea=uTime*0.06; float ec=cos(ea), es=sin(ea); d.xz=mat2(ec,-es,es,ec)*d.xz;
+            vec3 c=vec3(0.040,0.043,0.055);
+            c+=mix(vec3(0.020,0.024,0.036),vec3(0.125,0.15,0.20),clamp(d.y*0.6+0.5,0.,1.));
+            c+=vec3(0.70,0.84,0.98)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),7.0)*0.60;
+            c+=vec3(0.90,0.94,1.0)*pow(max(0.,dot(d,normalize(vec3(0.1,0.85,-0.2)))),15.0)*0.52;
+            c+=vec3(1.0)*pow(max(0.,dot(d,normalize(vec3(0.5,0.62,0.4)))),22.0)*0.45;
+            c+=vec3(0.05,0.85,1.0)*pow(max(0.,dot(d,normalize(vec3(-0.55,0.35,0.75)))),6.0)*uAber*1.8;
+            c+=vec3(1.0,0.20,0.32)*pow(max(0.,dot(d,normalize(vec3(0.65,-0.25,0.6)))),6.0)*uAber*1.8;
+            return c; }
+          vec4 shade(vec2 frag, out float ef){ ef=0.;
+            vec2 uv=(frag-0.5*uRes)/uRes.y; uv=(uv-uCenter)*uScale;
+            vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
+            /* CINE: salida temprana si el rayo no toca la esfera que contiene gema + halo */
+            { float bb=dot(ro,rd); float cc=dot(ro,ro)-2.6; if(bb*bb-cc<0.0) return vec4(0.); }
+            float t=0.; float hit=-1.; float md=1e9;
+            for(int i=0;i<${STEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
+              if(d<0.0008+0.0007*t){hit=t;break;} t+=d*0.8; if(t>7.)break; }
+            float bf=(1.0-smoothstep(0.35,0.9,uBreak));   // se apaga al romperse (sin fantasma)
+            if(hit<0.){
+              ef=step(md,0.02);
+              float e=smoothstep(0.012,0.0,md); float glow=smoothstep(0.20,0.0,md);
+              float rg=0.; if(uRingA>0.001){ float rr=length(uv)-uRing; rg=(exp(-rr*rr/0.0009)*0.55+exp(-rr*rr/0.00012))*uRingA; }   // CINE: anillo que invita a tocar
+              if(e<=0.001&&glow<=0.001&&rg<=0.002){ return vec4(0.); }
+              vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.08,0.08,uv.x));
+              hc=mix(hc,uTint,uTintAmt*0.85);
+              return vec4((hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf+mix(vec3(0.7,0.92,1.0),hc,0.35)*rg, max(max(e*0.8,glow*glow*0.32)*bf,rg*0.7));
+            }
+            /* refina el impacto: estabiliza la normal en rayos rasantes (sin esto el borde "puntea") */
+            for(int i=0;i<3;i++){ hit+=sdC(uRot*(ro+rd*hit))*0.8; }
+            vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
+            float ci=clamp(dot(-rd,nw),0.,1.); float fres=0.04+0.96*pow(1.0-ci,4.0);
+            ef=1.0-smoothstep(0.10,0.17,ci);   // sólo el rasante extremo (la silueta misma)
+            float iorG=1.47; float disp=0.045+uAber*0.11; vec3 col;
+            vec3 rin=refract(rd,nw,1.0/iorG);
+            if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
+            else{
+              vec3 rinObj=uRot*rin; float ti=0.02;
+              for(int i=0;i<${INSTEPS};i++){ float d=sdC(po+rinObj*ti); if(d>0.)break; ti+=max(0.01,-d)*0.9; if(ti>6.)break; }
+              vec3 pe=po+rinObj*ti; vec3 neW=(-nrm(pe))*uRot;
+              vec3 oR=refract(rin,neW,iorG+disp),oG=refract(rin,neW,iorG),oB=refract(rin,neW,iorG-disp);
+              if(length(oR)<0.5)oR=reflect(rin,neW); if(length(oG)<0.5)oG=reflect(rin,neW); if(length(oB)<0.5)oB=reflect(rin,neW);
+              col=vec3(env(oR).r,env(oG).g,env(oB).b);
+              col*=exp(-ti*vec3(0.55,0.42,0.28)*0.32)*1.15;
+            }
+            vec3 rfl=env(reflect(rd,nw)); col=mix(col,rfl,fres*0.7);
+            /* curvatura (fina vs gruesa): alta en vértices y uniones de aristas */
+            float dnn=1.0-dot(n,nrmC(po));
+            /* rim en dos capas: halo suave + línea tensa; atenuado en vértices para que
+               las uniones se fundan en vez de "pinchar" con un punto caliente */
+            float rim=pow(1.0-ci,2.6), rimT=pow(1.0-ci,4.0);
+            float vsoft=1.0-0.55*smoothstep(0.10,0.55,dnn);
+            vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x));
+            rimC=mix(rimC,uTint,uTintAmt*0.85);
+            col+=(rim*0.34+rimT*0.92)*(1.0+uAber*2.6)*rimC*vsoft;
+            /* glint de aristas: línea fina de luz donde se quiebran las facetas
+               (apagado en la silueta, donde la normal gruesa es inestable y puntea) */
+            float eg=smoothstep(0.06,0.5,dnn)*smoothstep(0.0,0.25,ci);
+            col+=eg*(0.33+uAber*0.7)*mix(rimC,vec3(0.9,0.95,1.0),0.6);
+            if(uPlateAmt>0.001){
+              vec2 puv=uv*0.78*vec2(min(1.0,1.0/uPlateAsp),min(1.0,uPlateAsp))+rin.xy*0.09+0.5;
+              float ps=0.004+uAber*0.012;
+              vec3 pc=vec3(texture2D(uPlate,puv+vec2(ps,0.)).r,texture2D(uPlate,puv).g,texture2D(uPlate,puv-vec2(ps,0.)).b);
+              col+=uPlateAmt*pc*(0.28+0.42*(1.0-fres));
+            }
+            if(uWordAmt>0.001){
+              float vsc = uWordMode > 0.5 ? 1.0 : 2.7;   // imagen: mapeo cuadrado · texto: comprimido
+              vec2 wuv=uv*vec2(1.0,vsc)+rin.xy*0.05+vec2(0.5,0.5);
+              float so=0.005+uAber*0.012;
+              if(uWordMode > 0.5){
+                /* ventana (A): captura real del sitio; uWinFrac+uScroll recortan y desplazan (scroll del strip) */
+                wuv.y = wuv.y * uWinFrac + uScroll;
+                vec3 wc=vec3(texture2D(uWord,wuv+vec2(so,0.)).r, texture2D(uWord,wuv).g, texture2D(uWord,wuv-vec2(so,0.)).b);
+                col+=uWordAmt*wc*0.68;   // disuelto: una insinuación del sitio, no un cartel
+              } else {
+                /* nombre: texto blanco, dispersado */
+                float wr=texture2D(uWord,wuv+vec2(so,0.)).r, wg=texture2D(uWord,wuv).r, wb=texture2D(uWord,wuv-vec2(so,0.)).r;
+                col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
+              }
+            }
+            if(uCrack>0.001){
+              float cl=1.0-smoothstep(0.0,0.05,vedge(po*2.3));
+              float sw=fract(dot(po,normalize(vec3(0.8,0.55,0.25)))*0.42-uTime*uSweep);
+              float band=smoothstep(0.0,0.12,sw)*smoothstep(0.42,0.12,sw);   // la luz viaja por las grietas
+              col+=cl*uCrack*(0.08+1.3*band)*mix(vec3(0.85,0.95,1.0),rimC,0.45);
+            }
+            float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
+            al*=bf;   // al romperse, la gema se apaga (mismo ritmo que el borde)
+            return vec4(col,al);
+          }
+          void main(){
+            /* AA adaptativo: sólo en la silueta (rasante o casi-impacto) se promedian
+               5 muestras subpixel en grid rotado — elimina el punteado del borde */
+            float ef; vec4 c=shade(gl_FragCoord.xy,ef);
+            if(ef>0.35){
+              vec3 acc=c.rgb*c.a; float aa=c.a; float e2; vec4 s;
+              s=shade(gl_FragCoord.xy+vec2(0.45,0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.15,0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(0.15,-0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
+              s=shade(gl_FragCoord.xy+vec2(-0.45,-0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+              c=vec4(acc/max(aa,1e-4),aa*0.2);
+            }
+            gl_FragColor=vec4(c.rgb,c.a*uAlpha);
+          }`;
+        const COVER = `
+          uniform sampler2D uTex; uniform vec2 uRes; uniform vec2 uVid; uniform float uZoom; uniform float uPan;
+          uniform float uBarT; uniform float uBarB; uniform float uPortrait;
+          // el plano ocupa la zona entre la barra superior (header reservado) y la inferior
+          vec2 regUV(vec2 uv){ return vec2(uv.x,(uv.y-uBarB)/max(0.01,1.0-uBarB-uBarT)); }
+          vec2 coverUVv(vec2 uv, float z, vec2 vid){ vec2 rr=uRes*vec2(1.0,1.0-uBarB-uBarT); vec2 px=regUV(uv)*rr; float s=max(rr.x/vid.x,rr.y/vid.y)*z;
+            return (px-0.5*rr)/(vid*s)+0.5+vec2(uPan,0.0); }
+          vec2 coverUV(vec2 uv, float z){ return coverUVv(uv,z,uVid); }
+          vec3 tap(vec2 t){ return texture2D(uTex,t).rgb; }
+          /* el trabajo queda INTACTO arriba; sólo la franja de créditos (tercio inferior en apaisado, ~45% en
+             vertical) es un piso sólido #0b0b0c al 85% con el video desenfocado debajo: sin capas fantasma */
+          float band(vec2 uv){ float y=regUV(uv).y; float h=mix(0.34,0.47,uPortrait); return 1.0-smoothstep(h-0.06,h+0.005,y); }
+          vec3 blurTap(vec2 t){ vec2 o=7.0/uVid; vec3 a=tap(t)*0.2;
+            a+=(tap(t+vec2(o.x,0.))+tap(t-vec2(o.x,0.))+tap(t+vec2(0.,o.y))+tap(t-vec2(0.,o.y)))*0.1;
+            a+=(tap(t+o)+tap(t-o)+tap(t+vec2(o.x,-o.y))+tap(t+vec2(-o.x,o.y)))*0.1; return a; }
+          vec3 grade(vec3 c, vec2 uv){ return mix(c, vec3(0.043,0.043,0.047), 0.85*band(uv)); }
+          vec3 frameAt(vec2 uv, float z){ vec2 t=coverUV(uv,z); float b=band(uv); vec3 c=tap(t); if(b>0.001) c=mix(c,blurTap(t),b); return grade(c,uv); }`;
+        const VQ = 'attribute vec2 p; varying vec2 vUv; void main(){ vUv=p*0.5+0.5; gl_Position=vec4(p,0.,1.); }';
+        const FQ = 'precision highp float; varying vec2 vUv;' + COVER + `
+          uniform float uFade;
+          void main(){ vec3 c=frameAt(vUv,uZoom); gl_FragColor=vec4(mix(vec3(0.043,0.043,0.055),c,uFade),1.0); }`;
+        // esquirlas: la geometría ya viene proyectada desde la CPU (física + cuaternión por pieza);
+        // el shader pone el material: motion blur por velocidad, normal → lambert/especular, fresnel en el canto
+        const VS = `precision highp float;
+          attribute vec2 aClip; attribute vec2 aUv; attribute float aEdge; attribute vec4 aSh; attribute vec2 aVel; attribute float aLife; attribute vec2 aN;
+          varying vec2 vUv; varying float vEdge; varying vec4 vSh; varying vec2 vVel; varying float vLife; varying vec2 vN;
+          void main(){ vUv=aUv; vEdge=aEdge; vSh=aSh; vVel=aVel; vLife=aLife; vN=aN; gl_Position=vec4(aClip,0.0,1.0); }`;
+        const FS = 'precision highp float; varying vec2 vUv; varying float vEdge; varying vec4 vSh; varying vec2 vVel; varying float vLife; varying vec2 vN;' + COVER + `
+          uniform sampler2D uTxt; uniform vec2 uImp; uniform float uFront; uniform float uAsp; uniform float uPx; uniform float uRaw; uniform float uTxtA;
+          uniform sampler2D uNext; uniform vec2 uVidN;
+          void main(){
+            vec3 acc=vec3(0.0); vec2 tx0=vUv;
+            for(int i=0;i<5;i++){ acc+=tap(coverUV(tx0-vVel*(float(i)/4.0-0.5),uZoom)); }   // motion blur a lo largo de la velocidad
+            acc*=0.2;
+            vec3 c=uRaw>0.5 ? acc : mix(grade(acc,vUv), acc, smoothstep(0.0,0.4,vLife)*0.75);   // al despegar recupera el color real
+            vec4 tt=texture2D(uTxt,vUv); c=mix(c,tt.rgb,tt.a*uTxtA);                 // créditos salientes, pegados a su pieza
+            float fres=vSh.x, spec=vSh.y, lam=vSh.w;
+            float lifted0=smoothstep(0.0,0.25,vLife);
+            /* transmisión: a través de la pieza se ve el plano SIGUIENTE, desviado por su normal; dispersión en el canto */
+            vec2 sc=gl_FragCoord.xy/uRes; vec2 nn=vN*(0.05+0.06*fres);
+            float edgeK=1.0-smoothstep(0.0,uPx*6.0,vEdge);
+            vec3 tr=vec3(texture2D(uNext,coverUVv(sc+nn*(1.0+0.6*edgeK),1.0,uVidN)).r,
+                         texture2D(uNext,coverUVv(sc+nn,1.0,uVidN)).g,
+                         texture2D(uNext,coverUVv(sc+nn*(1.0-0.6*edgeK),1.0,uVidN)).b);
+            tr=grade(tr,sc);
+            float lum=dot(c,vec3(0.299,0.587,0.114));
+            float glass=clamp(lifted0*(0.32+0.5*fres+(1.0-lum)*0.4),0.0,0.88);
+            c=mix(c*lam,tr*1.06,glass);                                         // la cara se oscurece/aclara según su normal
+            c+=vec3(0.92,0.96,1.0)*spec*0.55;
+            /* grieta / canto */
+            float ew=uPx*0.85; float line=1.0-smoothstep(ew*0.4,ew*1.6,vEdge);
+            float d=length((vUv-uImp)*vec2(uAsp,1.0));
+            float vis=1.0-smoothstep(uFront-0.03,uFront,d);                    // sólo detrás del frente: la grieta se PROPAGA
+            float hot=1.0-smoothstep(0.0,0.07,abs(d-uFront));
+            vec3 crack=vec3(0.92,0.96,1.0)*(0.7+0.8*hot);
+            vec3 cant=mix(vec3(0.55,0.92,1.0),vec3(1.0,0.45,0.55),clamp(fres*1.4,0.0,1.0))*(0.35+1.6*fres) + spec*0.6;
+            float lifted=smoothstep(0.0,0.08,vLife);
+            c+=line*vis*mix(crack,cant,lifted);
+            gl_FragColor=vec4(c,vSh.z); }`;
+
+        // ── recursos GL (se recrean si el contexto se pierde) ──
+        let PG, PQ, PSh, quad, shBuf, wordTex, txtTex, tex = [], ok = false, landT0 = -1e9, landTex = null;
+        const mkImg = (u) => { const im = new Image(); im.decoding = 'async'; im.src = u; return im; };
+        const posterImg = projects.map((p) => mkImg('/img/poster/' + p.slug + '.jpg'));
+        const posterImgM = projects.map((p) => mkImg('/img/poster/' + p.slug + '-m.jpg'));
+        const projCol = projects.map(() => [1, 1, 1]);
+        posterImg.forEach((im, i) => { const f = () => { try { const c = document.createElement('canvas'); c.width = 16; c.height = 10; const x = c.getContext('2d');
+            x.drawImage(im, 0, 0, 16, 10); const d = x.getImageData(0, 0, 16, 10).data; let r = 0, g = 0, b = 0, w = 0;
+            for (let k = 0; k < d.length; k += 4) { const sat = Math.max(d[k], d[k + 1], d[k + 2]) - Math.min(d[k], d[k + 1], d[k + 2]); const ww = 1 + sat / 32;
+              r += d[k] * ww; g += d[k + 1] * ww; b += d[k + 2] * ww; w += ww; }
+            const m = Math.max(r, g, b) / w || 1; projCol[i] = [r / w / m, g / w / m, b / w / m].map((v) => 0.15 + 0.85 * v); } catch {} };
+          if (im.complete && im.naturalWidth) f(); else im.addEventListener('load', f, { once: true }); });
+        const posterOf = (i) => (VSUF === '-m' ? posterImgM : posterImg)[i];
+        const wordCv = document.createElement('canvas'); wordCv.width = 1024; wordCv.height = 384;
+        const drawWord = () => { const x = wordCv.getContext('2d'); x.clearRect(0, 0, 1024, 384); x.fillStyle = '#fff'; x.textAlign = 'center';
+          x.textBaseline = 'middle'; x.letterSpacing = '8px'; x.font = '400 300px "Bebas Neue", sans-serif'; x.fillText('blopa', 512, 200); };
+        let wordReady = false;
+        const mkTex = (fill) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(fill || [11, 11, 14, 255]));
+          [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((k) => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); return t; };
+        const upload = (t, src, fmt) => { gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, fmt || gl.RGB, fmt || gl.RGB, gl.UNSIGNED_BYTE, src); };
+        const mk = (vs, fs) => { const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);
+            if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; };
+          const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+          gl.linkProgram(pr); const L = {}; pr.u = (n) => (n in L ? L[n] : (L[n] = gl.getUniformLocation(pr, n))); return pr; };
+        const initGL = () => {
+          PG = mk('attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}', GEMFRAG); PQ = mk(VQ, FQ); PSh = mk(VS, FS);
+          quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+          shBuf = gl.createBuffer();
+          wordTex = mkTex([0, 0, 0, 0]); txtTex = mkTex([0, 0, 0, 0]);
+          if (wordReady) upload(wordTex, wordCv, gl.RGBA);
+          tex = projects.map((p, i) => { const o = { t: mkTex(), w: 1280, h: 800, live: false, dirty: true };
+            const put = () => { const im = posterOf(i); if (!o.live && im.complete && im.naturalWidth) { upload(o.t, im); o.w = im.naturalWidth; o.h = im.naturalHeight; kick(); } };
+            o.put = put; [posterImg[i], posterImgM[i]].forEach((im) => im.addEventListener('load', put)); put();
+            return o; });
+          landTex = null; ok = !gl.isContextLost(); };
+        initGL();
+        onPlayHook = (i) => { const o = tex[i]; if (o) { o.live = false; o.dirty = true; o.put && o.put(); } };
+        onReSource = () => { tex.forEach((o) => { o.live = false; o.dirty = true; o.put && o.put(); }); };
+        const fontsOk = () => { drawWord(); wordReady = true; if (ok) upload(wordTex, wordCv, gl.RGBA); kick(); };
+        if (document.fonts && document.fonts.load) document.fonts.load('400 300px "Bebas Neue"').then(fontsOk).catch(fontsOk); else fontsOk();
+        cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); ok = false; });
+        cv.addEventListener('webglcontextrestored', () => { initGL(); resize(); kick(); });
+        vids.forEach((v, i) => { const mark = () => { if (tex[i]) tex[i].dirty = true; if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(mark); };
+          if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(mark); });
+        const pump = (i) => { const v = vids[i], o = tex[i]; if (!o || v.readyState < 2 || v.seeking || (v.paused && !o.live && entered)) return;
+          if (!v.requestVideoFrameCallback || o.dirty) { upload(o.t, v); o.w = v.videoWidth; o.h = v.videoHeight; o.live = true; o.dirty = false; } };
+
+        const resize = () => { W = innerWidth; H = innerHeight; SCALE = calcScale(); cv.width = Math.round(W * SCALE); cv.height = Math.round(H * SCALE);
+          cv.style.width = W + 'px'; cv.style.height = H + 'px'; kick(); };
+        resize(); addEventListener('resize', resize);
+
+        // ── fractura radial-concéntrica desde la gema ──
+        const D = 1.7;   // distancia de cámara (en altos de pantalla) para la perspectiva de las piezas
+        let pieces = [], vData = null, nVerts = 0, simT = 0, impact = [0.5, 0.05], maxStart = 0;
+        const CRACK_V = 2.9;     // velocidad del frente de grieta (altos/s)
+        let seed = 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+        const buildFracture = (ix, iy) => {
+          seed = 1 + Math.floor(Math.random() * 1e6);
+          const asp = W / H; pieces = []; maxStart = 0;
+          const far = Math.max(...[[0, 0], [asp, 0], [0, 1], [asp, 1]].map(([x, y]) => Math.hypot(x - ix, y - iy))) + 0.05;
+          const rings = [0]; let r = 0.03; while (r < far) { rings.push(r); r *= 1.33 + rnd() * 0.22; } rings.push(far);
+          const S = coarse ? 13 : 17; const base = rnd() * 6.2832;
+          const spokes = Array.from({ length: S }, (_, j) => base + (j + (rnd() - 0.5) * 0.55) * 6.2832 / S);
+          // vértices de la red con ruido (las grietas no son círculos perfectos)
+          const VR = rings.map((rr, k) => spokes.map((a) => { const jr = k === 0 ? 0 : rr * (1 + (rnd() - 0.5) * 0.18); const ja = a + (rnd() - 0.5) * 0.12;
+            return [ix + Math.cos(ja) * jr, iy + Math.sin(ja) * jr]; }));
+          const inScreen = (pts) => pts.some(([x, y]) => x > -0.02 && x < asp + 0.02 && y > -0.02 && y < 1.02);
+          const addPiece = (poly) => { if (poly.length < 3 || !inScreen(poly)) return;
+            let cx = 0, cy = 0; poly.forEach(([x, y]) => { cx += x; cy += y; }); cx /= poly.length; cy /= poly.length;
+            let inr = 1e9; for (let i = 0; i < poly.length; i++) { const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+              const ex = bx - ax, ey = by - ay, l = Math.hypot(ex, ey) || 1; inr = Math.min(inr, Math.abs((cx - ax) * ey - (cy - ay) * ex) / l); }
+            const dist = Math.hypot(cx - ix, cy - iy), size = Math.sqrt(inr);
+            const start = dist / CRACK_V + 0.05 + rnd() * 0.07; maxStart = Math.max(maxStart, start);
+            const dx = (cx - ix) / (dist || 1), dy = (cy - iy) / (dist || 1), sp = (0.35 + rnd() * 0.55) * (1.25 - 0.45 * Math.min(1, dist));
+            const ax = rnd() - 0.5, ay = rnd() - 0.5, az = (rnd() - 0.5) * 0.4, al = Math.hypot(ax, ay, az) || 1, wm = (3 + rnd() * 6) / (0.5 + size * 2.5);
+            pieces.push({ cx, cy, loc: poly.map(([x, y]) => [x - cx, y - cy]), inr, start,
+              x: 0, y: 0, z: 0, vx: dx * sp, vy: dy * sp + 0.25, vz: (0.5 + rnd() * 1.3) * (1.3 - 0.6 * Math.min(1, dist)),
+              q: [0, 0, 0, 1], w: [ax / al * wm, ay / al * wm, az / al * wm] }); };
+          const arc = (x0, y0, a0, a1, rr, n) => { const out = []; for (let s = 0; s <= n; s++) { const a = a0 + (a1 - a0) * s / n; out.push([x0 + Math.cos(a) * rr, y0 + Math.sin(a) * rr]); } return out; };
+          for (let k = 0; k < rings.length - 1; k++) for (let j = 0; j < S; j++) {
+            const j2 = (j + 1) % S; const a0 = spokes[j], a1 = spokes[j2] + (j2 === 0 ? 6.2832 : 0);
+            const r0 = rings[k], r1 = rings[k + 1];
+            const split = r1 * (a1 - a0) > 0.32 ? 2 : 1;   // celdas anchas de afuera: una grieta radial más
+            for (let s = 0; s < split; s++) {
+              const b0 = a0 + (a1 - a0) * s / split, b1 = a0 + (a1 - a0) * (s + 1) / split;
+              const n1 = Math.max(1, Math.ceil(r1 * (b1 - b0) / 0.06)), n0 = Math.max(1, Math.ceil(r0 * (b1 - b0) / 0.06));
+              let poly;
+              if (k === 0) poly = [[ix, iy], ...arc(ix, iy, b0, b1, r1, n1)];
+              else { const inner = s === 0 ? VR[k][j] : null, outerA = s === 0 ? VR[k + 1][j] : null;
+                const A = arc(ix, iy, b0, b1, r0, n0), B = arc(ix, iy, b1, b0, r1, n1);
+                if (inner) A[0] = inner; if (outerA) B[B.length - 1] = outerA;
+                if (s === split - 1) { A[A.length - 1] = VR[k][j2]; B[0] = VR[k + 1][j2]; }
+                poly = [...A, ...B]; }
+              addPiece(poly); } }
+          // buffer: 3 vértices por triángulo del abanico (centroide + borde); 12 floats por vértice
+          nVerts = pieces.reduce((n, p) => n + p.loc.length * 3, 0); vData = new Float32Array(nVerts * 14);
+          gl.bindBuffer(gl.ARRAY_BUFFER, shBuf); gl.bufferData(gl.ARRAY_BUFFER, vData.byteLength, gl.DYNAMIC_DRAW);
+          simT = 0; };
+        // integrador semi-implícito a paso fijo (determinista: se puede adelantar a cualquier t)
+        const G = -2.3, DRAG = 1.0, WDRAG = 0.5, DT = 1 / 120;
+        const stepSim = (tT) => { while (simT < tT) { simT += DT;
+            for (const p of pieces) { if (simT < p.start) continue;
+              p.vx += (-DRAG * p.vx) * DT; p.vy += (G - DRAG * p.vy) * DT; p.vz += (-DRAG * p.vz) * DT;   // v ← v + a·dt
+              p.x += p.vx * DT; p.y += p.vy * DT; p.z += p.vz * DT;                                          // x ← x + v·dt (con la v nueva)
+              const [qx, qy, qz, qw] = p.q, [wx, wy, wz] = p.w, h = 0.5 * DT;                                // q ← q + ½·ω⊗q·dt
+              let nx = qx + h * (wx * qw + wy * qz - wz * qy), ny = qy + h * (wy * qw + wz * qx - wx * qz),
+                nz = qz + h * (wz * qw + wx * qy - wy * qx), nw = qw - h * (wx * qx + wy * qy + wz * qz);
+              const l = Math.hypot(nx, ny, nz, nw); p.q = [nx / l, ny / l, nz / l, nw / l];
+              const wd = Math.exp(-WDRAG * DT); p.w = [wx * wd, wy * wd, wz * wd]; } } };
+        const rot = (q, v) => { const [x, y, z, w] = q; const ix = w * v[0] + y * v[2] - z * v[1], iy = w * v[1] + z * v[0] - x * v[2],
+            iz = w * v[2] + x * v[1] - y * v[0], iw = -x * v[0] - y * v[1] - z * v[2];
+          return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x]; };
+        const LX = -0.35, LY = 0.55, LZ = 0.76, Ll = Math.hypot(LX, LY, LZ); const L = [LX / Ll, LY / Ll, LZ / Ll];
+        const Hh = [L[0], L[1], L[2] + 1]; const Hl = Math.hypot(...Hh); const HV = Hh.map((v) => v / Hl);
+        const writeVerts = (t) => { const asp = W / H, cX = asp / 2, cY = 0.5; let o = 0; const pxU = H * SCALE;
+          const proj = (x, y, z) => { const f = D / Math.max(0.15, D - z); return [cX + (x - cX) * f, cY + (y - cY) * f]; };
+          for (const p of pieces) {
+            const life = t - p.start; const lifted = life > 0;
+            const n = lifted ? rot(p.q, [0, 0, 1]) : [0, 0, 1];
+            const nd = n[0] * L[0] + n[1] * L[1] + n[2] * L[2];
+            const lam = lifted ? Math.max(0.35, Math.min(1.25, 0.55 + 0.45 * nd / L[2])) : 1;
+            const spec = lifted ? Math.pow(Math.max(0, n[0] * HV[0] + n[1] * HV[1] + n[2] * HV[2]), 70) * Math.min(1, life / 0.15) : 0;
+            const fres = lifted ? Math.pow(1 - Math.abs(n[2]), 2) : 0;
+            let a = 1; if (lifted) a = 1 - Math.min(1, Math.max(0, (life - 0.5) / 0.45)); a *= 1 - Math.min(1, Math.max(0, (p.z - D * 0.55) / (D * 0.25)));
+            const lifeN = Math.max(0, Math.min(1, life / 0.9));
+            const c0 = proj(p.cx + p.x, p.cy + p.y, p.z), c1 = lifted ? proj(p.cx + p.x + p.vx * 0.016, p.cy + p.y + p.vy * 0.016, p.z + p.vz * 0.016) : c0;
+            let bvx = (c1[0] - c0[0]) / asp * 2.2, bvy = (c1[1] - c0[1]) * 2.2; const bl = Math.hypot(bvx, bvy); if (bl > 0.04) { bvx *= 0.04 / bl; bvy *= 0.04 / bl; }
+            const vtx = (lx, ly, edge) => { let wx = lx, wy = ly, wz = 0; if (lifted) { const r = rot(p.q, [lx, ly, 0]); wx = r[0]; wy = r[1]; wz = r[2]; }
+              const [sx, sy] = proj(p.cx + p.x + wx, p.cy + p.y + wy, p.z + wz);
+              vData[o++] = sx / asp * 2 - 1; vData[o++] = sy * 2 - 1; vData[o++] = (p.cx + lx) / asp; vData[o++] = p.cy + ly;
+              vData[o++] = edge; vData[o++] = fres; vData[o++] = spec; vData[o++] = a; vData[o++] = lam; vData[o++] = bvx; vData[o++] = bvy; vData[o++] = lifeN; vData[o++] = n[0]; vData[o++] = n[1]; };
+            const inPx = p.inr * pxU;
+            for (let i = 0; i < p.loc.length; i++) { const A = p.loc[i], B = p.loc[(i + 1) % p.loc.length];
+              vtx(0, 0, inPx); vtx(A[0], A[1], 0); vtx(B[0], B[1], 0); } }
+          gl.bindBuffer(gl.ARRAY_BUFFER, shBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, vData); };
+
+        // ── créditos → textura (foto exacta del DOM: cada palabra/letra en su rect real) ──
+        const txtCv = document.createElement('canvas'); const tctx = txtCv.getContext('2d');
+        const snapCred = () => { if (!ok) return;
+          txtCv.width = cv.width; txtCv.height = cv.height; const k = cv.width / innerWidth;
+          tctx.setTransform(k, 0, 0, k, 0, 0); tctx.clearRect(0, 0, innerWidth, innerHeight); tctx.textBaseline = 'alphabetic';
+          credEl.querySelectorAll('.btn').forEach((b) => { const cs = getComputedStyle(b); if (cs.display === 'none') return; const r = b.getBoundingClientRect();
+            tctx.beginPath(); tctx.roundRect(r.left + .5, r.top + .5, r.width - 1, r.height - 1, r.height / 2);
+            if (!b.classList.contains('btn--ghost')) { tctx.fillStyle = 'rgba(10,10,14,.45)'; tctx.fill(); }
+            if (cs.borderTopColor !== 'rgba(0, 0, 0, 0)') { tctx.strokeStyle = cs.borderTopColor; tctx.lineWidth = 1; tctx.stroke(); } });
+          const walker = document.createTreeWalker(credEl, NodeFilter.SHOW_TEXT); const rg = document.createRange(); let n;
+          while ((n = walker.nextNode())) { const el = n.parentElement; if (el.closest('[hidden]')) continue; const cs = getComputedStyle(el);
+            tctx.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily; tctx.fillStyle = cs.color;
+            try { tctx.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing; } catch {}
+            const up = cs.textTransform === 'uppercase'; const re = /\S+/g; let m;
+            while ((m = re.exec(n.data))) { rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
+              const r = rg.getBoundingClientRect(); if (!r.width) continue; const word = up ? m[0].toUpperCase() : m[0];
+              const mt = tctx.measureText(word); const fa = mt.fontBoundingBoxAscent || parseFloat(cs.fontSize) * .8, fd = mt.fontBoundingBoxDescent || parseFloat(cs.fontSize) * .2;
+              tctx.fillText(word, r.left, r.top + (r.height - (fa + fd)) / 2 + fa); } }
+          upload(txtTex, txtCv, gl.RGBA); };
+
+        // ── film ──
+        let barF = 0, barA = 0;   // letterbox animado (sólo apaisado)
+        // barras: header reservado arriba (en vertical, nav + índice) y letterbox abajo (sólo apaisado); px = CSS --bt/--bb
+        const barPxT = () => (W < H ? 54.4 + 46 : Math.max(56, Math.min(72, H * 0.07)));
+        const barPxB = () => (W < H ? 0 : Math.max(56, Math.min(72, H * 0.07)));
+        let barT = 0, barB = 0;
+        let showI = 0, outObj = null, landSnap = null, tr0 = 0, onDone = null, onReveal = null, shotT0 = performance.now(), outPan = 0, outZoom = 1, filmA = 0, lastNow = 0;
+        const bindQuad = (pr) => { gl.bindBuffer(gl.ARRAY_BUFFER, quad); const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0); return l; };
+        const setCover = (pr, o, zoom, pan) => { gl.useProgram(pr);
+          gl.uniform2f(pr.u('uRes'), cv.width, cv.height); gl.uniform2f(pr.u('uVid'), o.w, o.h); gl.uniform1f(pr.u('uZoom'), zoom); gl.uniform1f(pr.u('uPan'), pan);
+          gl.uniform1f(pr.u('uBarT'), barT); gl.uniform1f(pr.u('uBarB'), barB); gl.uniform1f(pr.u('uPortrait'), W < H ? 1 : 0);
+          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, o.t); gl.uniform1i(pr.u('uTex'), 0); };
+        const ease = (x) => 1 - Math.pow(1 - x, 3);
+        const drawFilm = (now, dt) => {
+          filmA += ((entered ? 1 : 0) - filmA) * (reduceMotion ? 1 : 1 - Math.exp(-2.6 * dt));
+          if (landSnap) return false;   // este cuadro es la entrada: se copia entera para romperla
+          if (filmA < 0.004 && !outObj) return false;
+          pump(showI);
+          barA += ((entered ? 1 : 0) - barA) * (reduceMotion ? 1 : 1 - Math.exp(-3.2 * dt));
+          barT = barPxT() / H * barA; barB = barPxB() / H * barA; barF = Math.max(barT, barB);
+          const pan = 0;
+          const tS = (now - tr0) / 1000;
+          const inTr = !!outObj;
+          const pushIn = reduceMotion ? 1 : 1.0 + 0.035 * Math.min(1, (now - shotT0) / 14000);
+          const zin = inTr ? 1.0 + 0.07 * (1 - ease(Math.min(1, tS / 1.1))) : pushIn;
+          gl.disable(gl.BLEND); gl.disable(gl.SCISSOR_TEST);
+          const l = bindQuad(PQ); setCover(PQ, tex[showI], zin, pan);
+          gl.uniform1f(PQ.u('uFade'), (inTr ? 0.4 + 0.6 * ease(Math.min(1, tS / 0.9)) : 1) * filmA);
+          gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disableVertexAttribArray(l);
+          if (inTr) {
+            stepSim(tS); writeVerts(tS);
+            gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            setCover(PSh, outObj, outZoom, outPan); gl.uniform1f(PSh.u('uRaw'), outObj.raw ? 1 : 0); gl.uniform1f(PSh.u('uTxtA'), outObj.raw ? 0 : 1);
+            gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, txtTex); gl.uniform1i(PSh.u('uTxt'), 1); gl.activeTexture(gl.TEXTURE0);
+            gl.uniform2f(PSh.u('uImp'), impact[0] / (W / H), impact[1]); gl.uniform1f(PSh.u('uFront'), tS * CRACK_V);
+            gl.uniform1f(PSh.u('uAsp'), W / H); gl.uniform1f(PSh.u('uPx'), SCALE);
+            if (outObj.raw) { gl.uniform1f(PSh.u('uBarT'), 0); gl.uniform1f(PSh.u('uBarB'), 0); }   // la entrada copiada: pantalla entera
+            const nx = tex[showI]; gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, nx.t); gl.uniform1i(PSh.u('uNext'), 3); gl.activeTexture(gl.TEXTURE0);
+            gl.uniform2f(PSh.u('uVidN'), nx.w, nx.h);
+            gl.bindBuffer(gl.ARRAY_BUFFER, shBuf);
+            const at = (nm, sz, off) => { const k = gl.getAttribLocation(PSh, nm); gl.enableVertexAttribArray(k); gl.vertexAttribPointer(k, sz, gl.FLOAT, false, 56, off * 4); return k; };
+            const ls = [at('aClip', 2, 0), at('aUv', 2, 2), at('aEdge', 1, 4), at('aSh', 4, 5), at('aVel', 2, 9), at('aLife', 1, 11), at('aN', 2, 12)];
+            gl.drawArrays(gl.TRIANGLES, 0, nVerts); ls.forEach((k) => gl.disableVertexAttribArray(k));
+            const tEnd = maxStart + 1.0;
+            if (tS >= Math.min(0.85, tEnd * 0.58) && onReveal) { const r = onReveal; onReveal = null; r(); }   // mismo reloj que la rotura
+            if (tS >= tEnd) { outObj = null; shotT0 = now; const d = onDone; onDone = null; if (d) d(); }
+          }
+          // letterbox: dos franjas negras (clear con scissor), debajo de la gema
+          if (barF > 0.0005) { gl.enable(gl.SCISSOR_TEST); gl.clearColor(0.02, 0.02, 0.024, 1);
+            const bt = Math.round(barT * cv.height), bb = Math.round(barB * cv.height);
+            if (bb > 0) { gl.scissor(0, 0, cv.width, bb); gl.clear(gl.COLOR_BUFFER_BIT); }
+            if (bt > 0) { gl.scissor(0, cv.height - bt, cv.width, bt); gl.clear(gl.COLOR_BUFFER_BIT); }
+            gl.disable(gl.SCISSOR_TEST); }
+          return true; };
+        film = {
+          ok: () => ok,
+          cut: (i) => { showI = i; outObj = null; shotT0 = performance.now(); },
+          snapCred,
+          shatter: (from, to, done, reveal) => { const now = performance.now();
+            outZoom = 1.0 + 0.035 * Math.min(1, (now - shotT0) / 14000); outPan = 0;
+            impact = [gemState.x * (W / H), gemState.y];                 // la gema es el obturador: el corte sale de ella
+            buildFracture(impact[0], impact[1]);
+            outObj = tex[from]; showI = to; tr0 = now; onDone = done; onReveal = reveal; },
+          // entrar: la ENTRADA (con la gema) se copia y estalla desde la gema, abriendo el primer plano
+          enterBreak: (to, done, reveal) => { landSnap = { to, done, reveal }; },
+          plateOf: (i) => tex[i], pump,
+          afterGem: (now) => { if (!landSnap) return; const L = landSnap; landSnap = null;
+            if (!landTex) landTex = mkTex(); gl.bindTexture(gl.TEXTURE_2D, landTex);
+            gl.copyTexImage2D(gl.TEXTURE_2D, 0, gl.RGB, 0, 0, cv.width, cv.height, 0);
+            outObj = { t: landTex, w: cv.width, h: cv.height, raw: true }; outZoom = 1; outPan = 0; filmA = 1; barA = 1;   // header/letterbox ya puestos: la UI del sitio nunca asoma
+            impact = [gemState.x * (W / H), gemState.y]; buildFracture(impact[0], impact[1]);
+            showI = L.to; tr0 = now; shotT0 = now; onDone = L.done; onReveal = L.reveal; landT0 = now; },
+        };
+
+        // ── gema ──
+        let gemState = { x: 0.5, y: 0.05 };
+        let mtx = 0, mty = 0, pmx = 0, pmy = 0;
+        addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; if (reduceMotion) kick(); });
+        let a = 0, aber = 0, ent = 0, sc = 0, cx = 0, cy = 0, wordAmt = 0, brk = reduceMotion ? 0 : 0.12, scInit = false, yaw = 0, crack = 1.5, plateA = 0, tintA = 0, tint = [1, 1, 1];
+        const rotM = (ax, ay, az) => {
+          const cX = Math.cos(ax), sX = Math.sin(ax), cY = Math.cos(ay), sY = Math.sin(ay), cZ = Math.cos(az), sZ = Math.sin(az);
+          const rxy = [[cY, 0, sY], [sX * sY, cX, -sX * cY], [-cX * sY, sX, cX * cY]]; const rz = [[cZ, -sZ, 0], [sZ, cZ, 0], [0, 0, 1]]; const m = [];
+          for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let s = 0; for (let k = 0; k < 3; k++) s += rz[r][k] * rxy[k][c]; m[r * 3 + c] = s; }
+          return new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]); };
+        const drawGem = (now, dt, filmOn) => {
+          const lp = (r) => (reduceMotion ? 1 : 1 - Math.exp(-r * dt));
+          ent += ((entered ? 1 : 0) - ent) * lp(3.2);
+          // obturador: al cortar, la gema destella y se sacude
+          const bt = (now - burstT) / 1000; const hit = bt >= 0 && bt < 0.6 ? Math.sin(Math.min(1, bt / 0.6) * Math.PI) : 0;
+          let brkT = hit * 0.03;
+          const csB = (now - bootT0) / 1000;
+          if (!reduceMotion && csB < 1.15) brkT = Math.max(brkT, 0.12 * Math.pow(1 - csB / 1.15, 3));   // nace ya en el idioma de la grieta (lo lleva la luz, no el burbujeo)
+          brk += (brkT - brk) * lp(9);
+          const burst = brk * (1 - brk) * 4.0;
+          let birth = 1; if (!reduceMotion) { const cs = (now - bootT0) / 1000; if (cs < 1.15) { const g = 1 - Math.pow(1 - cs / 1.15, 3); birth = 1 / (0.06 + 0.94 * g); } }
+          const mob = W < H; const fit = mob ? 0.6 + 0.7 * (H / W) : 1;
+          // dentro: sello de ≈40px abajo al centro (en apaisado, dentro del letterbox; en vertical, bajo los créditos)
+          const rr = 20 / H; const small = 0.6 / rr;
+          const scT = entered ? small : (mob ? 2.2 : 1.95) * fit;
+          if (!scInit) { sc = scT; scInit = true; }
+          sc += (scT - sc) * lp(3.4);
+          const ltE = (now - landT0) / 1000, hidden = ltE >= 0 && ltE < 0.6;   // invisible tras romperse: se ubica ya como sello
+          if (hidden) sc = scT;
+          const cyT = entered ? (-0.5 + (mob ? 36 / H : Math.max(barPxB() / 2, 26) / H)) : 0.02;
+          cy += (cyT - cy) * lp(3.4); cx += (0 - cx) * lp(3.4); if (hidden) cy = cyT;
+          gemState = { x: 0.5 + cx * H / W, y: 0.5 + cy };
+          gembtn.style.left = (0.5 * W + cx * H) + 'px'; gembtn.style.top = ((0.5 - cy) * H) + 'px';
+          const wt = (wordReady && !entered && brk < 0.12) ? 1 : 0; wordAmt += (wt - wordAmt) * lp(entered ? 9 : 3.7);
+          pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
+          const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
+          aber += ((Math.min(1, vel * 30) * 0.5) - aber) * lp(6.3); aber = Math.max(aber, burst * 1.4, hit * 1.3);
+          if (!reduceMotion) a += 0.096 * dt * (1 + hit * 7);
+          const yawT = entered ? cur * Math.PI * 0.5 : 0; yaw += (yawT - yaw) * lp(4);
+          const pk = 1 - ent * 0.6;
+          const ay = (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07 + Math.sin(a * 0.12 + 1.3) * 0.055) + pmx * 0.6 * pk + yaw;
+          const ax = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk;
+          const az = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;
+          const fx = Math.sin(a * 0.6) * 0.004 * (1 - ent), fy = Math.sin(a * 0.42 + 0.8) * 0.006 * (1 - ent);
+          if (!filmOn) { gl.disable(gl.SCISSOR_TEST); gl.clearColor(0.043, 0.043, 0.055, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
+          // la gema chica sólo ocupa un recuadro: scissor (no se raymarchea la pantalla entera)
+          const gr = (0.6 / (sc * birth)) * H * 1.9 * SCALE;
+          const gx = (0.5 * W + (cx + fx) * H) * SCALE, gy = (0.5 + cy + fy) * H * SCALE;
+          if (gr < cv.height * 0.45) { gl.enable(gl.SCISSOR_TEST); gl.scissor(Math.floor(gx - gr), Math.floor(gy - gr), Math.ceil(gr * 2), Math.ceil(gr * 2)); }
+          else gl.disable(gl.SCISSOR_TEST);
+          gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          gl.useProgram(PG); const l = bindQuad(PG);
+          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.uniform1i(PG.u('uWord'), 0);
+          gl.uniform2f(PG.u('uRes'), cv.width, cv.height); gl.uniform2f(PG.u('uCenter'), cx + fx, cy + fy); gl.uniform1f(PG.u('uScale'), sc * birth);
+          gl.uniform1f(PG.u('uAber'), aber); gl.uniform1f(PG.u('uWordAmt'), wordAmt); gl.uniform1f(PG.u('uTime'), now * 0.001);
+          gl.uniform1f(PG.u('uBreak'), brk);
+          // invitación sin texto: cada 2,6 s un anillo de luz sale de la gema y ella late (desde ~1,4 s, sólo en la entrada)
+          let ringA = 0, ringR = 0, pulse = 0;
+          if (!entered && !reduceMotion) { const tt = csB - 1.4; if (tt > 0) { const ph = (tt % 2.6) / 2.6;
+            ringR = 0.6 + ph * 0.6; const near = 1 - Math.min(1, Math.max(0, (Math.hypot(mtx * W / H, mty) - 0.08) / 0.3));
+            ringA = Math.pow(1 - ph, 1.3) * 1.0 * Math.min(1, tt / 0.6) * (1 - near * 0.6); pulse = ph < 0.2 ? Math.sin(Math.PI * ph / 0.2) : 0; } }
+          gl.uniform1f(PG.u('uRing'), ringR); gl.uniform1f(PG.u('uRingA'), ringA);
+          gl.uniform1f(PG.u('uScale'), sc * birth * (1 + pulse * 0.035));
+          // sello: absorbe el color del plano actual (con destello en cada corte)
+          const pc = projCol[cur] || [1, 1, 1]; tint = tint.map((v, k) => v + (pc[k] - v) * lp(3));
+          tintA += ((entered ? 0.7 + hit * 0.3 : 0) - tintA) * lp(4);
+          gl.uniform3f(PG.u('uTint'), tint[0], tint[1], tint[2]); gl.uniform1f(PG.u('uTintAmt'), tintA);
+          // grietas de luz: nacimiento brillante, respiración en reposo, más vivas bajo el cursor, destello en cada corte
+          const prox = entered ? 0 : 1 - Math.min(1, Math.max(0, (Math.hypot(mtx * W / H, mty) - 0.08) / 0.3));
+          const crT = (reduceMotion ? 0.5 : 0.42 + 0.12 * Math.sin(now * 0.0013)) + prox * 0.7 + hit * 2.2 + (csB < 1.4 ? (1.4 - csB) * 1.6 : 0);
+          crack += (crT - crack) * lp(8);
+          gl.uniform1f(PG.u('uCrack'), crack); gl.uniform1f(PG.u('uSweep'), entered ? 0.35 : 0.2 + prox * 0.25);
+          // el primer plano detrás de la gema (sólo en la entrada)
+          const pi = hashAt(); const po = film && film.plateOf ? film.plateOf(pi) : null;
+          if (po && !entered) film.pump(pi);
+          plateA += ((po && !entered && csB > 0.6 ? 1 : 0) - plateA) * lp(entered ? 12 : 1.6);
+          if (po) { gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, po.t); gl.uniform1i(PG.u('uPlate'), 2); gl.activeTexture(gl.TEXTURE0);
+            gl.uniform1f(PG.u('uPlateAsp'), po.w / po.h); }
+          gl.uniform1f(PG.u('uPlateAmt'), po ? plateA : 0);
+          // al entrar, la gema de la entrada se rompe con la pantalla: la viva reaparece ya como sello
+          const lt = (now - landT0) / 1000; gl.uniform1f(PG.u('uAlpha'), lt >= 0 && lt < 1.1 ? Math.max(0, Math.min(1, (lt - 0.6) / 0.5)) : 1);
+          gl.uniform1f(PG.u('uWordMode'), 0); gl.uniform1f(PG.u('uRipple'), 0); gl.uniform1f(PG.u('uWinFrac'), 1); gl.uniform1f(PG.u('uScroll'), 0);
+          gl.uniformMatrix3fv(PG.u('uRot'), false, rotM(ax, ay, az));
+          gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disableVertexAttribArray(l); gl.disable(gl.SCISSOR_TEST); };
+
+        let fAcc = 0, fN = 0;
+        const frame = (now) => { if (!ok) return; now = performance.now();
+          const dt = Math.min(0.05, lastNow ? (now - lastNow) / 1000 : 0.016); lastNow = now;
+          // DPR adaptativo: cada ~90 cuadros, si el promedio pasa 21 ms baja la escala; si sobra, la recupera
+          if (!reduceMotion && dt > 0) { fAcc += dt; fN++; if (fN >= 90) { const avg = fAcc / fN; fAcc = 0; fN = 0;
+            if (avg > 0.021 && qual > 0.55) { qual *= 0.85; resize(); } else if (avg < 0.0135 && qual < 1) { qual = Math.min(1, qual * 1.1); resize(); } } }
+          gl.viewport(0, 0, cv.width, cv.height);
+          const filmOn = drawFilm(now, dt); drawGem(now, dt, filmOn); film.afterGem(now); };
+        if (reduceMotion) {
+          // sin rAF continuo: un cuadro por cambio de estado
+          let req = 0; kick = () => { if (!req) req = requestAnimationFrame(() => { req = 0; frame(); }); }; kick();
+        } else { const loop = () => { frame(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+      }
+    </script>
+  </body>
+</html>

@@ -1,8 +1,12 @@
 ---
 // Herramienta de trabajo (solo dev): muestra el sitio en MOBILE y DESKTOP lado a lado,
 // en vivo, dentro de una sola ventana. Botones para cambiar qué página miramos.
+// La fila de VERSIONES (src/data/versiones.ts) cambia qué variante del home se ve.
+import { versiones as todas } from '../data/versiones';
+// las /v/* existen sólo en dev: publicado, el selector muestra únicamente el home
+const versiones = import.meta.env.DEV ? todas : todas.filter((v) => !v.href.startsWith('/v/'));
 const targets = [
-  { href: '/', label: 'Home' },
+  { href: '/', label: 'Sitio' },
   { href: '/tipos', label: 'Selector' },
   { href: '/lab', label: 'Lab efectos' },
 ];
@@ -30,8 +34,20 @@ const targets = [
       .bar button:hover { color:var(--ink); border-color:var(--soft); }
       .bar button.on { color:#06131a; background:var(--acc); border-color:var(--acc); }
       .bar .reload { margin-left:auto; }
+      /* fila de versiones: sólo con el target "Sitio" */
+      .vers { display:flex; align-items:center; gap:.5rem; min-height:44px; padding:.35rem 1rem; border-bottom:1px solid var(--hair);
+        background:#0e0e12; }
+      .vers[hidden] { display:none; }
+      .vers .lbl { font-size:.62rem; letter-spacing:.18em; text-transform:uppercase; color:var(--soft); margin-right:.4rem; }
+      .vers button { appearance:none; font:inherit; font-size:.68rem; letter-spacing:.06em; cursor:pointer;
+        color:var(--soft); background:transparent; border:1px solid var(--hair); border-radius:6px; padding:.36rem .75rem;
+        transition:color .2s, border-color .2s, background .2s; }
+      .vers button:hover { color:var(--ink); border-color:var(--soft); }
+      .vers button.on { color:var(--ink); border-color:var(--acc); background:rgba(36,226,232,.08); }
+      .vers .desc { margin-left:.8rem; font-size:.68rem; color:var(--soft); line-height:1.4; max-width:70ch; }
 
-      .stage { display:flex; gap:1.4rem; height:calc(100% - 52px); padding:1.4rem; align-items:center; justify-content:center; }
+      body { display:flex; flex-direction:column; }
+      .stage { display:flex; gap:1.4rem; flex:1; min-height:0; padding:1.4rem; align-items:center; justify-content:center; }
       .col { display:flex; flex-direction:column; align-items:center; gap:.7rem; height:100%; }
       .col .cap { font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--soft); }
       .screen { position:relative; overflow:hidden; background:#000; border:1px solid var(--hair);
@@ -53,6 +69,13 @@ const targets = [
       ))}
       <button type="button" class="reload" data-reload>↻ recargar</button>
     </div>
+    <div class="vers" data-vers>
+      <span class="lbl">Versión</span>
+      {versiones.map((v) => (
+        <button type="button" data-ver={v.href} data-desc={v.desc}>{v.label}</button>
+      ))}
+      <span class="desc" data-desc-out></span>
+    </div>
 
     <div class="stage">
       <div class="col col--mobile">
@@ -67,13 +90,20 @@ const targets = [
 
     <script>
       const MW = 390, MH = 844, DW = 1440, DH = 900;
-      let current = new URLSearchParams(location.search).get('u') || '/';
+      const qs = new URLSearchParams(location.search);
+      let current = qs.get('u') || '/';
+      // compat: ?u=/v/xxx → target Sitio + esa versión
+      let version = qs.get('v') || (current.startsWith('/v/') ? current : '/');
+      if (current.startsWith('/v/')) current = '/';
 
       const mFrame = document.querySelector('[data-frame="mobile"]');
       const dFrame = document.querySelector('[data-frame="desktop"]');
       const mScreen = document.querySelector('[data-screen="mobile"]');
       const dScreen = document.querySelector('[data-screen="desktop"]');
       const btns = Array.from(document.querySelectorAll('.bar button[data-href]'));
+      const vers = document.querySelector('[data-vers]');
+      const vbtns = Array.from(document.querySelectorAll('[data-ver]'));
+      const descOut = document.querySelector('[data-desc-out]');
 
       // fija el tamaño real del iframe; el .screen se escala para contenerlo
       mFrame.style.width = MW + 'px'; mFrame.style.height = MH + 'px';
@@ -104,15 +134,28 @@ const targets = [
         dScreen.style.height = DH * dScale + 'px';
       }
 
+      // el target "Sitio" muestra la versión elegida; los demás targets ignoran la fila de versiones
+      const resolved = () => (current === '/' ? version : current);
       function load(href) {
         current = href;
-        mFrame.src = href; dFrame.src = href;
+        const src = resolved();
+        mFrame.src = src; dFrame.src = src;
         btns.forEach((b) => b.classList.toggle('on', b.dataset.href === href));
-        const u = new URL(location.href); u.searchParams.set('u', href); history.replaceState({}, '', u);
+        vers.hidden = href !== '/';
+        vbtns.forEach((b) => b.classList.toggle('on', b.dataset.ver === version));
+        const on = vbtns.find((b) => b.dataset.ver === version); descOut.textContent = on ? on.dataset.desc : '';
+        const u = new URL(location.href); u.searchParams.set('u', href);
+        if (href === '/' && version !== '/') u.searchParams.set('v', version); else u.searchParams.delete('v');
+        history.replaceState({}, '', u);
+        fit();
       }
 
       btns.forEach((b) => b.addEventListener('click', () => load(b.dataset.href)));
-      document.querySelector('[data-reload]').addEventListener('click', () => { mFrame.src = current; dFrame.src = current; });
+      // cada versión arranca SIEMPRE en su home (entrada), nunca en un proyecto abierto
+      vbtns.forEach((b) => b.addEventListener('click', () => { version = b.dataset.ver; load('/'); }));
+      // recarga real (mismo path + hash no recargaría por src)
+      document.querySelector('[data-reload]').addEventListener('click', () => [mFrame, dFrame].forEach((f) => {
+        f.src = 'about:blank'; requestAnimationFrame(() => { f.src = resolved(); }); }));   // recargar = volver al home
       addEventListener('resize', fit);
       new ResizeObserver(fit).observe(document.documentElement);
       load(current); fit();
