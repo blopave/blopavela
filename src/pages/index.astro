@@ -164,8 +164,11 @@ import { projects } from '../data/projects';
         #g-land{top:44svh;width:76vw}
         /* índice mobile = el desktop en vertical: nombres a la izquierda, la gema arriba y el sitio MOBILE real
            proyectado en una pantalla tipo teléfono a la derecha */
-        #g-idx{left:72vw;top:15svh;width:22vw}
-        .scr{left:50vw;right:auto;width:44vw;top:30svh;transform:none}
+        /* la gema baja lo justo para no rozar la nav en tablets (en teléfonos queda en 15svh) */
+        #g-idx{left:72vw;top:max(15svh,calc(var(--gut) + 3.5rem + 11vw));width:22vw}
+        /* la pantalla (teléfono vertical) se limita por ALTO: en tablets 44vw la sacaba de cuadro con la cartela;
+           centrada bajo la gema (72vw) */
+        .scr{--sw:min(44vw,calc((70svh - 5rem) * 720 / 1558));left:calc(72vw - var(--sw) / 2);right:auto;width:var(--sw);top:30svh;transform:none}
         #s-idx{aspect-ratio:720/1558}
         .scr__label{flex-direction:column;gap:.15rem;margin-top:.7rem;font-size:.625rem}
         :global(.scr__pre){display:none}
@@ -188,6 +191,21 @@ import { projects } from '../data/projects';
           background:rgba(11,11,14,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--hair)}
         .case__live,.kase__next{min-height:48px;border-bottom-color:transparent}
         .case__live span{color:var(--ink)}
+      }
+      /* case con scroll (vertical y horizontal bajo): lo que sube se funde bajo la nav y el ‹ Proyectos (termina justo bajo la píldora) */
+      .nav::before{content:'';position:absolute;inset:0 0 calc(var(--gut) + 18px - 5.65rem);z-index:-1;pointer-events:none;opacity:0;
+        background:linear-gradient(var(--bg) 55%,rgba(11,11,14,0));transition:opacity .5s var(--ease)}
+      @media(orientation:portrait){ body.in-case .nav::before{opacity:1} }
+      /* ── HORIZONTAL BAJO (teléfono acostado): la ficha no entra centrada → columna con scroll bajo la nav ── */
+      @media(orientation:landscape) and (max-height:540px){
+        /* el scroll arranca bajo la píldora ‹ Proyectos: el texto se recorta (con fundido) ahí, nunca a su lado */
+        .kase{top:calc(var(--gut) + 5.65rem);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+          -webkit-mask-image:linear-gradient(transparent,#000 1.2rem);mask-image:linear-gradient(transparent,#000 1.2rem)}
+        .kase__info{position:relative;left:auto;top:auto;transform:none;margin:1rem 0 calc(var(--gut) + 1rem) var(--gut);
+          width:calc(41.667vw - var(--gut) * 1.6)}
+        .case__title{font-size:clamp(2.4rem,13svh,3.6rem)}
+        .case__approach{font-size:.92rem;margin-top:.8rem}
+        .cred{margin-top:1rem}
       }
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
@@ -975,7 +993,7 @@ import { projects } from '../data/projects';
           if (inCase) {
             let sR;
             if (port) sR = rectOf('#s-casep');
-            else { const gut = clamp(W * 0.04, 20.8, 64), band = Math.min(H * 0.14, 112);
+            else { const gut = clamp(W * 0.04, 20.8, 64), band = Math.max(Math.min(H * 0.14, 112), navEl.getBoundingClientRect().bottom - gut + 25);   // en pantallas bajas, no subir hasta la nav
               const x0 = W * 5 / 12 + gut * 0.4, x1 = W - gut; let fw = x1 - x0, fh = fw / 1.6;
               const maxH = H - band - gut * 1.2; if (fh > maxH) { fh = maxH; fw = fh * 1.6; }
               const cy0 = band + (H - band - gut * 0.4) / 2; sR = { left: x1 - fw, top: cy0 - fh / 2, right: x1, bottom: cy0 + fh / 2 }; }
