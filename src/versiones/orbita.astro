@@ -58,14 +58,16 @@ const data = JSON.stringify(projects);
       body.entered .enter{display:none}
 
       .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:baseline;
-        padding:var(--gut);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);pointer-events:none;
+        align-items:center;padding:calc(var(--gut) - 12px) var(--gut);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);pointer-events:none;
         opacity:0;transition:opacity .6s var(--ease)}
+      .nav::before{content:"";position:absolute;inset:0 0 -2.5rem;z-index:-1;pointer-events:none;
+        background:linear-gradient(180deg,rgba(7,7,10,.92) 0%,rgba(7,7,10,.7) 55%,rgba(7,7,10,0) 100%)}
       body.entered .nav{opacity:1;transition-delay:.5s}
       body.entered .nav__home,body.entered .nav__contact{pointer-events:auto}
-      .nav__home{appearance:none;background:none;border:0;font:inherit;font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mid);cursor:pointer;
+      .nav__home{appearance:none;background:none;border:0;font:inherit;font-size:.75rem;min-height:44px;min-width:44px;padding:0;letter-spacing:.16em;text-transform:uppercase;color:var(--mid);cursor:pointer;
         transition:color .25s var(--ease)}
       .nav__home:hover{color:var(--ink)}
-      .nav__contact{text-transform:none;letter-spacing:0;white-space:nowrap;font-size:.75rem;transition:color .25s var(--ease)}
+      .nav__contact{display:inline-flex;align-items:center;min-height:44px;text-transform:none;letter-spacing:0;white-space:nowrap;font-size:.75rem;transition:color .25s var(--ease)}
       .nav__contact:hover{color:var(--ink)}
       @media(max-width:640px){ .nav__who{display:none} }
 
@@ -76,7 +78,7 @@ const data = JSON.stringify(projects);
         background:linear-gradient(90deg,rgba(7,7,10,.94) 0%,rgba(7,7,10,.82) 45%,rgba(7,7,10,0) 100%)}
       body.entered .index{opacity:1;transform:none;pointer-events:auto;transition-delay:.7s}
       body.in-case .index{opacity:0;transform:translateX(-24px);pointer-events:none;transition-delay:0s}
-      .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;padding:.2rem 0;display:flex;align-items:baseline;gap:.9rem;
+      .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;padding:.2rem 0;min-height:44px;display:flex;align-items:baseline;gap:.9rem;
         font-family:var(--display);font-size:clamp(2.2rem,4.4vw,3.8rem);line-height:1;color:rgba(242,243,245,.34);
         transition:color .35s var(--ease),padding .35s var(--ease)}
       .prow small{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;color:var(--soft);opacity:0;transition:opacity .35s var(--ease)}
@@ -110,7 +112,7 @@ const data = JSON.stringify(projects);
       .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.72rem}
       .cred dd{font-size:.88rem}
       .cred dd.soft{color:var(--mid)}
-      .kase__live{display:inline-flex;gap:.5rem;margin-top:1.6rem;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+      .kase__live{display:inline-flex;align-items:center;min-height:44px;gap:.5rem;margin-top:1.6rem;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
         padding:.35rem 0;border-bottom:1px solid rgba(242,243,245,.35);transition:border-color .25s}
       .kase__live:hover{border-color:var(--ink)}
       .kase__kind{color:var(--ink)}
@@ -143,11 +145,27 @@ const data = JSON.stringify(projects);
         .cred{margin-top:1rem}
       }
 
+      /* teléfono acostado / pantallas bajas: la ficha arranca bajo la nav y scrollea si no entra */
+      @media (orientation:landscape) and (max-height:560px){
+        .kase,body.in-case .kase{top:calc(var(--gut) + 44px);bottom:0;transform:none;overflow-y:auto;overscroll-behavior:contain;
+          padding-bottom:1.2rem;scrollbar-width:none}
+        .kase::-webkit-scrollbar{display:none}
+        .kase__back{margin-bottom:.9rem}
+        .kase__name{font-size:clamp(2.4rem,9vh,3.4rem);margin:.2rem 0 .6rem}
+        .kase__txt{font-size:.88rem}
+        .cred{margin-top:1rem}
+        .kase__acts{margin-top:1rem}
+        .index{bottom:1.2rem}
+        .prow{font-size:clamp(1.8rem,8.5vh,2.6rem)}
+      }
+
       /* sin WebGL: lista HTML y ficha con la captura (todo legible, nada roto) */
       body.no-gl canvas.orb,body.no-gl .enter{display:none}
       body.no-gl .index{position:static;opacity:1;transform:none;pointer-events:auto;padding:calc(var(--gut) + 4rem) var(--gut) 3rem}
       body.no-gl .index::before{display:none}
-      body.no-gl .prow{color:var(--ink)}
+      body.no-gl .prow{color:var(--ink);flex-direction:column;gap:.2rem;padding:1rem 0;border-bottom:1px solid var(--hair);width:100%}
+      body.no-gl .prow small{opacity:1}
+      body.no-gl .index{max-width:48rem}
       body.no-gl{overflow:auto}
       body.no-gl.in-case .index{display:none}
       body.no-gl .kase{position:static;transform:none;width:auto;max-width:40rem;padding:calc(var(--gut) + 4rem) var(--gut) 3rem}
@@ -166,7 +184,7 @@ const data = JSON.stringify(projects);
     <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
     <nav class="nav" aria-label="Navegación" data-nav>
       <button type="button" class="nav__home" data-home>blopa</button>
-      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela · </span>blopave@pm.me ↗</a>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela ·&nbsp;</span>blopave@pm.me ↗</a>
     </nav>
     <main>
     <section class="index" data-index aria-label="Proyectos">
@@ -196,6 +214,12 @@ const data = JSON.stringify(projects);
       <button type="button" class="cbar__next" data-next2>Siguiente <b data-next-name2></b> →</button>
     </div>
     </main>
+    <noscript>
+      <style is:inline>.nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) 3rem;max-width:48rem}.nojs h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.4rem);line-height:1}.nojs li{list-style:none;padding:1rem 0;border-bottom:1px solid var(--hair)}.nojs p{color:var(--mid);font-size:.92rem;margin-top:.35rem}.nojs ul{padding:0}.nav{opacity:1!important;pointer-events:auto!important}canvas.orb,.enter,.ping,.index,.kase,.cbar{display:none!important}body{overflow:auto!important}</style>
+      <section class="nojs" aria-label="Proyectos"><ul>
+        {projects.map((p) => (<li><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>))}
+      </ul></section>
+    </noscript>
     <script type="application/json" id="orb-data" set:html={data}></script>
 
     <script>
@@ -307,8 +331,12 @@ const data = JSON.stringify(projects);
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
         if (!renderer.getContext()) throw new Error('sin contexto WebGL');
         GL = true;
-        const DPR = Math.min(coarse ? 1.75 : 1.75, devicePixelRatio || 1);
-        renderer.setPixelRatio(DPR);
+        // presupuesto: el canvas nunca pasa ~2,5 Mpx (a DPR 2 en 1440×900 serían 5,2)
+        const fitDPR = () => Math.max(1, Math.min(1.75, devicePixelRatio || 1, Math.sqrt(2.5e6 / Math.max(1, innerWidth * innerHeight))));
+        renderer.setPixelRatio(fitDPR());
+        let lost = false;
+        canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; });
+        canvas.addEventListener('webglcontextrestored', () => { lost = false; });
         renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         const scene = new THREE.Scene();
@@ -333,8 +361,13 @@ const data = JSON.stringify(projects);
         const mirror = new THREE.Group(); scene.add(mirror);
         const KEYG = `vec3(${KEY.x.toFixed(4)},${KEY.y.toFixed(4)},${KEY.z.toFixed(4)})`;
 
-        const VERT = `varying vec2 vUv; varying float vDist; varying vec3 vNw; varying vec3 vWp;
-          void main(){ vUv=uv; vec4 w=modelMatrix*vec4(position,1.); vWp=w.xyz; vec4 mv=viewMatrix*w; vDist=-mv.z;
+        // uFlat: la pantalla curva se APLANA al abrir el case (el trabajo se lee recto); arco → cuerda sin cambiar el ancho
+        const VERT = `uniform float uFlat; uniform float uDrum; varying vec2 vUv; varying float vDist; varying vec3 vNw; varying vec3 vWp;
+          void main(){ vUv=uv; vec3 p=position;
+            if(uFlat>0.001){
+              if(uDrum>0.5){ float rr=length(p.yz), th=atan(p.y,p.z); p.yz=mix(p.yz,vec2(rr*th,rr),uFlat); }
+              else { float rr=length(p.xz), th=atan(p.x,p.z); p.xz=mix(p.xz,vec2(rr*th,rr),uFlat); } }
+            vec4 w=modelMatrix*vec4(p,1.); vWp=w.xyz; vec4 mv=viewMatrix*w; vDist=-mv.z;
             vNw=normalize(mat3(modelMatrix)*(-normal)); gl_Position=projectionMatrix*mv; }`;
         const UVMAP = `vec2 suv(){ return uDrum>0.5 ? vec2(1.0-vUv.y, 1.0-vUv.x) : vec2(1.0-vUv.x, vUv.y); }`;
         // pantalla: el sitio + el vidrio, que refleja SÓLO la luz clave (un barrido cuando gira) + filete finísimo.
@@ -370,6 +403,8 @@ const data = JSON.stringify(projects);
             gl_FragColor=vec4(c,1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
+            // leyendo: el sitio con sus colores reales (sin tone-map), la luz señala pero no toca
+            if(uRefl<0.5) gl_FragColor.rgb=mix(gl_FragColor.rgb,sRGBTransferOETF(vec4(c,1.)).rgb,uRead*uFade);
           }`;
         // marco: metal oscuro; el canto agarra la luz clave del lado que la mira
         const PLATE_FRAG = `uniform float uDrum; uniform float uFocus; uniform vec3 uAcc; uniform vec2 uK; uniform float uFade; uniform float uRead; uniform float uCr;
@@ -413,13 +448,13 @@ const data = JSON.stringify(projects);
           const phi = (i / N) * Math.PI * 2;
           const pivot = new THREE.Group(), rpivot = new THREE.Group(); ring.add(pivot); mirror.add(rpivot);
           const uni = { map: { value: null }, uDim: { value: 0.5 }, uFocus: { value: 0 }, uRefl: { value: 0 }, uDrum: { value: 0 },
-            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 } };
+            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 }, uFlat: { value: 0 } };
           const mesh = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: SCREEN_FRAG, uniforms: uni, side: THREE.BackSide }));
           mesh.userData.i = i; pivot.add(mesh); pickers.push(mesh);
-          const puni = { uDrum: uni.uDrum, uFocus: uni.uFocus, uFade: uni.uFade, uRead: uni.uRead, uCr: uni.uCr, uAcc: { value: new THREE.Color(p.accent) }, uK: { value: new THREE.Vector2(1.6, 1) } };
+          const puni = { uDrum: uni.uDrum, uFocus: uni.uFocus, uFade: uni.uFade, uRead: uni.uRead, uCr: uni.uCr, uFlat: uni.uFlat, uAcc: { value: new THREE.Color(p.accent) }, uK: { value: new THREE.Vector2(1.6, 1) } };
           const plate = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PLATE_FRAG, uniforms: puni, side: THREE.BackSide }));
           pivot.add(plate);
-          const runi = { ...uni, uRefl: { value: 1 }, uRead: { value: 0 } };
+          const runi = { ...uni, uRefl: { value: 1 }, uRead: { value: 0 }, uFlat: { value: 0 } };
           const rmesh = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: SCREEN_FRAG, uniforms: runi, side: THREE.BackSide }));
           rpivot.add(rmesh);
           const v = document.createElement('video');
@@ -585,7 +620,7 @@ const data = JSON.stringify(projects);
             // modelado por la clave: las caras que la miran se encienden apenas, las del lado opuesto caen a sombra
             col*=0.82+0.3*max(dot(nw,${KEYG}),0.0);
             vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x)); rimC=mix(rimC,uTint,uTintAmt*0.5);
-            col+=pow(1.0-ci,4.0)*0.2*rimC;
+            col+=pow(1.0-ci,3.0)*0.42*rimC;
             col+=smoothstep(0.06,0.5,dnn)*smoothstep(0.0,0.25,ci)*0.24*vec3(1.0,0.97,0.92);
             col=col/(1.0+col*0.45);
             if(uWordAmt>0.002){
@@ -682,8 +717,9 @@ const data = JSON.stringify(projects);
 
         // ── tamaño ──
         let W = 0, H = 0, portrait = false, baseFov = 34;
-        const resize = () => { W = innerWidth; H = innerHeight; portrait = H > W * 1.05; renderer.setSize(W, H, false);
-          camera.aspect = W / H; baseFov = portrait ? 40 : 22;   // desktop: lente larga, las vecinas no se agrandan contra el borde camera.fov = baseFov; camera.updateProjectionMatrix();
+        const resize = () => { W = innerWidth; H = innerHeight; portrait = H > W * 1.05; renderer.setPixelRatio(fitDPR()); renderer.setSize(W, H, false);
+          camera.aspect = W / H; baseFov = portrait ? 40 : 22;   // desktop: lente larga, las vecinas no se agrandan contra el borde
+          camera.fov = baseFov; camera.updateProjectionMatrix();
           const was = mode; buildLayout(portrait ? 'drum' : 'ring'); layout();
           if (was && was !== mode) { const k = inCase ? caseI : 0; rot = angleFor(k); target = null; } };
         addEventListener('resize', resize);
@@ -703,10 +739,12 @@ const data = JSON.stringify(projects);
           const t = tanH();
           if (mode === 'drum') {
             const C = new THREE.Vector3(0, RD * Math.sin(DOFF), -RD * Math.cos(DOFF));
-            const L = PH * Math.cos(DOFF) / (2 * t * 0.4), camZ = L + C.z, pxS = 2 * L * t / H;
-            const yc = 72 + 0.2 * H, camY = C.y + (yc - 0.5 * H) * pxS;
-            const pxG = 2 * camZ * t / H; GR = 0.095 * H * pxG;
-            GEMP.set(0, camY - (72 + 0.4 * H + 0.025 * H + 0.095 * H - 0.5 * H) * pxG, 0);
+            // teléfono + gema tienen que entrar ENTEROS sobre los nombres (pantallas bajas: la pila se achica)
+            const room = (indexEl.offsetTop || H * 0.6) - 72 - 14, k = Math.min(1, room / (0.615 * H));
+            const L = PH * Math.cos(DOFF) / (2 * t * 0.4 * k), camZ = L + C.z, pxS = 2 * L * t / H;
+            const yc = 72 + 0.2 * k * H, camY = C.y + (yc - 0.5 * H) * pxS;
+            const pxG = 2 * camZ * t / H; GR = 0.095 * k * H * pxG;
+            GEMP.set(0, camY - (72 + 0.52 * k * H - 0.5 * H) * pxG, 0);
             poseIndex.set(0, camY, camZ); lookIndex.set(0, camY, -10);
             poseHome.set(0, GEMP.y, GR / (0.62 * t * camera.aspect)); lookHome.copy(GEMP);
           } else {
@@ -734,9 +772,13 @@ const data = JSON.stringify(projects);
             arcCtl.lerpVectors(poseIndex, poseCase, 0.5).add(new THREE.Vector3(0.9, 0.6, 0.6));
             setKaseTop(KTOP);
           } else {
-            const d = (SH / 0.64) / (2 * tanH());
+            // la pantalla va a la derecha de la ficha, nunca debajo: si no entra, la cámara se aleja (pantallas bajas/anchas)
+            const kr = Math.min(0.6, (caseEl.offsetLeft + caseEl.offsetWidth + 28) / W);
+            let d = (SH / 0.64) / (2 * tanH());
+            const sw0 = (2 * R * Math.sin(TH / 2)) * 1.1 / (2 * d * tanH() * camera.aspect);
+            d *= Math.max(1, sw0 / (0.97 - kr));
             const visW = 2 * d * tanH() * camera.aspect; const sw = (2 * R * Math.sin(TH / 2)) * 1.1 / visW;
-            const xc = Math.max(0.5, Math.min(0.33 + sw / 2, 0.97 - sw / 2));
+            const xc = Math.max(0.5, Math.min(Math.max(0.33, kr) + sw / 2, 0.97 - sw / 2));
             const shift = (xc - 0.5) * visW;
             poseCase.set(-shift, RING_Y, -R + d); lookCase.set(-shift, RING_Y, -R);
             // el vuelo no es una recta: abre en arco por arriba y a la derecha de la gema (como una grúa)
@@ -800,20 +842,24 @@ const data = JSON.stringify(projects);
             if (drum) qA.setFromAxisAngle(AX.set(1, 0, 0), -a); else qA.setFromAxisAngle(AX.set(0, 1, 0), a);
             radial.set(0, 0, 1);
             const bob = reduce ? 0 : Math.sin(now * 0.0006 + i * 1.7);
-            qR.setFromAxisAngle(radial, -lag * 0.9 + bob * 0.012);
+            const still = i === fi ? f : 0;   // la del case se endereza: sin rolido ni flote
+            qR.setFromAxisAngle(radial, (-lag * 0.9 + bob * 0.012) * (1 - still));
             s.pivot.quaternion.copy(qA).multiply(qR); s.rpivot.quaternion.copy(s.pivot.quaternion);
-            const by = reduce ? 0 : Math.sin(now * 0.0008 + i * 2.3) * 0.06;
+            const by = reduce ? 0 : Math.sin(now * 0.0008 + i * 2.3) * 0.06 * (1 - still);
             if (drum) s.pivot.position.set(by, 0, 0); else s.pivot.position.set(0, by, 0);
             s.rpivot.position.copy(s.pivot.position);
             const on = i === fi ? 1 : 0;
             s.focus += (on - s.focus) * lp(4);
-            const dimT = inCase ? (on ? 1.0 : 0.06) : (on ? 1.0 : (drum ? 0.16 : 0.1));   // el foco se LEE limpio
+            const dimT = inCase ? (on ? 1.0 : 0.06) : (on ? 1.0 : (drum ? 0.16 : 0.24));   // el foco se LEE limpio
             s.dim += (dimT - s.dim) * lp(4);
             // mobile: al llegar, el teléfono 3D se funde y queda el video del DOM (mismo cuadro, scrolleable)
-            const fadeT = ue * (inCase && !on ? 0 : 1) * (drum && inCase && on && f > 0.9 ? 0 : 1);
+            let away = 1;
+            if (drum) { let da = wrap(a - (Math.PI - DOFF)); if (da > Math.PI) da -= TAU; away = 1 - THREE.MathUtils.smoothstep(Math.abs(da), 0.75, 1.25); }
+            const fadeT = ue * away * (inCase && !on ? 0 : 1) * (drum && inCase && on && f > 0.9 ? 0 : 1);
             s.fade += (fadeT - s.fade) * lp(inCase && !on ? 9 : inCase ? 3 : 5);   // en el case las otras se van YA
             s.uni.uDim.value = s.dim; s.uni.uFocus.value = s.focus; s.uni.uFade.value = s.fade;
             s.uni.uRead.value = on ? Math.max(f, s.focus) : 0;                        // foco: sin desenfoque ni brillos
+            s.uni.uFlat.value = on ? f : 0;
             if (!s.uni.map.value) s.uni.map.value = s.runi.map.value = posterOf(s.p.slug, mode);
             if (on && calm) { s.onT += dt; s.offT = 0; } else { s.onT = 0; s.offT += dt; }
             play(s, entered && on === 1 && (inCase || s.onT > 0.45));                // debounce: pasar de largo no baja videos
@@ -847,7 +893,7 @@ const data = JSON.stringify(projects);
           if (!gemU.uSiteB.value) gemU.uSiteB.value = tex;
           gemU.uSiteMix.value = Math.min(1, gemU.uSiteMix.value + dt / (reduce ? 0.01 : 0.9));
           gemU.uSiteAsp.value = drum ? PW / PH : 1.6;
-          gemU.uMirror.value += ((entered ? 0.9 : 0.42) - gemU.uMirror.value) * lp(2.5); gemU.uWordAmt.value = wordReady ? Math.max(0, 1 - ue * 2.2) : 0;
+          gemU.uMirror.value += ((entered ? 0.72 : 0.2) - gemU.uMirror.value) * lp(2.5); gemU.uWordAmt.value = wordReady ? Math.max(0, 1 - ue * 2.2) : 0;
           gemU.uBurst.value = Math.sin(Math.PI * Math.min(1, f * 1.3)) * (f > prevF ? 1 : 0.4); prevF = f;
           gemQuad.position.copy(gem.position); gemQuad.quaternion.copy(camera.quaternion); gemQuad.scale.setScalar(gem.scale.x * 2.85);
           gemQuad.visible = f < 0.75;
@@ -859,7 +905,7 @@ const data = JSON.stringify(projects);
           // reposo (sin input 5 s y sin transiciones): se dibuja un cuadro sí y uno no (~30 fps)
           frameN++;
           const idle = now - lastInput > 5000 && !dragging && Math.abs(vel) < 0.01 && Math.abs(flight - (inCase ? 1 : 0)) < 0.01 && Math.abs(unfold - (entered ? 1 : 0)) < 0.01;
-          if (!(idle && frameN % 2)) renderer.render(scene, camera);
+          if (!lost && !(idle && frameN % 2)) renderer.render(scene, camera);
           // reduced-motion: no hay nada que animar → render por demanda (cada interacción despierta el loop un rato)
           if (reduce && now > awakeUntil) { running = false; return; }
           requestAnimationFrame(loop);

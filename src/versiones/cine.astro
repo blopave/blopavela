@@ -33,7 +33,7 @@ import { projects } from '../data/projects';
         --aqua:#24e2e8; --red:#ff3a54;
         --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
         --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem);
-        --bt:clamp(56px,7vh,72px); --bb:var(--bt); }
+        --bt:clamp(48px,7vh,72px); --bb:var(--bt); }
       /* vertical: header reservado sobre el video (nav + índice), sin barra inferior */
       @media(orientation:portrait){ :root{ --bt:calc(3.4rem + 46px); --bb:0px } }
       .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -86,9 +86,10 @@ import { projects } from '../data/projects';
       .cred__role b{font-weight:400;color:var(--aqua)}
       .cred__name{font-family:var(--display);font-weight:400;font-size:clamp(3rem,7.4vw,8.4rem);line-height:.84;letter-spacing:.005em;
         white-space:nowrap;margin-left:-.04em;outline:none}
-      .ln{display:block;overflow:hidden;padding-top:.06em}
-      .ch{display:inline-block;transform:translateY(105%);transition:transform .9s var(--ease)}
-      .cred.on .ch{transform:none}
+      /* las letras se crean por JS (sin el atributo de scope de Astro): reglas globales */
+      :global(.ln){display:block;overflow:hidden;padding-top:.06em}
+      :global(.ch){display:inline-block;transform:translateY(105%);transition:transform .9s var(--ease)}
+      .cred.on :global(.ch){transform:none}
       .cred__body{min-height:4.6em}
       .cred__app{max-width:44ch;color:#dcdee3;font-size:.95rem;line-height:1.5}
       .cred__dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem 1.2rem;max-width:44ch;font-size:.9rem;line-height:1.45}
@@ -109,9 +110,11 @@ import { projects } from '../data/projects';
       .btn--ghost:hover{color:var(--ink);border-color:rgba(242,243,245,.2)}
       .btn--ghost[aria-pressed="true"]{color:var(--ink);border-color:rgba(242,243,245,.32)}
       .btn kbd{font:inherit;color:var(--dim);border:1px solid var(--hair);border-radius:4px;padding:0 .3em;font-size:.9em}
-      .cred.out .ch{transform:translateY(-105%);transition-duration:.45s;transition-delay:0s!important}
+      .cred.out :global(.ch){transform:translateY(-105%);transition-duration:.45s;transition-delay:0s!important}
       /* durante el corte, los créditos viajan DENTRO de las esquirlas (textura); el DOM se apaga en seco */
       .cred.gone{visibility:hidden}
+      /* fuera de la sala (entrada / volver) los créditos no existen: si no, el último plano queda flotando sobre la gema */
+      body:not(.entered) .cred{opacity:0;visibility:hidden;transition:opacity .35s var(--ease),visibility 0s .35s}
 
       /* la gema chica es un SELLO (≈40px) y un botón: abre el índice */
       .gembtn{position:fixed;z-index:8;transform:translate(-50%,-50%);border-radius:50%;appearance:none;border:0;background:none;cursor:pointer;
@@ -137,6 +140,14 @@ import { projects } from '../data/projects';
         .cred__row{margin-top:.9rem}
         .cred__name{font-size:clamp(3rem,15vw,6rem)}
         .cred__app,.cred__dl{font-size:.88rem}
+      }
+      /* apaisado bajo (teléfono acostado): créditos compactos para que la franja no se coma el plano */
+      @media(orientation:landscape) and (max-height:520px){
+        .cred{bottom:calc(var(--bb) + .7rem);grid-template-columns:minmax(0,1fr) minmax(0,46ch);column-gap:2rem}
+        .cred__name{font-size:clamp(2.2rem,12.5vh,8.4rem)}
+        .cred__eye{margin-bottom:.2rem} .cred__role{margin-top:.45rem}
+        .cred__body{min-height:0} .cred__app,.cred__dl{font-size:.8rem;line-height:1.4} .cred__dl{gap:.1rem 1rem}
+        .cred__row{margin-top:.55rem}
       }
       .vids{position:fixed;width:2px;height:2px;opacity:0;pointer-events:none;overflow:hidden;left:0;top:0}
 
@@ -263,10 +274,10 @@ import { projects } from '../data/projects';
         roleEl.textContent = p.role || ''; servEl.textContent = (p.services || []).join(', '); stackEl.textContent = (p.stack || []).join(', ');
         if (p.url) { liveEl.href = p.url; liveEl.style.display = ''; liveEl.setAttribute('aria-label', 'Ver ' + p.name + ' en vivo'); } else liveEl.style.display = 'none';
         tickBtns.forEach((b, k) => { b.classList.toggle('on', k === i); b.setAttribute('aria-current', k === i ? 'true' : 'false'); });
-        document.title = 'blopa — ' + p.name; };
+        document.title = 'blopa — ' + p.name; bandMeasure(); };
       const credIn = () => { credEl.classList.remove('out', 'gone'); void credEl.offsetWidth; credEl.classList.add('on'); };
       // créditos de película (Rol / Servicios / Stack): conmutan con la idea sin romper el plano
-      const showCredits = (on) => { dlEl.hidden = !on; appEl.hidden = on; crBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+      const showCredits = (on) => { dlEl.hidden = !on; appEl.hidden = on; crBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); bandMeasure(); kick(); };
       crBtn.addEventListener('click', () => showCredits(dlEl.hidden));
 
       // ── videos: sólo el actual decodifica; el siguiente baja metadatos; en táctil, la versión de 640 ──
@@ -277,7 +288,7 @@ import { projects } from '../data/projects';
       // tramo con contenido (todos empiezan por su home; fin antes de colas vacías)
       // PULZ arranca pasada su animación de logo (si no, el nombre se lee doble) · (los verticales: PULZ corta antes del titular "Encontrá tu…" que cae justo detrás de los créditos)
       const SPAN = { valecasenave: [0, 13], pulz: [2.9, 14.4], basslayer: [0, 18.4], beokey: [0, 15.6] };
-      const SPAN_M = { valecasenave: [0, 14.2], pulz: [3.6, 12.8], basslayer: [0, 16], beokey: [0, 15.3] };
+      const SPAN_M = { valecasenave: [0, 14.2], pulz: [8.6, 14.4], basslayer: [0, 16], beokey: [0, 15.3] };
       const spanOf = (i) => (VSUF === '-m' ? SPAN_M : SPAN)[projects[i].slug] || [0, 1e9];
       const vidBox = $('[data-vids]');
       const vids = projects.map((p, i) => { const v = document.createElement('video');
@@ -300,7 +311,7 @@ import { projects } from '../data/projects';
         const nx = vids[(i + 1) % N]; if (nx.preload === 'none') { nx.preload = 'metadata'; nx.load(); } };
 
       // ── navegación entre planos (con cola: la última intención durante el corte no se pierde) ──
-      let film = null;
+      let film = null, bandMeasure = () => {};
       const go = (i, { push = true, instant = false } = {}) => {
         i = ((i % N) + N) % N;
         if (busy) { pending = i; return; }
@@ -484,7 +495,9 @@ import { projects } from '../data/projects';
               vec2 puv=uv*0.78*vec2(min(1.0,1.0/uPlateAsp),min(1.0,uPlateAsp))+rin.xy*0.09+0.5;
               float ps=0.004+uAber*0.012;
               vec3 pc=vec3(texture2D(uPlate,puv+vec2(ps,0.)).r,texture2D(uPlate,puv).g,texture2D(uPlate,puv-vec2(ps,0.)).b);
-              col+=uPlateAmt*pc*(0.28+0.42*(1.0-fres));
+              pc=mix(vec3(dot(pc,vec3(0.299,0.587,0.114))),pc,0.5);          // medio desaturado: vidrio oscuro, no caramelo
+              float wm=uWordAmt*smoothstep(0.34,0.0,abs(uv.y*1.25));           // se aparta detrás de BLOPA (legibilidad)
+              col+=uPlateAmt*pc*(0.09+0.2*(1.0-fres))*(1.0-0.65*wm);
             }
             if(uWordAmt>0.001){
               float vsc = uWordMode > 0.5 ? 1.0 : 2.7;   // imagen: mapeo cuadrado · texto: comprimido
@@ -527,16 +540,16 @@ import { projects } from '../data/projects';
           }`;
         const COVER = `
           uniform sampler2D uTex; uniform vec2 uRes; uniform vec2 uVid; uniform float uZoom; uniform float uPan;
-          uniform float uBarT; uniform float uBarB; uniform float uPortrait;
+          uniform float uBarT; uniform float uBarB; uniform float uPortrait; uniform float uBand;
           // el plano ocupa la zona entre la barra superior (header reservado) y la inferior
           vec2 regUV(vec2 uv){ return vec2(uv.x,(uv.y-uBarB)/max(0.01,1.0-uBarB-uBarT)); }
           vec2 coverUVv(vec2 uv, float z, vec2 vid){ vec2 rr=uRes*vec2(1.0,1.0-uBarB-uBarT); vec2 px=regUV(uv)*rr; float s=max(rr.x/vid.x,rr.y/vid.y)*z;
             return (px-0.5*rr)/(vid*s)+0.5+vec2(uPan,0.0); }
           vec2 coverUV(vec2 uv, float z){ return coverUVv(uv,z,uVid); }
           vec3 tap(vec2 t){ return texture2D(uTex,t).rgb; }
-          /* el trabajo queda INTACTO arriba; sólo la franja de créditos (tercio inferior en apaisado, ~45% en
-             vertical) es un piso sólido #0b0b0c al 85% con el video desenfocado debajo: sin capas fantasma */
-          float band(vec2 uv){ float y=regUV(uv).y; float h=mix(0.34,0.47,uPortrait); return 1.0-smoothstep(h-0.06,h+0.005,y); }
+          /* el trabajo queda INTACTO arriba; sólo la franja de créditos es un piso sólido #0b0b0c al 85% con el video
+             desenfocado debajo. Su alto (uBand) se MIDE del DOM: el texto nunca cae sobre el video, en ningún viewport */
+          float band(vec2 uv){ float y=regUV(uv).y; float h=uBand; return 1.0-smoothstep(h-0.06,h+0.005,y); }
           vec3 blurTap(vec2 t){ vec2 o=7.0/uVid; vec3 a=tap(t)*0.2;
             a+=(tap(t+vec2(o.x,0.))+tap(t-vec2(o.x,0.))+tap(t+vec2(0.,o.y))+tap(t-vec2(0.,o.y)))*0.1;
             a+=(tap(t+o)+tap(t-o)+tap(t+vec2(o.x,-o.y))+tap(t+vec2(-o.x,o.y)))*0.1; return a; }
@@ -571,7 +584,7 @@ import { projects } from '../data/projects';
                          texture2D(uNext,coverUVv(sc+nn*(1.0-0.6*edgeK),1.0,uVidN)).b);
             tr=grade(tr,sc);
             float lum=dot(c,vec3(0.299,0.587,0.114));
-            float glass=clamp(lifted0*(0.32+0.5*fres+(1.0-lum)*0.4),0.0,0.88);
+            float glass=clamp(lifted0*(0.14+0.42*fres+(1.0-lum)*0.18),0.0,0.55);
             c=mix(c*lam,tr*1.06,glass);                                         // la cara se oscurece/aclara según su normal
             c+=vec3(0.92,0.96,1.0)*spec*0.55;
             /* grieta / canto */
@@ -636,7 +649,7 @@ import { projects } from '../data/projects';
           if (!v.requestVideoFrameCallback || o.dirty) { upload(o.t, v); o.w = v.videoWidth; o.h = v.videoHeight; o.live = true; o.dirty = false; } };
 
         const resize = () => { W = innerWidth; H = innerHeight; SCALE = calcScale(); cv.width = Math.round(W * SCALE); cv.height = Math.round(H * SCALE);
-          cv.style.width = W + 'px'; cv.style.height = H + 'px'; kick(); };
+          cv.style.width = W + 'px'; cv.style.height = H + 'px'; bandMeasure(); kick(); };
         resize(); addEventListener('resize', resize);
 
         // ── fractura radial-concéntrica desde la gema ──
@@ -747,14 +760,20 @@ import { projects } from '../data/projects';
         // ── film ──
         let barF = 0, barA = 0;   // letterbox animado (sólo apaisado)
         // barras: header reservado arriba (en vertical, nav + índice) y letterbox abajo (sólo apaisado); px = CSS --bt/--bb
-        const barPxT = () => (W < H ? 54.4 + 46 : Math.max(56, Math.min(72, H * 0.07)));
-        const barPxB = () => (W < H ? 0 : Math.max(56, Math.min(72, H * 0.07)));
+        const barPxT = () => (W < H ? 54.4 + 46 : Math.max(48, Math.min(72, H * 0.07)));
+        const barPxB = () => (W < H ? 0 : Math.max(48, Math.min(72, H * 0.07)));
         let barT = 0, barB = 0;
+        // franja de créditos: alto real del bloque (+ aire), en coordenadas de la zona del plano; se interpola
+        let bandH = 0.4, bandT = 0.4;
+        const measureBand = () => { const hd = credEl.querySelector('.cred__head'), sd = credEl.querySelector('.cred__side');
+          const top = Math.min(hd.getBoundingClientRect().top, sd.getBoundingClientRect().top);
+          const reg = H - barPxT() - barPxB(); bandT = Math.max(0.2, Math.min(0.9, (H - top + 18 - barPxB()) / reg + 0.06)); };
+        bandMeasure = measureBand; measureBand(); bandH = bandT;
         let showI = 0, outObj = null, landSnap = null, tr0 = 0, onDone = null, onReveal = null, shotT0 = performance.now(), outPan = 0, outZoom = 1, filmA = 0, lastNow = 0;
         const bindQuad = (pr) => { gl.bindBuffer(gl.ARRAY_BUFFER, quad); const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0); return l; };
         const setCover = (pr, o, zoom, pan) => { gl.useProgram(pr);
           gl.uniform2f(pr.u('uRes'), cv.width, cv.height); gl.uniform2f(pr.u('uVid'), o.w, o.h); gl.uniform1f(pr.u('uZoom'), zoom); gl.uniform1f(pr.u('uPan'), pan);
-          gl.uniform1f(pr.u('uBarT'), barT); gl.uniform1f(pr.u('uBarB'), barB); gl.uniform1f(pr.u('uPortrait'), W < H ? 1 : 0);
+          gl.uniform1f(pr.u('uBarT'), barT); gl.uniform1f(pr.u('uBarB'), barB); gl.uniform1f(pr.u('uPortrait'), W < H ? 1 : 0); gl.uniform1f(pr.u('uBand'), bandH);
           gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, o.t); gl.uniform1i(pr.u('uTex'), 0); };
         const ease = (x) => 1 - Math.pow(1 - x, 3);
         const drawFilm = (now, dt) => {
@@ -764,6 +783,7 @@ import { projects } from '../data/projects';
           pump(showI);
           barA += ((entered ? 1 : 0) - barA) * (reduceMotion ? 1 : 1 - Math.exp(-3.2 * dt));
           barT = barPxT() / H * barA; barB = barPxB() / H * barA; barF = Math.max(barT, barB);
+          bandH += (bandT - bandH) * (reduceMotion ? 1 : 1 - Math.exp(-6 * dt));
           const pan = 0;
           const tS = (now - tr0) / 1000;
           const inTr = !!outObj;
@@ -771,7 +791,7 @@ import { projects } from '../data/projects';
           const zin = inTr ? 1.0 + 0.07 * (1 - ease(Math.min(1, tS / 1.1))) : pushIn;
           gl.disable(gl.BLEND); gl.disable(gl.SCISSOR_TEST);
           const l = bindQuad(PQ); setCover(PQ, tex[showI], zin, pan);
-          gl.uniform1f(PQ.u('uFade'), (inTr ? 0.4 + 0.6 * ease(Math.min(1, tS / 0.9)) : 1) * filmA);
+          gl.uniform1f(PQ.u('uFade'), (inTr ? 0.72 + 0.28 * ease(Math.min(1, tS / 0.7)) : 1) * filmA);
           gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disableVertexAttribArray(l);
           if (inTr) {
             stepSim(tS); writeVerts(tS);
@@ -887,7 +907,7 @@ import { projects } from '../data/projects';
           gl.uniform3f(PG.u('uTint'), tint[0], tint[1], tint[2]); gl.uniform1f(PG.u('uTintAmt'), tintA);
           // grietas de luz: nacimiento brillante, respiración en reposo, más vivas bajo el cursor, destello en cada corte
           const prox = entered ? 0 : 1 - Math.min(1, Math.max(0, (Math.hypot(mtx * W / H, mty) - 0.08) / 0.3));
-          const crT = (reduceMotion ? 0.5 : 0.42 + 0.12 * Math.sin(now * 0.0013)) + prox * 0.7 + hit * 2.2 + (csB < 1.4 ? (1.4 - csB) * 1.6 : 0);
+          const crT = (reduceMotion ? 0.3 : 0.24 + 0.08 * Math.sin(now * 0.0013)) + prox * 0.7 + hit * 2.2 + (csB < 1.4 ? (1.4 - csB) * 1.6 : 0);
           crack += (crT - crack) * lp(8);
           gl.uniform1f(PG.u('uCrack'), crack); gl.uniform1f(PG.u('uSweep'), entered ? 0.35 : 0.2 + prox * 0.25);
           // el primer plano detrás de la gema (sólo en la entrada)
