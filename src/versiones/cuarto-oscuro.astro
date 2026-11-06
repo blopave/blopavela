@@ -1,0 +1,508 @@
+---
+// VERSIÓN cuarto-oscuro (exploración, sólo dev en /v/cuarto-oscuro) — el sitio es un laboratorio de revelado.
+// Luz roja de seguridad. La gema es la LENTE de la ampliadora: proyecta la luz que expone el papel.
+// Cada proyecto es una hoja: al señalarla, la lente destella (exposición) y la copia se REVELA en la cubeta
+// como en la química real — primero las sombras, después los medios tonos, al final las luces — con el líquido
+// que todavía se mueve. Revelada, la copia cobra vida (el video del sitio). Click → se saca de la cubeta,
+// se endereza y se cuelga: el case, con el sitio recto y nítido, sin velo rojo ("la luz señala, no toca").
+// Liviano: un solo pase WebGL 2D que dibuja SÓLO mientras revela u ondula (reposo ≈ 0 GPU); la gema es SVG.
+import { projects } from '../data/projects';
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa</title>
+    <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta name="theme-color" content="#0c0807" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#0c0807; --ink:#f3eee9; --mid:#a8968e; --soft:#8a7a73; --dim:#4a3c37; --hair:rgba(255,220,200,.1);
+        --safe:#ff3b22; --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
+      *{box-sizing:border-box;margin:0}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5}
+      a{color:inherit;text-decoration:none}
+      :focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:3px}
+      .case__title:focus,.case__title:focus-visible{outline:none}
+      .eye,.nav,.row__meta,.kase__back,.case__live,.kase__next,.cred dt{font-feature-settings:"case"}
+
+      /* la sala: oscuridad cálida + la lámpara de seguridad (arriba a la derecha) que se apaga al prender la luz del case */
+      .room{position:fixed;inset:0;z-index:0;pointer-events:none;
+        background:radial-gradient(60% 55% at 92% -8%,rgba(255,59,34,.22),rgba(255,59,34,.06) 45%,transparent 70%),
+          radial-gradient(90% 70% at 60% 110%,rgba(120,30,18,.18),transparent 70%),var(--bg);transition:opacity 1.1s var(--ease)}
+      .room::after{content:'';position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 40%,transparent 50%,rgba(0,0,0,.55))}
+      .lamp{position:fixed;right:calc(var(--gut) + 4px);top:calc(var(--gut) + 3.2rem);width:7px;height:7px;border-radius:50%;z-index:1;pointer-events:none;
+        background:var(--safe);box-shadow:0 0 14px 3px rgba(255,59,34,.55),0 0 60px 12px rgba(255,59,34,.18);transition:opacity .8s var(--ease)}
+      body.in-case .room{opacity:.35} body.in-case .lamp{opacity:.25}
+
+      /* slots: sólo MEDIDAS. El JS los mide y ubica la copia, la cubeta, la lente y el cono */
+      .slot{position:fixed;visibility:hidden;pointer-events:none}
+      #s-tray{left:65vw;top:61svh;width:min(42vw,64svh);aspect-ratio:16/10;transform:translate(-50%,-50%)}
+      #s-case{right:var(--gut);top:calc(var(--gut) + 6.4rem);width:calc(58.333vw - var(--gut));aspect-ratio:16/10;max-height:calc(100svh - var(--gut) * 2 - 7.5rem)}
+      #s-lens{left:65vw;top:calc(var(--gut) + 2.6rem);width:124px;height:124px;transform:translateX(-50%)}
+
+      /* el haz de la ampliadora: de la lente al papel. En reposo, apenas; al exponer, blanco */
+      .cone{position:fixed;inset:0;z-index:5;pointer-events:none;mix-blend-mode:screen;opacity:.13;filter:blur(5px);
+        background:linear-gradient(180deg,rgba(255,240,228,.95) 3%,rgba(255,200,180,.32) 34%,rgba(255,160,130,.06) 56%,transparent 64%);transition:opacity 1.1s var(--ease)}
+      body.expose .cone{opacity:.85;transition:opacity .06s linear}
+      /* el destello también toca el papel */
+      .paper::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(70% 60% at 50% 40%,rgba(255,236,222,.5),rgba(255,200,180,.12) 60%,transparent);opacity:0;mix-blend-mode:screen;transition:opacity 1s var(--ease)}
+      body.expose .paper::after{opacity:1;transition:opacity .06s linear}
+      body.in-case .cone{opacity:0;transition:opacity .4s var(--ease)}
+
+      /* la lente = la gema (SVG, aristas reales del icosaedro proyectadas en JS; borde cian/rojo, la firma) */
+      .lens{position:fixed;z-index:3;pointer-events:none;overflow:visible;transition:opacity .6s var(--ease)}
+      .lens g{fill:none;stroke-width:1.5;stroke-linecap:round}
+      .lens{transition:opacity .6s var(--ease),filter .9s var(--ease)}
+      body.expose .lens{filter:drop-shadow(0 0 10px rgba(255,244,236,.95)) drop-shadow(0 0 34px rgba(255,200,180,.6));transition:filter .06s linear}
+      .lens :global(line){vector-effect:non-scaling-stroke}
+      .lens .c{stroke:#38dcff} .lens .r{stroke:#ff3a54} .lens .w{stroke:#fff6ee;opacity:.5;transition:opacity .2s}
+      .lens .c,.lens .r{mix-blend-mode:screen;opacity:.9}
+      body.expose .lens .w{opacity:1}
+      .lens__ap{fill:#fff3ea;filter:drop-shadow(0 0 6px rgba(255,240,230,.9));transform-box:fill-box;transform-origin:center;transition:transform .9s var(--ease)}
+      body.expose .lens__ap{transform:scale(2.6);transition:transform .06s linear}
+      body.in-case .lens{opacity:0}
+
+      /* la cubeta: líquido oscuro bajo la copia, en la misma perspectiva */
+      .tray{position:fixed;z-index:2;pointer-events:none;border-radius:6px;transform-origin:50% 50%;
+        transform:perspective(1100px) rotateX(26deg) rotateZ(-1.4deg) scale(1.1);
+        background:linear-gradient(170deg,#1b0f0c,#0e0807 60%,#160b09);
+        box-shadow:inset 0 0 0 1px rgba(255,190,170,.07),inset 0 18px 40px rgba(0,0,0,.6),0 30px 60px rgba(0,0,0,.5);transition:opacity .7s var(--ease)}
+      .tray::after{content:'';position:absolute;inset:0;border-radius:inherit;
+        background:linear-gradient(115deg,transparent 30%,rgba(255,170,150,.07) 46%,transparent 58%)}
+      body.in-case .tray{opacity:0}
+
+      /* la copia: papel (borde blanco de la ampliadora) + revelado (canvas) + la copia viva (video) + la luz roja encima */
+      .paper{position:fixed;z-index:4;isolation:isolate;left:0;top:0;width:10px;height:10px;padding:2.2%;background:#1f1411;cursor:pointer;
+        transform:perspective(1100px) rotateX(26deg) rotateZ(-1.4deg);transform-origin:50% 50%;
+        box-shadow:inset 0 0 0 1px rgba(255,205,185,.09),0 14px 30px rgba(0,0,0,.4);border-radius:1px;
+        transition:left .95s var(--ease),top .95s var(--ease),width .95s var(--ease),height .95s var(--ease),transform .95s var(--ease),padding .95s var(--ease),box-shadow .95s var(--ease),background-color .9s var(--ease)}
+      .paper.sheet-in{animation:drop .55s var(--ease)}
+      @keyframes drop{from{margin-top:-14px;opacity:.4}to{margin-top:0;opacity:1}}
+      .paper__in{position:relative;width:100%;height:100%;overflow:hidden;background:#2a1a16;box-shadow:0 0 0 1px rgba(255,205,185,.06)}
+      .paper canvas,.paper :global(video),.paper img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;object-position:top}
+      .paper :global(video){opacity:0;transition:opacity .9s var(--ease)}
+      .paper :global(video.live){opacity:1}
+      .paper img{display:none}
+      body.in-case .paper{transform:none;padding:0;cursor:default;background:#efe9e2;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+      /* colgada: un alambre y dos ganchos finos (sólo en el case) */
+      .wire{position:fixed;left:0;right:0;top:calc(var(--gut) + 4.6rem);height:1px;z-index:3;pointer-events:none;
+        background:linear-gradient(90deg,transparent,rgba(255,230,215,.16) 20%,rgba(255,230,215,.16) 80%,transparent);opacity:0;transition:opacity .6s var(--ease)}
+      .hook{position:absolute;top:-1px;width:1px;height:0;background:rgba(255,230,215,.32);transition:height .6s var(--ease) .7s}
+      .hook::after{content:'';position:absolute;left:-3px;bottom:-4px;width:7px;height:9px;border-radius:1px;background:#2a211e;border:1px solid rgba(255,230,215,.22)}
+      
+      body.in-case .wire{opacity:1;transition-delay:.5s}
+      body.in-case .hook{height:var(--hang,1.6rem)}
+
+      .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:center;
+        padding:calc(var(--gut) - 13px) var(--gut);font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;color:var(--mid)}
+      .nav__home{appearance:none;background:none;border:0;font:inherit;min-height:44px;padding:0;letter-spacing:.16em;text-transform:uppercase;color:var(--mid);cursor:pointer;transition:color .25s}
+      .nav__home:hover,.nav__contact:hover{color:var(--ink)}
+      .nav__contact{display:inline-flex;align-items:center;min-height:44px;white-space:nowrap;transition:color .25s}
+      @media(max-width:640px){ .nav__who{display:none} }
+
+      /* las hojas: índice a la izquierda, como el rótulo de una hoja de contactos */
+      .sheets{position:fixed;left:0;top:0;bottom:0;z-index:5;display:flex;flex-direction:column;justify-content:center;gap:.1rem;
+        padding:6rem var(--gut) 4rem;max-width:min(38vw,34rem);transition:opacity .6s var(--ease)}
+      .eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin-bottom:1.1rem}
+      .row{appearance:none;background:none;border:0;cursor:pointer;text-align:left;color:inherit;padding:.35rem 0;min-height:44px;
+        display:grid;grid-template-columns:2.2rem 1fr;align-items:baseline}
+      .row__n{font-family:var(--mono);font-size:.6875rem;color:var(--dim);transition:color .3s}
+      .row__name{font-family:var(--display);font-size:clamp(2.6rem,4.8vw,4.3rem);line-height:1;letter-spacing:.01em;color:var(--ink);white-space:nowrap;transition:color .4s var(--ease)}
+      .row__meta{grid-column:2;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);
+        max-height:0;opacity:0;overflow:hidden;transition:max-height .45s var(--ease),opacity .45s var(--ease)}
+      .sheets.has-on .row:not(.on) .row__name{color:var(--dim)}
+      .row.on .row__n{color:var(--safe)}
+      .row.on .row__meta{max-height:1.6rem;opacity:1}
+      body.in-case .sheets{opacity:0;pointer-events:none}
+
+      /* case: la copia colgada a la derecha (recta, nítida), la ficha a la izquierda */
+      .kase{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .5s var(--ease),visibility .5s}
+      body.in-case .kase{opacity:1;visibility:visible;transition-delay:.45s}
+      .kase__info{position:absolute;left:var(--gut);top:calc(50% + 2rem);transform:translateY(-50%);width:calc(41.667vw - var(--gut) * 1.8);max-width:34rem;pointer-events:auto;transition:opacity .25s}
+      .kase__info>*{opacity:0;transform:translateY(12px);transition:opacity .6s var(--ease),transform .9s var(--ease)}
+      body.in-case .kase__info>*{opacity:1;transform:none}
+      body.in-case .kase__info>:nth-child(2){transition-delay:.08s} body.in-case .kase__info>:nth-child(3){transition-delay:.16s}
+      body.in-case .kase__info>:nth-child(4){transition-delay:.24s} body.in-case .kase__info>:nth-child(5){transition-delay:.32s}
+      .kase__info.swap{opacity:0}
+      .kase__frame{display:none}
+      .case__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,7rem);line-height:.88;margin:.4rem 0 0}
+      .case__approach{margin-top:1.1rem;color:#ddd3cc;font-size:1rem;max-width:40ch}
+      .cred{display:grid;grid-template-columns:7rem 1fr;margin:1.5rem 0 0;border-top:1px solid var(--hair)}
+      .cred dt,.cred dd{padding:.55rem 0;border-bottom:1px solid var(--hair);margin:0}
+      .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.68rem}
+      .cred dd{font-size:.92rem}
+      .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.4rem;flex-wrap:wrap}
+      .case__live,.kase__next{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;display:inline-flex;align-items:center;gap:.5rem;
+        min-height:44px;padding:.35rem 0;color:var(--ink);background:none;border:0;cursor:pointer;border-bottom:1px solid rgba(243,238,233,.3);transition:border-color .3s,color .3s}
+      .case__live:hover{border-color:var(--ink)}
+      .kase__next{color:var(--mid);border-color:transparent}
+      .kase__next b{font-weight:400;color:var(--ink)}
+      .kase__next:hover{color:var(--ink);border-color:var(--ink)}
+      .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;display:inline-flex;align-items:center;gap:.55rem;
+        min-height:44px;padding:.6rem 1rem .6rem .8rem;border-radius:999px;border:1px solid var(--hair);background:rgba(16,10,9,.6);
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);
+        opacity:0;visibility:hidden;transition:opacity .5s,visibility .5s,color .25s,border-color .25s}
+      .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
+      .kase__back:hover{color:var(--ink)}
+      body.in-case .kase__back{opacity:1;visibility:visible;transition-delay:.7s}
+
+      /* ── TELÉFONO (vertical): lente arriba, cubeta al medio con la copia vertical, hojas abajo ── */
+      @media(orientation:portrait) and (max-width:900px){
+        #s-lens{left:50%;top:calc(var(--gut) + 2.3rem);width:88px;height:88px}
+        #s-tray{left:50%;top:calc(var(--gut) + 9.6rem);transform:translateX(-50%);width:min(62vw,37svh);aspect-ratio:3/4}
+        #s-case{left:0;right:0;top:calc(var(--gut) + 5.6rem);width:100%;aspect-ratio:auto;height:50svh;max-height:none}
+        .sheets{top:auto;bottom:0;max-width:none;justify-content:flex-end;padding:0 var(--gut) calc(1.4rem + env(safe-area-inset-bottom,0px))}
+        .eye{margin-bottom:.5rem}
+        .row{min-height:48px;padding:.15rem 0}
+        .row__name{font-size:clamp(2rem,9.4vw,2.8rem)}
+        .row.on .row__meta{max-height:1.3rem}
+        .lamp{top:calc(var(--gut) + 3rem)}
+        .wire{top:calc(var(--gut) + 4.9rem)}
+        body.in-case .paper{box-shadow:none}
+        /* case: la copia arriba a todo el ancho; la ficha sube por encima con scroll */
+        .kase{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:calc(var(--gut) + 5.6rem + 50svh) var(--gut) calc(6.5rem + env(safe-area-inset-bottom,0px))}
+        .kase__info{position:relative;left:auto;top:auto;transform:none;width:auto;max-width:none;padding-top:1.5rem;background:var(--bg)}
+        .case__title{font-size:clamp(3rem,15vw,4.6rem)}
+        .kase__acts{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:7;flex-wrap:nowrap;padding:.5rem var(--gut) calc(.5rem + env(safe-area-inset-bottom,0px));
+          background:rgba(14,9,8,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--hair)}
+      }
+      /* sin WebGL / sin JS: índice funcional */
+      .nogl{display:none;position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) var(--gut);max-width:56rem}
+      .nogl h1{font-family:var(--display);font-weight:400;font-size:clamp(3rem,9vw,6rem);line-height:.9}
+      .nogl ul{list-style:none;padding:0;margin:2.4rem 0 0;border-top:1px solid var(--hair)}
+      .nogl li{padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .nogl li a{font-family:var(--display);font-size:clamp(2rem,6vw,3.4rem);line-height:1}
+      .nogl li p{color:var(--mid);font-size:.92rem;margin-top:.35rem;max-width:60ch}
+      .nogl li small{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+      body.no-gl .paper canvas{display:none} body.no-gl .paper img{display:block;filter:sepia(1) saturate(2.4) hue-rotate(-28deg);transition:opacity 1.6s var(--ease),filter 2s var(--ease)}
+      body.no-gl .paper img:not(.dev){opacity:0}
+      body.no-gl.in-case .paper img{filter:none}
+      @media (prefers-reduced-motion:reduce){*{transition-duration:.01s!important;animation:none!important}}
+    </style>
+  </head>
+  <body>
+    <noscript><style is:inline>.nogl{display:block!important}.room,.lamp,.cone,.lens,.tray,.paper,.wire,.sheets,.kase,.kase__back{display:none!important}body{overflow:auto!important}</style></noscript>
+    <section class="nogl" aria-label="Proyectos">
+      <h1>BLOPA — Pablo Vela</h1>
+      <ul>
+        {projects.map((p) => (
+          <li><small>{p.category} · {p.ended ? p.ended.split('-')[0] : 'En curso'}</small><br />
+            <a href={p.url} target="_blank" rel="noopener">{p.name} ↗</a><p>{p.blurb}</p></li>
+        ))}
+      </ul>
+    </section>
+
+    <div class="room" aria-hidden="true"></div>
+    <div class="lamp" aria-hidden="true"></div>
+    <div class="slot" id="s-tray"></div><div class="slot" id="s-case"></div><div class="slot" id="s-lens"></div>
+    <div class="cone" data-cone aria-hidden="true"></div>
+    <svg class="lens" data-lens viewBox="-1 -1 2 2" aria-hidden="true"><g class="c"></g><g class="r"></g><g class="w"></g><circle class="lens__ap" r=".09" cy=".05"></circle></svg>
+    <div class="tray" data-tray aria-hidden="true"></div>
+    <div class="wire" aria-hidden="true"><span class="hook hook--l"></span><span class="hook hook--r"></span></div>
+
+    <div class="paper" data-paper aria-hidden="true">
+      <div class="paper__in">
+        <canvas data-dev></canvas>
+        <img data-fallback alt="" />
+        <div data-vids></div>
+      </div>
+    </div>
+
+    <nav class="nav" aria-label="Navegación">
+      <button type="button" class="nav__home" data-home>blopa</button>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span>blopave@pm.me ↗</a>
+    </nav>
+
+    <main>
+      <section class="sheets" data-sheets aria-label="Proyectos">
+        <p class="eye" aria-hidden="true">Copias · {String(projects.length).padStart(2, '0')}</p>
+        {projects.map((p, i) => (
+          <button type="button" class="row" data-row data-slug={p.slug}>
+            <span class="row__n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <span class="row__name">{p.name}</span>
+            <span class="row__meta">{p.category} · {p.ended ? p.ended.split('-')[0] : 'En curso'}</span>
+          </button>
+        ))}
+      </section>
+
+      <section class="kase" data-case aria-hidden="true" aria-labelledby="case-title">
+        <div class="kase__info" data-info>
+          <p class="case__eye" data-cat></p>
+          <h2 class="case__title" id="case-title" data-name tabindex="-1"></h2>
+          <p class="case__approach" data-approach></p>
+          <dl class="cred">
+            <dt>Rol</dt><dd data-role></dd>
+            <dt>Servicios</dt><dd data-services></dd>
+            <dt>Stack</dt><dd class="soft" data-stack></dd>
+          </dl>
+          <div class="kase__acts">
+            <a class="case__live" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
+            <button type="button" class="kase__next" data-next>Siguiente&nbsp;<b data-next-name></b>&nbsp;<span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proyectos
+    </button>
+
+    <script define:vars={{ projects }}>
+      const body = document.body;
+      const $ = (s, r = document) => r.querySelector(s);
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const PORT = () => matchMedia('(orientation: portrait) and (max-width: 900px)').matches;
+      const PORT0 = PORT();   // la copia (póster/video) se elige al cargar: vertical → versión MOBILE de cada sitio
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      const projOf = (s) => projects.find((x) => x.slug === s);
+      const idxOf = (s) => projects.findIndex((x) => x.slug === s);
+      const nextOf = (s, d) => projects[(idxOf(s) + d + projects.length) % projects.length].slug;
+      const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+
+      const rows = Array.from(document.querySelectorAll('[data-row]'));
+      const sheetsEl = $('[data-sheets]'), caseEl = $('[data-case]'), infoEl = $('[data-info]'), backEl = $('[data-back]'), titleEl = $('[data-name]');
+      const paperEl = $('[data-paper]'), trayEl = $('[data-tray]'), coneEl = $('[data-cone]'), lensEl = $('[data-lens]'), vidsEl = $('[data-vids]');
+      const devC = $('[data-dev]'), fbImg = $('[data-fallback]');
+      const wireEl = $('.wire'), hookL = $('.hook--l'), hookR = $('.hook--r');
+      let cur = null, inCase = false, lastCase = null, lastInput = performance.now(), lastKey = false;
+
+      const syncInert = () => { sheetsEl.inert = inCase; caseEl.inert = !inCase; backEl.inert = !inCase; caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+
+      // ── layout: la copia, la cubeta, la lente y el cono se ubican según los slots ──
+      const rectOf = (id) => document.getElementById(id).getBoundingClientRect();
+      const place = () => {
+        const r = rectOf(inCase ? 's-case' : 's-tray'), t = rectOf('s-tray'), l = rectOf('s-lens');
+        Object.assign(paperEl.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+        Object.assign(trayEl.style, { left: t.left + 'px', top: t.top + 'px', width: t.width + 'px', height: t.height + 'px' });
+        Object.assign(lensEl.style, { left: l.left + 'px', top: l.top + 'px', width: l.width + 'px', height: l.height + 'px' });
+        // cono: desde la apertura de la lente hasta el borde ALTO del papel (la perspectiva lo achica) y su base
+        const ax = l.left + l.width / 2, ay = l.top + l.height * 0.55, k = 0.06;
+        const yt = t.top + t.height * 0.06, yb = t.bottom - t.height * 0.02;
+        coneEl.style.clipPath = `polygon(${ax - 1.5}px ${ay}px, ${ax + 1.5}px ${ay}px, ${t.right - t.width * k}px ${yt}px, ${t.right + t.width * 0.02}px ${yb}px, ${t.left - t.width * 0.02}px ${yb}px, ${t.left + t.width * k}px ${yt}px)`;
+        // ganchos: del alambre al borde alto de la copia colgada, sobre sus esquinas
+        const c = rectOf('s-case'), wr = wireEl.getBoundingClientRect();
+        document.documentElement.style.setProperty('--hang', Math.max(6, c.top - wr.top) + 'px');
+        hookL.style.left = (c.left + c.width * 0.1) + 'px'; hookR.style.left = (c.right - c.width * 0.1) + 'px';
+        sizeCanvas(); };
+
+      // ── la lente: icosaedro real (12 vértices, 30 aristas), girando lento; tres pasadas (cian, rojo, núcleo) ──
+      const PHI = 1.618034, V = [];
+      for (const a of [-1, 1]) for (const b of [-1, 1]) V.push([0, a, b * PHI], [a, b * PHI, 0], [b * PHI, 0, a]);
+      const E = []; for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) { const d = Math.hypot(V[i][0] - V[j][0], V[i][1] - V[j][1], V[i][2] - V[j][2]); if (Math.abs(d - 2) < 0.01) E.push([i, j]); }
+      const NS = 'http://www.w3.org/2000/svg';
+      const layers = ['.c', '.r', '.w'].map((s) => { const g = lensEl.querySelector(s); return E.map(() => { const ln = document.createElementNS(NS, 'line'); g.appendChild(ln); return ln; }); });
+      let lensA = 0.6;
+      const drawLens = (a) => { const s = 0.5, cy = Math.cos(a), sy = Math.sin(a), cx = Math.cos(0.42), sx = Math.sin(0.42);
+        const P = V.map(([x, y, z]) => { const x1 = x * cy + z * sy, z1 = -x * sy + z * cy; const y1 = y * cx - z1 * sx; return [x1 * s, y1 * s]; });
+        const off = [[-0.022, 0], [0.022, 0], [0, 0]];
+        layers.forEach((L, li) => E.forEach(([i, j], k) => { const ln = L[k];
+          ln.setAttribute('x1', (P[i][0] + off[li][0]).toFixed(3)); ln.setAttribute('y1', P[i][1].toFixed(3));
+          ln.setAttribute('x2', (P[j][0] + off[li][0]).toFixed(3)); ln.setAttribute('y2', P[j][1].toFixed(3)); })); };
+      drawLens(lensA);
+
+      // ── revelado: un pase WebGL 2D. Dibuja SÓLO mientras revela u ondula ──
+      const gl = devC.getContext('webgl', { alpha: false, antialias: false, premultipliedAlpha: false });
+      if (!gl) body.classList.add('no-gl');
+      let U = null, glReady = () => false, progOK = false, drawPend = false, tex = null, texAsp = 1.6, CW = 1, CH = 1;
+      const FS = `precision mediump float;
+        uniform sampler2D uImg; uniform vec2 uRes; uniform vec2 uCov; uniform float uT, uTime, uRip, uSeed, uSafe;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)) + uSeed) * 43758.5453); }
+        float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+        void main(){
+          vec2 uv = gl_FragCoord.xy / uRes;
+          /* el líquido todavía se mueve: refracción leve que se calma */
+          vec2 w = vec2(sin(uv.y * 34. + uTime * 2.6) + sin(uv.y * 13. - uTime * 1.7 + uv.x * 5.),
+                        cos(uv.x * 29. - uTime * 2.1) + cos(uv.x * 11. + uTime * 1.4)) * 0.0022 * uRip;
+          vec2 tc = vec2((uv.x - .5) * uCov.x + .5, 1. - (1. - uv.y) * uCov.y) + w;   /* cover anclado ARRIBA (el home del sitio) */
+          vec3 c = texture2D(uImg, clamp(tc, 0., 1.)).rgb;
+          float l = dot(c, vec3(.299, .587, .114));
+          /* química: la densidad aparece donde hubo más luz (las sombras de la copia) → oscuros primero; revelado algo desparejo */
+          float th = l * 0.86 + (vn(uv * 3.5) - .5) * 0.16;
+          float k = smoothstep(th - 0.03, th + 0.2, uT * 1.12);
+          vec3 paper = vec3(.94, .915, .885);
+          vec3 col = mix(paper, c, k);
+          /* reflejo del líquido: una franja que se desliza mientras hay movimiento */
+          float sp = pow(max(0., sin((uv.x * 1.2 + uv.y * .7) * 5. - uTime * .9 + w.x * 300.)), 30.) * 0.07 * uRip;
+          /* luz de seguridad: la copia se ve en un solo canal rojo-ámbar (la cubeta nunca muestra el color real) */
+          /* bajo la luz de seguridad el papel virgen casi no se ve (blanco apenas tibio); la imagen EMERGE en un solo
+             canal rojo: las sombras se hunden primero, las luces se encienden al final */
+          float lc = dot(c, vec3(.3, .55, .15));
+          vec3 blank = vec3(.165, .102, .086);
+          vec3 safe = mix(blank, vec3(.86, .29, .19) * (lc * .78 + .02), k);
+          /* el líquido: un reflejo especular de la lámpara (arriba a la derecha), apenas perceptible */
+          float lr = length((uv - vec2(.86, .9)) * vec2(1., 1.7));
+          safe += vec3(1., .42, .32) * (smoothstep(.38, 0., lr) * .045 + smoothstep(.06, 0., lr) * .05);
+          gl_FragColor = vec4(mix(col, safe, uSafe) + sp * mix(vec3(1.), vec3(1., .5, .4), uSafe), 1.);
+        }`;
+      if (gl) {
+        const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); return sh; };
+        const pr = gl.createProgram(); gl.attachShader(pr, mk(gl.VERTEX_SHADER, 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}'));
+        gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, FS)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr);
+        // compilación en paralelo (KHR_parallel_shader_compile): nada toca el programa hasta que el driver terminó,
+        // así el hilo principal no se congela; draw() espera a glReady()
+        const pcx = gl.getExtension('KHR_parallel_shader_compile');
+        glReady = () => { if (progOK) return true;
+          if (pcx && !gl.getProgramParameter(pr, pcx.COMPLETION_STATUS_KHR)) return false;
+          if (!gl.getProgramParameter(pr, gl.LINK_STATUS) && !gl.isContextLost()) console.error(gl.getProgramInfoLog(pr));
+          gl.useProgram(pr); gl.uniform1i(U('uImg'), 0); return (progOK = true); };
+        const L = {}; U = (n) => (n in L ? L[n] : (L[n] = gl.getUniformLocation(pr, n)));
+        const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([240, 234, 226, 255]));
+        [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((k) => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        devC.addEventListener('webglcontextlost', (e) => e.preventDefault());
+        devC.addEventListener('webglcontextrestored', () => location.reload());
+      }
+      // el canvas se dimensiona a la copia EN LA CUBETA (≤ 1,5 Mpx; en el case lo cubre el video)
+      function sizeCanvas() { const t = rectOf('s-tray'); const dpr = Math.min(devicePixelRatio || 1, 1.5);
+        let w = t.width * 0.956 * dpr, h = t.height * 0.956 * dpr; const k = Math.min(1, Math.sqrt(1.5e6 / Math.max(1, w * h)));
+        w = Math.max(2, Math.round(w * k)); h = Math.max(2, Math.round(h * k));
+        if (w !== CW || h !== CH) { CW = w; CH = h; devC.width = w; devC.height = h; draw(); } }
+
+      // estado del revelado
+      const dev = { safe: 1, t: 0, rip: 0, slug: null, t0: 0, dur: reduceMotion ? 1 : 2600, seed: 0, running: false };
+      const posters = {}, vids = {};
+      const posterOf = (slug) => { let im = posters[slug];
+        if (!im) { im = new Image(); im.decoding = 'async'; im.src = '/img/poster/' + slug + (PORT0 ? '-m' : '') + '.jpg'; posters[slug] = im; } return im; };
+      const vidOf = (slug) => { let v = vids[slug];
+        if (!v) { v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('muted', '');
+          v.preload = 'none'; v.src = '/video/' + slug + (PORT0 ? '-m' : '') + '.mp4'; vidsEl.appendChild(v); vids[slug] = v; } return v; };
+
+      function draw() { if (!gl || gl.isContextLost()) return;
+        if (!glReady()) { if (!drawPend) { drawPend = true; requestAnimationFrame(() => { drawPend = false; draw(); }); } return; }
+        const ra = CW / CH; const cov = ra > texAsp ? [1, texAsp / ra] : [ra / texAsp, 1];
+        gl.viewport(0, 0, CW, CH);
+        gl.uniform2f(U('uRes'), CW, CH); gl.uniform2f(U('uCov'), cov[0], cov[1]);
+        gl.uniform1f(U('uT'), dev.t); gl.uniform1f(U('uRip'), dev.rip); gl.uniform1f(U('uSeed'), dev.seed); gl.uniform1f(U('uSafe'), dev.safe);
+        gl.uniform1f(U('uTime'), performance.now() * 0.001);
+        gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+      // ── un solo bucle a ~30 fps: lente girando + revelado/onda; se duerme cuando no hay nada que mover ──
+      let raf = 0, lastT = 0;
+      const tick = (now) => { raf = 0;
+        if (now - lastT >= 32) { const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
+          if (!reduceMotion && !inCase) { lensA += dt * 0.32; drawLens(lensA); }
+          if (dev.running) { const x = clamp((now - dev.t0) / dev.dur, 0, 1); dev.t = 1 - Math.pow(1 - x, 2.2);
+            dev.rip = reduceMotion ? 0 : Math.max(0, 1 - x * 1.15) * 0.9 + 0.1 * Math.max(0, 1 - x * 3);
+            draw(); if (x >= 1) { dev.running = false; dev.rip = 0; draw(); onDeveloped(); } } }
+        if (!document.hidden && (dev.running || (!reduceMotion && !inCase))) raf = requestAnimationFrame(tick); };
+      const wake = () => { if (!raf) raf = requestAnimationFrame(tick); };
+      document.addEventListener('visibilitychange', wake);
+
+      // tinte de seguridad animado (al prender/apagar la luz del case)
+      let safeRaf = 0;
+      const fadeSafe = (to) => { cancelAnimationFrame(safeRaf); const from = dev.safe, t0 = performance.now(), d = reduceMotion ? 1 : 900;
+        const st = (n) => { const x = clamp((n - t0) / d, 0, 1); dev.safe = from + (to - from) * (1 - Math.pow(1 - x, 3)); draw(); if (x < 1) safeRaf = requestAnimationFrame(st); };
+        safeRaf = requestAnimationFrame(st); };
+      let exposeT = 0;
+      // poner una hoja nueva en la cubeta, exponerla bajo la lente y revelarla
+      const setProj = (slug) => { if (!slug || slug === cur) return; cur = slug;
+        rows.forEach((r) => r.classList.toggle('on', r.dataset.slug === slug)); sheetsEl.classList.add('has-on');
+        Object.entries(vids).forEach(([k, v]) => { v.classList.remove('live'); if (k !== slug && !v.paused) v.pause(); });
+        const im = posterOf(slug), token = slug;
+        paperEl.classList.remove('sheet-in'); void paperEl.offsetWidth; if (!inCase && !reduceMotion) paperEl.classList.add('sheet-in');
+        dev.t = 0; dev.rip = reduceMotion ? 0 : 1; dev.running = false; dev.seed = Math.random() * 50; draw();
+        fbImg.classList.remove('dev');
+        const go = () => { if (cur !== token) return;
+          if (gl) { gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im); texAsp = im.naturalWidth / im.naturalHeight; }
+          fbImg.src = im.src;
+          // exposición: la lente destella; el revelado arranca cuando se apaga
+          body.classList.add('expose'); clearTimeout(exposeT);
+          exposeT = setTimeout(() => { body.classList.remove('expose'); if (cur !== token) return;
+            dev.t0 = performance.now(); dev.running = true; fbImg.classList.add('dev'); wake(); }, reduceMotion ? 0 : 380);
+          if (inCase && !reduceMotion) goLive(); else if (!reduceMotion && !coarse) { const v = vidOf(slug); if (v.readyState === 0) { v.preload = 'metadata'; } } };
+        if (im.complete && im.naturalWidth) go(); else im.addEventListener('load', go, { once: true });
+        if (inCase) fill(projOf(slug)); };
+      // la copia cobra vida AL SALIR A LA LUZ (en el case): bajo la luz roja es una copia quieta
+      const onDeveloped = () => { if (inCase) goLive(); };
+      const goLive = () => { if (!cur || reduceMotion) return; const v = vidOf(cur), slug = cur;
+        const live = () => { if (cur !== slug) return; try { v.currentTime = 0; } catch {} v.play().then(() => v.classList.add('live')).catch(() => {}); };
+        if (v.readyState >= 2) live(); else { v.addEventListener('canplay', live, { once: true }); v.preload = 'auto'; v.load(); } };
+
+      // ── historial: índice ('') → #slug ──
+      const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+      const curH = () => location.hash.replace('#', '');
+      const pushHash = (h) => { if (curH() === h) return; const url = location.pathname + location.search + (h ? '#' + h : '');
+        if (FRAMED) history.replaceState(null, '', url); else if (h && !curH()) history.pushState(null, '', url);
+        else if (!h && curH() && history.state && history.state.fromIdx) history.back(); else history.replaceState(null, '', url); };
+
+      const fill = (p) => {
+        $('[data-cat]').textContent = p.category + ' · ' + yearOf(p.ended);
+        titleEl.textContent = p.name; $('[data-approach]').textContent = p.approach || '';
+        $('[data-role]').textContent = p.role || ''; $('[data-services]').textContent = (p.services || []).join(', ');
+        $('[data-stack]').textContent = (p.stack || []).join(', ');
+        const live = $('[data-live]'); if (p.url) { live.href = p.url; live.style.display = ''; } else live.style.display = 'none';
+        const nx = projOf(nextOf(p.slug, 1)); $('[data-next-name]').textContent = nx.name; $('[data-next]').dataset.slug = nx.slug; };
+      const openCase = (slug, { push = true } = {}) => { const p = projOf(slug); if (!p) return;
+        fill(p); setProj(slug); lastCase = slug; caseEl.scrollTop = 0;
+        inCase = true; body.classList.add('in-case'); syncInert(); place(); fadeSafe(0); goLive();
+        // si se abre antes de terminar de revelar, termina al instante (la copia sale "fijada")
+        if (dev.running || dev.t < 1) { dev.t0 = performance.now() - dev.dur; wake(); }
+        document.title = 'blopa — ' + p.name;
+        if (push) { const url = location.pathname + location.search + '#' + slug; if (FRAMED) history.replaceState(null, '', url); else history.pushState({ fromIdx: true }, '', url); }
+        let tries = 0; const focusTitle = () => { if (!inCase) return; titleEl.focus({ preventScroll: true });
+          if (document.activeElement !== titleEl && tries++ < 12) setTimeout(focusTitle, 120); };
+        setTimeout(focusTitle, 700); };
+      const closeCase = (push = true) => { if (!inCase) return; inCase = false; body.classList.remove('in-case'); syncInert(); place(); fadeSafe(1);
+        Object.values(vids).forEach((v) => { v.classList.remove('live'); v.pause(); }); wake();
+        document.title = 'blopa'; if (push) pushHash('');
+        const row = rows.find((r) => r.dataset.slug === lastCase); if (row && lastKey) setTimeout(() => row.focus({ preventScroll: true }), 60); };
+      const switchCase = (slug) => { infoEl.classList.add('swap'); setTimeout(() => { setProj(slug); fill(projOf(slug)); lastCase = slug;
+        document.title = 'blopa — ' + projOf(slug).name; history.replaceState(history.state, '', location.pathname + location.search + '#' + slug);
+        infoEl.classList.remove('swap'); }, 240); };
+
+      // ── interacción ──
+      let hoverT = 0, suppress = false;
+      rows.forEach((row) => {
+        if (!coarse) row.addEventListener('pointerenter', () => { clearTimeout(hoverT); hoverT = setTimeout(() => { if (!inCase) setProj(row.dataset.slug); }, 110); });
+        row.addEventListener('pointerleave', () => clearTimeout(hoverT));
+        row.addEventListener('focus', () => { if (!inCase) setProj(row.dataset.slug); });
+        row.addEventListener('click', () => { if (!suppress) openCase(row.dataset.slug); }); });
+      paperEl.addEventListener('click', () => { if (!inCase && cur && !suppress) openCase(cur); });
+      backEl.addEventListener('click', () => closeCase());
+      $('[data-home]').addEventListener('click', () => closeCase());
+      $('[data-next]').addEventListener('click', (e) => switchCase(e.currentTarget.dataset.slug));
+      sheetsEl.addEventListener('keydown', (e) => { const i = rows.indexOf(document.activeElement); if (i < 0) return;
+        const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); rows[(i + d + rows.length) % rows.length].focus(); } });
+      addEventListener('keydown', (e) => { lastKey = true;
+        if (e.key === 'Escape' && inCase) closeCase();
+        else if (inCase && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); switchCase(nextOf(cur, e.key === 'ArrowRight' ? 1 : -1)); } }, true);
+      addEventListener('pointerdown', () => { lastKey = false; }, true);
+      ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true }));
+      // táctil: deslizar sobre la copia pasa a la hoja siguiente (dial); tocarla abre el case
+      let sx = 0, sy = 0, sw = false;
+      paperEl.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; sw = true; });
+      addEventListener('pointerup', (e) => { if (!sw) return; sw = false; const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { suppress = true; setTimeout(() => { suppress = false; }, 80);
+          const nx = nextOf(cur || projects[0].slug, dx < 0 ? 1 : -1); if (inCase) switchCase(nx); else setProj(nx); } });
+      addEventListener('popstate', () => { const h = curH(); if (projOf(h)) openCase(h, { push: false }); else closeCase(false); });
+      addEventListener('resize', place);
+
+      // ── la señal que invita (sin texto): a los 0,9 s la lente expone la primera hoja; después, si nadie toca, pasa sola ──
+      setInterval(() => { if (inCase || document.hidden || reduceMotion || dev.running) return;
+        if (performance.now() - lastInput < (coarse ? 6000 : 9000)) return;
+        const r = rows.find((x) => x.matches(':hover')); if (r) return;
+        setProj(nextOf(cur || projects[projects.length - 1].slug, 1)); }, 6500);
+
+      syncInert(); place(); wake();
+      { const h = curH(); if (projOf(h)) openCase(h, { push: false }); else setTimeout(() => { if (!cur) setProj(projects[0].slug); }, reduceMotion ? 0 : 900); }
+      window.__cuarto = { setProj, openCase, closeCase, dev };
+    </script>
+  </body>
+</html>

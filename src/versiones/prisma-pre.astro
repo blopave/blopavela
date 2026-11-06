@@ -1,0 +1,1228 @@
+---
+// VERSIÓN prisma-pre (exploración nov-06, sólo dev en /v/prisma-pre): Prisma idéntico, pero la GEMA NO SE CALCULA EN VIVO.
+// La piedra es una secuencia pre-renderizada con el MISMO shader del home (scratchpad: bake.mjs + atlas2.py): 72 cuadros de
+// giro ry ∈ [0, π) — con R = Ry(ry)·Rx(0.12) el eje de giro es un eje 2-fold del icosaedro, así que el giro es periódico en π y
+// se puede arrastrar sin límite. Cada cuadro: color premultiplicado | alfa (se recombinan en la GPU a RGBA) + la palabra BLOPA
+// como capa aditiva de luminancia. Dos sets según la orientación (el haz llega distinto en horizontal y en vertical).
+// La sala, los hilos de luz y el trazado CPU de la faceta siguen en vivo (son baratos) y usan la MISMA R que el sprite.
+// ── lo que sigue es el home original ──
+// HOME = VERSIÓN prisma (publicada desde 2026-11-04; ver src/data/versiones.ts) — la gema es un PROYECTOR.
+// Sala oscura: un haz fino entra, atraviesa la gema y sale dispersado; los rayos de salida se calculan
+// con la FACETA REAL (trazado en CPU contra las 20 caras del icosaedro, con refracción y dispersión por
+// canal), así que al girar la piedra —sola, arrastrándola o con el giroscopio— el espectro barre la sala.
+// La gema proyecta el VIDEO del sitio en una pantalla: al señalar un proyecto la imagen arranca
+// desenfocada (bokeh real, aberración lateral, respiración de foco) y el autofoco la encaja.
+// Click → la cámara viaja por el haz y la pantalla se vuelve el case a pantalla completa.
+// Arquitectura: UN contexto WebGL, 3 programas — sala (pantalla completa), prefiltro de bokeh (FBO a media
+// resolución) y gema (viewport cuadrado encima). El layout lo mandan "slots" del DOM: el JS mide sus rects.
+import { projects } from '../data/projects';
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa — prisma pre</title>
+    <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta property="og:title" content="blopa" />
+    <meta property="og:description" content="Portfolio de Pablo Vela — sitios con firma visual propia. Buenos Aires." />
+    <meta property="og:image" content="https://www.blopavela.com/img/og.jpg" />
+    <meta property="og:url" content="https://www.blopavela.com/" />
+    <meta property="og:type" content="website" />
+    <meta name="robots" content="noindex" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#0b0b0e" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
+        --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
+      *{box-sizing:border-box;margin:0}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow:hidden;
+        -webkit-font-smoothing:antialiased;line-height:1.5}
+      a{color:inherit;text-decoration:none}
+      .nav__home,.kase__back,.case__eye,.case__live,.kase__next,.scr__label,.cred dt{font-feature-settings:"case"}
+      /* foco visible y consistente (teclado) */
+      :focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:3px}
+      .case__title:focus,.case__title:focus-visible{outline:none}
+
+      canvas.room{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .9s var(--ease)}
+      body.gl-on canvas.room{opacity:1}
+
+      /* slots: sólo MEDIDAS (dónde va la gema / la pantalla en cada estado). Invisibles. */
+      .slot{position:fixed;visibility:hidden;pointer-events:none}
+      #g-land{left:50%;top:50%;width:calc(min(100vw,100svh) * .62);aspect-ratio:1;transform:translate(-50%,-50%)}
+      #g-idx{left:43vw;top:50svh;width:min(30svh,23vw);aspect-ratio:1;transform:translate(-50%,-50%)}
+
+      /* pantalla del índice + cartela */
+      .scr{position:fixed;left:59vw;width:36vw;top:50svh;transform:translateY(-50%);z-index:3;pointer-events:none}
+      #s-idx{position:relative;visibility:hidden;width:100%;aspect-ratio:16/10}
+      .scr__label{display:flex;justify-content:space-between;gap:1rem;margin-top:.9rem;font-family:var(--mono);font-size:.6875rem;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--soft);opacity:0;transition:opacity .5s var(--ease)}
+      .scr__label b{font-weight:400;color:var(--mid)}
+      body.entered:not(.in-case) .scr__label.on{opacity:1;transition-delay:.25s}
+
+      .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:center;
+        padding:calc(var(--gut) - 13px) var(--gut);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);
+        opacity:0;pointer-events:none;transition:opacity .5s var(--ease)}
+      body.entered .nav{opacity:1;transition-delay:.3s}
+      body.entered .nav .nav__home,body.entered .nav .nav__contact{pointer-events:auto}
+      .nav__home{appearance:none;background:none;border:0;font:inherit;font-size:.75rem;min-height:44px;padding:0;letter-spacing:.16em;text-transform:uppercase;
+        color:var(--mid);cursor:pointer;transition:color .25s var(--ease)}
+      .nav__home:hover{color:var(--ink)}
+      .nav__contact{text-transform:none;letter-spacing:0;font-size:.75rem;color:var(--mid);white-space:nowrap;transition:color .25s var(--ease);
+        display:inline-flex;align-items:center;min-height:44px}
+      .nav__contact:hover{color:var(--ink)}
+      .nav__r{display:inline-flex;align-items:center;gap:1.4rem}
+      body.entered .nav .nav__snd{pointer-events:auto}
+      .nav__snd{appearance:none;background:none;border:0;padding:0 .2rem;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
+        font:inherit;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);cursor:pointer;transition:color .25s var(--ease)}
+      .nav__snd:hover,.nav__snd[aria-pressed="true"]{color:var(--ink)}
+      .snd__bars{display:inline-flex;align-items:flex-end;gap:2px;height:10px}
+      .snd__bars i{display:block;width:2px;height:3px;background:currentColor;border-radius:1px;transition:height .3s var(--ease)}
+      .nav__snd[aria-pressed="true"] .snd__bars i{animation:sndb 1.1s ease-in-out infinite}
+      .nav__snd[aria-pressed="true"] .snd__bars i:nth-child(2){animation-delay:-.4s} .nav__snd[aria-pressed="true"] .snd__bars i:nth-child(3){animation-delay:-.75s}
+      @keyframes sndb{0%,100%{height:3px}50%{height:10px}}
+      @media(max-width:640px){ .snd__lbl{display:none} .nav__r{gap:.6rem} }
+      @media(max-width:640px){ .nav__who{display:none} }
+
+      /* entrada: toda la pantalla es el disparador; táctil: el gesto (arrastre/swipe) lo maneja el JS */
+      .enter{position:fixed;inset:0;z-index:4;cursor:pointer;touch-action:none;appearance:none;border:0;background:transparent;padding:0;margin:0;color:inherit;border-radius:0}
+      .enter:focus-visible{outline:2px solid var(--ink);outline-offset:-10px}
+      body.entered .enter{pointer-events:none}
+      body.dragging,body.dragging *{cursor:grabbing!important}
+
+      /* índice: nombres a la izquierda; el haz baja por detrás de ellos hacia la gema */
+      .index{position:fixed;left:0;top:0;bottom:0;z-index:3;display:flex;flex-direction:column;justify-content:center;
+        gap:.15rem;padding:clamp(5rem,12vh,9rem) var(--gut) 4rem;max-width:min(36vw,32rem);touch-action:pan-y;
+        opacity:0;pointer-events:none;transition:opacity .7s var(--ease)}
+      body.entered .index{opacity:1;pointer-events:auto;transition-delay:.45s}
+      body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
+      body.from-case .index{transition-delay:.85s}   /* a la vuelta, los nombres esperan a que la pantalla se achique */
+      .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;color:inherit;position:relative;
+        display:flex;align-items:baseline;gap:1rem;padding:.45rem 0;transition:padding .35s var(--ease)}
+      .prow__name{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,4.9vw,4.4rem);
+        letter-spacing:.01em;line-height:1;color:var(--ink);white-space:nowrap;transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+      /* la lista "refracta": el nombre señalado toma el borde cian/rojo del haz */
+      .prow.on .prow__name{text-shadow:-1.5px 0 rgba(255,58,84,.85),1.5px 0 rgba(36,226,232,.85)}
+      .index.has-on .prow:not(.on) .prow__name{color:var(--dim)}
+      .prow.on{padding-left:.9rem}
+      .prow__idx{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;color:var(--soft);opacity:0;transform:translateX(-6px);
+        transition:opacity .3s var(--ease),transform .3s var(--ease)}
+      .prow.on .prow__idx{opacity:1;transform:none}
+
+      /* case = la proyección a pantalla completa (escala de cine); la info flota abajo-izq sobre el scrim del shader */
+      .kase{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;visibility:hidden;
+        transition:opacity .6s var(--ease),visibility .6s var(--ease)}
+      body.in-case .kase{opacity:1;visibility:visible;transition-delay:.55s}
+      /* la info entra ESCALONADA cuando la gema ya pasó de largo (no compite con el viaje) */
+      .kase__info>*{opacity:0;transform:translateY(14px);transition:opacity .6s var(--ease),transform .9s var(--ease)}
+      body.in-case .kase__info>*{opacity:1;transform:none}
+      body.in-case .kase__info>:nth-child(1){transition-delay:.86s} body.in-case .kase__info>:nth-child(2){transition-delay:.93s}
+      body.in-case .kase__info>:nth-child(3){transition-delay:1.02s} body.in-case .kase__info>:nth-child(4){transition-delay:1.1s}
+      body.in-case .kase__info>:nth-child(5){transition-delay:1.18s}
+      .kase__info{position:absolute;left:var(--gut);top:calc(50% + 2rem);transform:translateY(-50%);width:calc(41.667vw - var(--gut) * 1.6);max-width:36rem;pointer-events:auto;
+        transition:opacity .28s var(--ease)}
+      .kase__frame{display:none}
+      .kase__info.swap{opacity:0}
+      .case__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,7rem);line-height:.88;letter-spacing:.005em;margin:.4rem 0 0}
+      .case__approach{margin-top:1.1rem;color:#d4d6dc;line-height:1.5;font-size:1rem;max-width:40ch}
+      .cred{display:grid;grid-template-columns:7rem 1fr;margin:1.5rem 0 0;border-top:1px solid rgba(255,255,255,.12)}
+      .cred dt,.cred dd{padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.12);margin:0}
+      .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.68rem}
+      .cred dd{font-size:.92rem;color:var(--ink);line-height:1.45}
+      .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.4rem;flex-wrap:wrap}
+      .case__live,.kase__next{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+        display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.35rem 0;color:var(--ink);background:none;border:0;cursor:pointer;
+        border-bottom:1px solid rgba(242,243,245,.3);transition:border-color .3s var(--ease),color .3s var(--ease)}
+      .case__live:hover{border-color:var(--ink)}
+      .kase__next{color:var(--mid);border-color:transparent}
+      .kase__next b{font-weight:400;color:var(--ink)}
+      .kase__next:hover{color:var(--ink);border-color:var(--ink)}
+      .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;
+        display:inline-flex;align-items:center;gap:.55rem;min-height:44px;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
+        border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+        font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);
+        opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s,border-color .25s}
+      .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
+      .kase__back:hover{color:var(--ink);border-color:var(--soft)}
+      body.in-case .kase__back{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.8s}
+
+      /* sin WebGL: el sitio sigue siendo un índice funcional */
+      .nogl{display:none;position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) var(--gut);max-width:56rem}
+      .nogl h1{font-family:var(--display);font-weight:400;font-size:clamp(3rem,9vw,6rem);line-height:.9}
+      .nogl ul{list-style:none;padding:0;margin:2.4rem 0 0;border-top:1px solid var(--hair)}
+      .nogl li{padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .nogl li a{font-family:var(--display);font-size:clamp(2rem,6vw,3.4rem);line-height:1}
+      .nogl li p{color:var(--mid);font-size:.92rem;margin-top:.35rem;max-width:60ch}
+      .nogl li small{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+      body.no-gl{overflow:auto}
+      body.no-gl canvas,body.no-gl .enter,body.no-gl .index,body.no-gl .scr,body.no-gl .kase,body.no-gl .kase__back{display:none}
+      body.no-gl .nogl{display:block}
+      body.no-gl .nav{opacity:1;pointer-events:auto}
+
+      /* ── PORTRAIT (mobile): misma narrativa en columna — haz diagonal → gema → abanico → pantalla → cartela → nombres ── */
+      @media(orientation:portrait){
+        #g-land{top:44svh;width:76vw}
+        /* índice mobile = el desktop en vertical: nombres a la izquierda, la gema arriba y el sitio MOBILE real
+           proyectado en una pantalla tipo teléfono a la derecha */
+        /* la gema baja lo justo para no rozar la nav en tablets (en teléfonos queda en 15svh) */
+        #g-idx{left:72vw;top:max(15svh,calc(var(--gut) + 3.5rem + 11vw));width:22vw}
+        /* la pantalla (teléfono vertical) se limita por ALTO: en tablets 44vw la sacaba de cuadro con la cartela;
+           centrada bajo la gema (72vw) */
+        .scr{--sw:min(44vw,calc((70svh - 5rem) * 720 / 1558));left:calc(72vw - var(--sw) / 2);right:auto;width:var(--sw);top:30svh;transform:none}
+        #s-idx{aspect-ratio:720/1558}
+        .scr__label{flex-direction:column;gap:.15rem;margin-top:.7rem;font-size:.625rem}
+        :global(.scr__pre){display:none}
+        .index{max-width:50vw;justify-content:flex-start;right:auto;
+          padding-top:calc(30svh + 4.4rem);padding-bottom:1.5rem}
+        .prow{padding:.1rem 0;min-height:44px;align-items:center}
+        .prow.on{padding-left:0}   /* mobile: el activo se marca SÓLO por color */
+        .prow__idx{display:none}
+        .prow__name{font-size:clamp(1.6rem,8vw,2.6rem)}
+        /* case mobile: el sitio vertical a todo el ancho (fijo, bajo la franja de la nav) y la info sube por encima;
+           título dentro del 60% superior; CTA en barra fija abajo */
+        .kase{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+          padding:calc(var(--gut) + 5.3rem) var(--gut) calc(6.5rem + env(safe-area-inset-bottom,0px))}
+        .kase__frame{display:block;margin:0 calc(-1 * var(--gut))}
+        #s-casep{width:100%;height:60svh}
+        .kase__info{position:static;transform:none;width:auto;max-width:none;margin-top:1.5rem}
+        .case__title{font-size:clamp(3rem,15vw,4.6rem)}
+        .kase__acts{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:7;flex-wrap:nowrap;
+          padding:.5rem var(--gut) calc(.5rem + env(safe-area-inset-bottom,0px));
+          background:rgba(11,11,14,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--hair)}
+        .case__live,.kase__next{min-height:48px;border-bottom-color:transparent}
+        .case__live span{color:var(--ink)}
+      }
+      /* case con scroll (vertical y horizontal bajo): lo que sube se funde bajo la nav y el ‹ Proyectos (termina justo bajo la píldora) */
+      .nav::before{content:'';position:absolute;inset:0 0 calc(var(--gut) + 18px - 5.65rem);z-index:-1;pointer-events:none;opacity:0;
+        background:linear-gradient(var(--bg) 55%,rgba(11,11,14,0));transition:opacity .5s var(--ease)}
+      @media(orientation:portrait){ body.in-case .nav::before{opacity:1} }
+      /* ── HORIZONTAL BAJO (teléfono acostado): la ficha no entra centrada → columna con scroll bajo la nav ── */
+      @media(orientation:landscape) and (max-height:540px){
+        /* el scroll arranca bajo la píldora ‹ Proyectos: el texto se recorta (con fundido) ahí, nunca a su lado */
+        .kase{top:calc(var(--gut) + 5.65rem);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+          -webkit-mask-image:linear-gradient(transparent,#000 1.2rem);mask-image:linear-gradient(transparent,#000 1.2rem)}
+        .kase__info{position:relative;left:auto;top:auto;transform:none;margin:1rem 0 calc(var(--gut) + 1rem) var(--gut);
+          width:calc(41.667vw - var(--gut) * 1.6)}
+        .case__title{font-size:clamp(2.4rem,13svh,3.6rem)}
+        .case__approach{font-size:.92rem;margin-top:.8rem}
+        .cred{margin-top:1rem}
+      }
+      @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+    </style>
+  </head>
+  <body>
+    <canvas class="room" data-room aria-hidden="true"></canvas>
+    <noscript><style is:inline>.nogl{display:block!important}canvas.room,.enter,.index,.scr,.kase,.kase__back{display:none!important}.nav{opacity:1!important;pointer-events:auto!important}body{overflow:auto!important}</style></noscript>
+
+    <section class="nogl" aria-label="Proyectos">
+      <h1>BLOPA — Pablo Vela</h1>
+      <ul>
+        {projects.map((p) => (
+          <li><small>{p.category} · {p.ended ? p.ended.split('-')[0] : 'En curso'}</small><br />
+            <a href={p.url} target="_blank" rel="noopener">{p.name} ↗</a><p>{p.blurb}</p></li>
+        ))}
+      </ul>
+    </section>
+
+    <div class="slot" id="g-land"></div>
+    <div class="slot" id="g-idx"></div>
+    <div class="scr" aria-hidden="true">
+      <div id="s-idx"></div>
+      <p class="scr__label" data-label><span data-label-a></span><b data-label-b></b></p>
+    </div>
+
+    <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
+
+    <nav class="nav" aria-label="Navegación" data-nav>
+      <button type="button" class="nav__home" data-home>blopa</button>
+      <span class="nav__r">
+      <button type="button" class="nav__snd" data-snd aria-pressed="false" aria-label="Sonido"><span class="snd__bars" aria-hidden="true"><i></i><i></i><i></i></span><span class="snd__lbl">Sonido</span></button>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span><span class="nav__mail">blopave@pm.me ↗</span></a>
+      </span>
+    </nav>
+
+    <main>
+    <section class="index" data-index aria-label="Proyectos">
+      {projects.map((p, i) => (
+        <button type="button" class="prow" data-row data-slug={p.slug}>
+          <span class="prow__name">{p.name}</span>
+          <span class="prow__idx" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+        </button>
+      ))}
+    </section>
+
+    <section class="kase" data-case aria-hidden="true" aria-labelledby="case-title">
+      <div class="kase__frame" aria-hidden="true"><div id="s-casep"></div></div>
+      <div class="kase__info" data-info>
+        <p class="case__eye" data-cat></p>
+        <h2 class="case__title" id="case-title" data-name tabindex="-1"></h2>
+        <p class="case__approach" data-approach></p>
+        <dl class="cred">
+          <dt>Rol</dt><dd data-role></dd>
+          <dt>Servicios</dt><dd data-services></dd>
+          <dt>Stack</dt><dd class="soft" data-stack></dd>
+        </dl>
+        <div class="kase__acts">
+          <a class="case__live" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
+          <button type="button" class="kase__next" data-next>Siguiente&nbsp;<b data-next-name></b>&nbsp;<span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </section>
+    </main>
+    <button type="button" class="kase__back" data-back aria-label="Volver a proyectos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proyectos
+    </button>
+
+    <script define:vars={{ projects }}>
+      const body = document.body;
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const $ = (s, r = document) => r.querySelector(s);
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+      const projOf = (s) => projects.find((x) => x.slug === s);
+      const idxOf = (s) => projects.findIndex((x) => x.slug === s);
+
+
+      // ── estado ──
+      let entered = false, inCase = false;
+      let cur = null;          // proyecto que la gema proyecta (hover / case / auto en táctil / dial)
+      let focusT0 = -1e9;      // cuándo arrancó el autofoco actual
+      const T0 = performance.now();
+      let lastCase = null, lastManual = 0;
+      let invalidate = () => {};   // render por demanda (lo define el bloque GL)
+      let startTween = () => {};
+
+      const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+      // historial por niveles: home(0) → #proyectos(1) → #slug(2). Bajar de nivel VUELVE en el historial (Esc no apila)
+      const curH = () => location.hash.replace('#', '');
+      const LV = (h) => (!h ? 0 : h === 'proyectos' ? 1 : 2);
+      let baseLv = LV(curH());
+      const pushHash = (h) => { if (curH() === h) return;
+        const url = location.pathname + location.search + (h ? '#' + h : '');
+        const c = LV(curH()), t = LV(h);
+        if (FRAMED) history.replaceState(null, '', url);
+        else if (t > c) history.pushState(null, '', url);
+        else if (t < c && t >= baseLv) history.go(t - c);
+        else { history.replaceState(null, '', url); baseLv = Math.min(baseLv, t); } };
+
+      const rows = Array.from(document.querySelectorAll('[data-row]'));
+      const indexEl = $('[data-index]'), caseEl = $('[data-case]'), infoEl = $('[data-info]'), navEl = $('[data-nav]');
+      const enterEl = $('[data-enter]'), backEl = $('[data-back]'), titleEl = $('[data-name]');
+      const labelEl = $('[data-label]'), labelA = $('[data-label-a]'), labelB = $('[data-label-b]');
+
+      // lo que no se ve, no se enfoca ni se lee
+      const syncInert = () => {
+        enterEl.inert = entered; navEl.inert = !entered;
+        indexEl.inert = !entered || inCase; caseEl.inert = !inCase; backEl.inert = !inCase;
+        caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+
+      // ── videos: bajo demanda, uno solo decodificando; mobile/táctil usa la versión 640 ──
+      const SMALL = coarse || innerWidth < 900;
+      const PORT = matchMedia('(orientation: portrait)').matches;   // vertical → se proyecta la versión MOBILE de cada sitio
+      const vids = {}, posters = {};
+      const posterOf = (slug) => { let im = posters[slug];
+        if (!im) { im = new Image(); im.decoding = 'async'; im.src = '/img/poster/' + slug + (PORT ? '-m' : '') + '.jpg';
+          im.addEventListener('load', () => invalidate(), { once: true }); posters[slug] = im; } return im; };
+      const vidOf = (slug) => { let v = vids[slug];
+        if (!v) { v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true;
+          v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.preload = 'none';
+          v.poster = '/img/poster/' + slug + (PORT ? '-m' : '') + '.jpg';
+          v.src = '/video/' + slug + (PORT ? '-m' : SMALL ? '-640' : '') + '.mp4'; vids[slug] = v; } return v; };
+
+      let lastLabel = '';
+      function setLabelOnce(a2, b2) { const k = a2 + '|' + b2; if (k === lastLabel) return; lastLabel = k; setLabel(a2, b2); labelEl.classList.add('on'); }
+      const setLabel = (a, b) => { labelA.innerHTML = '<span class="scr__pre">Proyección · </span>' + a; labelB.textContent = b; };
+      const setProj = (slug) => {
+        if (slug === cur) return;
+        cur = slug; focusT0 = performance.now();
+        Object.entries(vids).forEach(([k, v]) => { if (k !== slug && !v.paused) v.pause(); });
+        rows.forEach((r) => r.classList.toggle('on', r.dataset.slug === slug));
+        indexEl.classList.toggle('has-on', !!slug);
+        if (slug) { const p = projOf(slug); posterOf(slug);
+          if (!reduceMotion) { const v = vidOf(slug); v.preload = 'auto'; v._failed = false;
+            try { v.currentTime = 0; } catch {}   // cada proyecto arranca en su HOME
+            v.play().catch(() => { v._failed = true; invalidate(); }); }
+          setLabel(p.name, p.category + ' · ' + yearOf(p.ended)); labelEl.classList.add('on');
+        } else labelEl.classList.remove('on');
+        lastLabel = '';
+        invalidate();
+      };
+      const stepFrom = () => cur || reel.slug || projects[0].slug;
+      const nextOf = (s, d) => projects[(idxOf(s) + d + projects.length) % projects.length].slug;
+
+      const enter = (push = true) => { if (entered) return; entered = true; startTween(1.0); body.classList.add('entered');
+        projects.forEach((p) => posterOf(p.slug));   // el reel necesita los pósters
+        if (coarse && !cur) setTimeout(() => { if (entered && !inCase && !cur) setProj(projects[0].slug); }, 3400);   // táctil: primero el reel
+        syncInert(); invalidate(); if (push) pushHash('proyectos'); };
+      let suppressClick = false;
+      // teclado (Enter/Espacio en el botón): entra y el foco pasa al primer proyecto
+      enterEl.addEventListener('click', (e) => { if (suppressClick) return; enter(); if (e.detail === 0) setTimeout(() => rows[0].focus(), 560); });
+      addEventListener('wheel', (e) => { if (!entered && Math.abs(e.deltaY) > 6) enter(); }, { passive: true });
+
+      // ── case ──
+      const fill = (p) => {
+        $('[data-cat]').textContent = p.category + ' · ' + yearOf(p.ended);
+        titleEl.textContent = p.name; $('[data-approach]').textContent = p.approach || '';
+        $('[data-role]').textContent = p.role || '';
+        $('[data-services]').textContent = (p.services || []).join(', ');
+        $('[data-stack]').textContent = (p.stack || []).join(', ');
+        const live = $('[data-live]'); if (p.url) { live.href = p.url; live.style.display = ''; } else live.style.display = 'none';
+        const nx = projOf(nextOf(p.slug, 1));
+        $('[data-next-name]').textContent = nx.name; $('[data-next]').dataset.slug = nx.slug;
+      };
+      const openCase = (slug, { push = true } = {}) => { const p = projOf(slug); if (!p) return;
+        if (!entered) { entered = true; body.classList.add('entered'); }
+        fill(p); setProj(slug); caseEl.scrollTop = 0; lastCase = slug;
+        if (!inCase) { startTween(1.25); snd.whoosh(false); }
+        inCase = true; body.classList.add('in-case'); syncInert();
+        document.title = 'blopa — ' + p.name; if (push) pushHash(slug);
+        // el foco va al título cuando el case ya es visible (reintenta mientras dura la transición)
+        let tries = 0; const focusTitle = () => { if (!inCase) return; titleEl.focus({ preventScroll: true });
+          if (document.activeElement !== titleEl && tries++ < 12) setTimeout(focusTitle, 120); };
+        setTimeout(focusTitle, 760);
+        invalidate(); };
+      const switchCase = (slug) => { infoEl.classList.add('swap');
+        setTimeout(() => { openCase(slug); infoEl.classList.remove('swap'); }, 240); };
+      const closeCase = (push = true) => { if (!inCase) return;
+        inCase = false; startTween(1.05); snd.whoosh(true); body.classList.add('from-case'); body.classList.remove('in-case'); syncInert();
+        clearTimeout(fromT); fromT = setTimeout(() => body.classList.remove('from-case'), 1600);
+        if (!coarse) setProj(null);
+        document.title = 'blopa'; if (push) pushHash('proyectos');
+        // el foco vuelve a la fila sólo si se cerró con teclado (con mouse/táctil no aparece un anillo de foco)
+        const row = rows.find((r) => r.dataset.slug === lastCase); if (row && lastKey) setTimeout(() => row.focus({ preventScroll: true }), 60);
+        invalidate(); };
+      const goHome = (push = true) => { inCase = false; entered = false; startTween(1.0);
+        body.classList.remove('in-case', 'entered'); setProj(null); syncInert();
+        document.title = 'blopa'; if (push) pushHash(''); invalidate(); };
+
+      let leaveT = 0, fromT = 0;
+      rows.forEach((row) => {
+        const on = () => { clearTimeout(leaveT); if (!inCase) { const was = cur; setProj(row.dataset.slug); if (was !== cur) aimRow(row.dataset.slug); } };
+        const off = () => { clearTimeout(leaveT); leaveT = setTimeout(() => { if (!inCase && !coarse) setProj(null); }, 140); };
+        if (!coarse) { row.addEventListener('pointerenter', on); row.addEventListener('pointerleave', off); }
+        row.addEventListener('focus', on); row.addEventListener('blur', off);
+        row.addEventListener('click', () => { if (!suppressClick) openCase(row.dataset.slug); });
+      });
+      backEl.addEventListener('click', () => closeCase());
+      $('[data-home]').addEventListener('click', () => goHome());
+      $('[data-next]').addEventListener('click', (e) => { const nx = e.currentTarget.dataset.slug; if (nx) switchCase(nx); });
+      // ←/→ (y ↑/↓) recorren el índice
+      indexEl.addEventListener('keydown', (e) => { const i = rows.indexOf(document.activeElement); if (i < 0) return;
+        const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 0;
+        if (d) { e.preventDefault(); rows[(i + d + rows.length) % rows.length].focus(); } });
+      addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && inCase) { closeCase(); return; }
+        if (inCase && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); switchCase(nextOf(cur, e.key === 'ArrowRight' ? 1 : -1)); }
+      });
+
+      // táctil: el proyector pasa diapositivas solo (pausa unos segundos tras un gesto manual)
+      if (coarse) setInterval(() => { if (!entered || inCase || document.hidden || performance.now() - lastManual < 6000) return;
+        setProj(nextOf(cur || projects[projects.length - 1].slug, 1)); aimRow(cur); }, 4600);
+
+      addEventListener('popstate', () => { const h = location.hash.replace('#', '');
+        if (projOf(h)) openCase(h, { push: false });
+        else if (h === 'proyectos') { if (inCase) closeCase(false); else enter(false); }
+        else goHome(false); });
+      syncInert();
+      caseEl.addEventListener('scroll', () => invalidate(), { passive: true });
+
+      // ── reel: con el puntero fuera de los nombres la pantalla no queda vacía — pasan los 4 sitios, tenues ──
+      const reel = { slug: projects[0].slug, swapAt: performance.now() + 1500, swapped: true };
+
+      // ── manipulación directa: arrastrar gira la gema (desvía el haz); en índice/case es un DIAL entre proyectos:
+      //    el desenfoque/RGB crece con la distancia al encastre y al soltar encaja y enfoca ──
+      const drag = { on: false, x0: 0, y0: 0, dx: 0, dy: 0, moved: false, id: -1 };
+      const dragOff = { x: 0, y: 0 };
+      addEventListener('pointerdown', (e) => {
+        if (body.classList.contains('no-gl') || e.button > 0) return;
+        if (e.target.closest('a,button:not(.prow):not(.enter),.kase__info,.nav')) return;
+        Object.assign(drag, { on: true, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, moved: false, id: e.pointerId, pt: e.pointerType });
+      });
+      addEventListener('pointermove', (e) => { if (!drag.on || e.pointerId !== drag.id) return;
+        drag.dx = (e.clientX - drag.x0) / innerWidth; drag.dy = (e.clientY - drag.y0) / innerHeight;
+        if (!drag.moved && Math.hypot(drag.dx * innerWidth, drag.dy * innerHeight) > 8) { drag.moved = true; body.classList.add('dragging'); }
+        invalidate(); });
+      const endDrag = (e) => { if (!drag.on || (e && e.pointerId !== drag.id)) return;
+        drag.on = false; body.classList.remove('dragging');
+        if (drag.moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 60);
+          const vert = Math.abs(drag.dy) > Math.abs(drag.dx);
+          if (!entered && vert && drag.dy < -0.06) enter();                       // swipe hacia arriba en la entrada: entra
+          else if (!entered && !vert && drag.pt === 'touch' && Math.abs(drag.dx) > 0.12) enter();   // swipe lateral (táctil) también
+          else if (entered && !vert && Math.abs(drag.dx) > 0.12) {                  // dial: pasa de proyecto y encaja
+            lastManual = performance.now(); const nx = nextOf(stepFrom(), drag.dx < 0 ? 1 : -1);
+            if (inCase) switchCase(nx); else setProj(nx); } }
+        drag.dx = 0; drag.dy = 0; invalidate(); };
+      addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
+
+      let lastInput = performance.now(), lastKey = false;
+      addEventListener('keydown', () => { lastKey = true; }, true); addEventListener('pointerdown', () => { lastKey = false; }, true);
+      // el rayo de salida APUNTA un instante a algo (un nombre del índice, la zona del índice en la invitación)
+      const aim = { t0: -1e9, x: 0, y: 0, hold: 0.35 };
+      const aimAt = (x, y, hold = 0.35) => { aim.t0 = performance.now(); aim.x = x; aim.y = y; aim.hold = hold; invalidate(2400); };
+      const aimRow = (slug) => { const r = rows.find((x) => x.dataset.slug === slug); if (!r) return;
+        const b = r.querySelector('.prow__name').getBoundingClientRect(); aimAt(b.left + b.width * 0.5, b.top + b.height * 0.5); };
+      const aimEnv = (now) => { const x = (now - aim.t0) / 1000, sm = (u) => u * u * (3 - 2 * u);
+        if (x < 0) return 0; if (x < 0.25) return sm(x / 0.25); if (x < 0.25 + aim.hold) return 1;
+        const y = (x - 0.25 - aim.hold) / 0.9; return y >= 1 ? 0 : 1 - sm(y); };
+
+      // ── SONIDO (opt-in, sintetizado con Web Audio, sin archivos): hum de proyector, zumbido de enfoque,
+      //    nota al encajar (distinta por proyecto) y whoosh filtrado en el viaje. Silencio con la pestaña oculta ──
+      const snd = (() => {
+        let on = false, ctx = null, master, buzz, buzzF, buzzG, nbuf;
+        try { on = localStorage.getItem('blopa-sound') === '1'; } catch {}
+        const init = () => { if (ctx) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+          ctx = new AC(); master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+          nbuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); const nd = nbuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+          const hg = ctx.createGain(); hg.gain.value = 0.045; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 360; hg.connect(lp); lp.connect(master);
+          [[55, 'triangle', 0.5], [110.4, 'sine', 0.25], [165.3, 'sine', 0.08]].forEach(([f, ty, a]) => { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f;
+            const g = ctx.createGain(); g.gain.value = a; o.connect(g); g.connect(hg); o.start(); });
+          const ns = ctx.createBufferSource(); ns.buffer = nbuf; ns.loop = true; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7;
+          const ng = ctx.createGain(); ng.gain.value = 0.01; ns.connect(bp); bp.connect(ng); ng.connect(master); ns.start();
+          buzz = ctx.createOscillator(); buzz.type = 'sawtooth'; buzz.frequency.value = 180; buzzF = ctx.createBiquadFilter(); buzzF.type = 'lowpass'; buzzF.frequency.value = 500;
+          buzzG = ctx.createGain(); buzzG.gain.value = 0; buzz.connect(buzzF); buzzF.connect(buzzG); buzzG.connect(master); buzz.start(); };
+        const setOn = (v) => { on = v; try { localStorage.setItem('blopa-sound', v ? '1' : '0'); } catch {}
+          if (v) { init(); if (!ctx) return; ctx.resume(); master.gain.setTargetAtTime(0.9, ctx.currentTime, reduceMotion ? 0.8 : 0.4); }
+          else if (ctx) master.gain.setTargetAtTime(0, ctx.currentTime, 0.15); };
+        let lastF = 0;
+        const focus = (df) => { if (!ctx || !on) return; const now = performance.now(); if (now - lastF < 50) return; lastF = now;
+          const a = Math.min(1, Math.abs(df)), t = ctx.currentTime;
+          buzzG.gain.setTargetAtTime(a * 0.03, t, 0.06); buzz.frequency.setTargetAtTime(170 + (1 - a) * 160, t, 0.08); buzzF.frequency.setTargetAtTime(380 + (1 - a) * 1500, t, 0.08); };
+        const note = (i) => { if (!ctx || !on) return; const f = [220, 277.18, 329.63, 369.99][i % 4], t = ctx.currentTime;
+          [[1, 0.09, 1.4], [2, 0.035, 1.0], [3.01, 0.014, 0.7]].forEach(([m, a, d]) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * m;
+            const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + (reduceMotion ? 0.08 : 0.006));
+            g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.05); }); };
+        const whoosh = (rev) => { if (!ctx || !on || reduceMotion) return; const t = ctx.currentTime;
+          const s = ctx.createBufferSource(); s.buffer = nbuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3; const g = ctx.createGain();
+          bp.frequency.setValueAtTime(rev ? 2400 : 280, t); bp.frequency.exponentialRampToValueAtTime(rev ? 280 : 2400, t + 1.1);
+          g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.11, t + 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
+          s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t + 1.3); };
+        document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (on) ctx.resume(); });
+        return { get on() { return on; }, setOn, focus, note, whoosh };
+      })();
+      const sndBtn = $('[data-snd]');
+      const syncSnd = () => sndBtn.setAttribute('aria-pressed', snd.on ? 'true' : 'false');
+      sndBtn.addEventListener('click', () => { snd.setOn(!snd.on); syncSnd(); });
+      syncSnd();
+      // preferencia guardada: el audio arranca con el primer gesto (los navegadores lo exigen)
+      if (snd.on) addEventListener('pointerdown', () => { if (snd.on) snd.setOn(true); }, { once: true });
+      ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true }));
+      // giroscopio (mobile): inclinar el teléfono gira la piedra
+      const gyro = { x: 0, y: 0 };
+      if (coarse && 'DeviceOrientationEvent' in window && !reduceMotion) {
+        const onOri = (e) => { if (e.gamma == null) return; gyro.x = clamp(e.gamma / 35, -1, 1); gyro.y = clamp((e.beta - 50) / 35, -1, 1); };
+        if (typeof DeviceOrientationEvent.requestPermission === 'function')
+          addEventListener('touchend', () => DeviceOrientationEvent.requestPermission().then((s) => { if (s === 'granted') addEventListener('deviceorientation', onOri); }).catch(() => {}), { once: true });
+        else addEventListener('deviceorientation', onOri);
+      }
+
+      // ganchos para pruebas automáticas (no cambian nada por sí solos)
+      window.__prisma = { enter, openCase, closeCase, setProj, goHome, T0 };
+
+      // ═══════════════ GL: UN contexto, sala + prefiltro de bokeh + gema ═══════════════
+      const roomC = $('[data-room]');
+      let gl = roomC.getContext('webgl', { alpha: false, antialias: false, powerPreference: 'high-performance' });
+      if (!gl) { body.classList.add('no-gl'); navEl.inert = false; enterEl.inert = true; }
+      // ── calidad: GPU integrada vieja / por software arranca en BAJA (menos pasos y rebotes en la gema, bokeh de 8
+      //    muestras, menos píxeles). Si igual no llega a ~35 fps, el loop baja a BAJA solo (ver frame()) ──
+      const weakGPU = (() => { if (!gl) return false;
+        let r = ''; try { const e = gl.getExtension('WEBGL_debug_renderer_info'); r = String(gl.getParameter(e ? e.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ''); } catch {}
+        if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(r)) return true;
+        if (/intel/i.test(r) && !/iris\(r\) xe|iris xe|arc/i.test(r)) return true;
+        if (/mali-[gt]?[0-7]\d\b|adreno[^\d]{0,12}[3-5]\d\d|powervr|geforce (gt |mx|[2-9]\d\d\b)|radeon(\(tm\))? (r[2-7]|hd)/i.test(r)) return true;
+        return (navigator.hardwareConcurrency || 8) <= 4 && !/apple/i.test(r); })();
+      const QHI = { steps: coarse ? 72 : 110, gin: coarse ? 26 : 42, gb: coarse ? 2 : 3, aa: 4, bok: 16, px: 2.6e6, dpr: 2, floor: 0.62 };
+      const QLO = { steps: 48, gin: 16, gb: 2, aa: 2, bok: 8, px: 1.15e6, dpr: 1.25, floor: 0.5 };
+      const qParam = new URLSearchParams(location.search).get('q');   // ?q=bajo / ?q=alto fuerzan el perfil (para comparar)
+      let Q = qParam === 'bajo' ? QLO : qParam === 'alto' ? QHI : weakGPU ? QLO : QHI;
+      const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+
+      // prefiltro: la diapositiva a MEDIA resolución, con downsample 2×2 y clamp suave de altas luces
+      // (el bokeh muestrea esto: barato y sin puntos sobrebrillados)
+      const PRE = `precision mediump float;
+        uniform sampler2D uVid; uniform vec2 uRes; uniform vec2 uTexel;
+        void main(){ vec2 uv=gl_FragCoord.xy/uRes;
+          vec3 c=(texture2D(uVid,uv+uTexel*vec2(-.5,-.5)).rgb+texture2D(uVid,uv+uTexel*vec2(.5,-.5)).rgb
+                 +texture2D(uVid,uv+uTexel*vec2(-.5,.5)).rgb+texture2D(uVid,uv+uTexel*vec2(.5,.5)).rgb)*.25;
+          float l=max(c.r,max(c.g,c.b)); c*=1./(1.+max(l-.78,0.)*1.6);
+          gl_FragColor=vec4(c,1.); }`;
+
+      const ROOM = () => `precision highp float;
+        uniform vec2 uRes; uniform float uDpr; uniform float uTime;
+        uniform vec2 uG; uniform float uGR; uniform vec2 uB0; uniform vec2 uEn;   // gema, origen del haz, punto de ENTRADA real
+        uniform vec4 uS;                                          // pantalla (x0,y0,x1,y1) px CSS, y hacia abajo
+        uniform vec2 uAx; uniform vec2 uFan;                      // eje del abanico de proyección y límites angulares
+        uniform float uScrAmt, uVidAmt, uDefocus, uBeamK, uFanK, uDisp, uOpen, uLightA, uScrim, uLand;
+        uniform vec2 uEx; uniform vec2 uDR; uniform vec2 uDC; uniform float uRayA; uniform float uDuo;   // salida real: punto + direcciones R / cian
+        uniform vec2 uSP[4]; uniform vec2 uSD[4]; uniform float uSW[4]; uniform vec3 uSCol[4];   // salidas secundarias (chispas)
+        uniform vec3 uCph; uniform vec2 uLp; uniform vec3 uHit; uniform float uExpo;          // cáusticas (fase = giro de la gema) · impacto en pantalla
+        uniform vec2 uCov;                                        // recorte "cover" de la diapositiva (anclado ARRIBA: el home del sitio)
+        uniform float uScrimP, uScrollK, uCropT;   // uCropT: recorte superior (p. ej. el selector de idiomas suelto)                          // case mobile: scrim inferior + oscurecer al scrollear
+        uniform vec3 uAvg; uniform vec3 uTint; uniform float uTintAmt;
+        uniform sampler2D uVid; uniform sampler2D uBok;
+        float h21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+        float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(h21(i),h21(i+vec2(1,0)),f.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x), f.y); }
+        float fbm(vec2 p){ float s=0., a=.5; for(int i=0;i<4;i++){ s+=a*vn(p); p=p*2.03+17.1; a*=.5; } return s; }
+        vec3 bump(vec3 x){ return max(1.-x*x,0.); }
+        vec3 spectral(float x){ return max(bump(vec3(3.54541723,2.86670055,2.29421995)*(x-vec3(0.69548916,0.49416934,0.28269708)))
+          - vec3(0.02320775,0.15936245,0.53520021), 0.); }
+        /* cáustica: red de interferencia afilada; su fase la mueve el GIRO de la gema */
+        float caus(vec2 q, vec3 ph){ float a=sin(q.x*0.9+ph.x)+sin(q.y*1.1+ph.y)+sin((q.x+q.y)*0.7+ph.z)+sin((q.x-q.y)*1.3-ph.x*1.3);
+          return pow(1.-abs(a*0.25),9.); }
+        vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.,1.); }
+        float fanM(float a, float soft){ return smoothstep(uFan.x-soft,uFan.x+soft,a)*(1.-smoothstep(uFan.y-soft,uFan.y+soft,a)); }
+        vec3 tx(vec2 uv){ return texture2D(uVid, vec2(uv.x,1.-uv.y)).rgb; }
+        vec3 bk(vec2 uv){ return texture2D(uBok, vec2(uv.x,1.-uv.y)).rgb; }
+        /* rayo fino desde o en dirección d: núcleo + halo que se abre con la distancia */
+        float rayL(vec2 p, vec2 o, vec2 d, float dust, out float tt){ vec2 v=p-o; tt=dot(v,d); float pr=abs(d.x*v.y-d.y*v.x);
+          float w=1.0+max(tt,0.)*0.011; float on=smoothstep(0.,6.,tt);
+          return on*(exp(-pr*pr/(w*w)) + 0.10*dust*exp(-pr/(5.+max(tt,0.)*0.045)))/(1.+max(tt,0.)/650.); }
+        void main(){
+          vec2 css=uRes/uDpr;
+          vec2 p=vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y)/uDpr;
+          float t=uTime;
+          vec3 L=vec3(0.);
+          /* aire de la sala: polvo en suspensión (sólo se ve donde hay luz) + motas que derivan */
+          float dust=fbm(p*0.0065+vec2(t*0.022,-t*0.011)); dust=0.30+1.9*dust*dust;
+          vec2 cg=floor(p/8.), fp=fract(p/8.); float hs=h21(cg);
+          vec2 mp=vec2(h21(cg+3.1),h21(cg+7.7))*.7+.15+0.12*vec2(sin(t*.5+hs*20.),cos(t*.4+hs*13.));
+          float mote=step(0.972,hs)*smoothstep(0.11,0.0,length(fp-mp))*(0.55+0.45*sin(t*1.3+hs*40.));
+          vec3 beamC=vec3(1.0,0.975,0.94);
+          /* ① haz entrante hasta el punto de ENTRADA real; HDR: la entrada "quema" (ACES + bloom analítico) */
+          vec2 bd=uEn-uB0; float bl=length(bd); vec2 bn=bd/max(bl,1e-3);
+          float tb=clamp(dot(p-uB0,bn),0.,bl*uBeamK); float db=length(p-(uB0+bn*tb));
+          float bOn=step(0.0005,uBeamK);
+          L+=beamC*bOn*(exp(-db*db/1.15)*1.5 + exp(-db/9.)*0.09*dust + exp(-db/46.)*0.022 + mote*exp(-db/18.)*0.9);
+          float reached=smoothstep(0.96,1.0,uBeamK);
+          float de=length(p-uEn);
+          L+=beamC*reached*(exp(-de/3.0)*7.0 + exp(-de/14.)*0.85 + exp(-de/64.)*0.15);
+          /* ② salida REAL (faceta): rayo rojo + rayo cian (o espectro) que barren al girar la gema, y la cuña entre ellos */
+          float tR,tC; float rR=rayL(p,uEx,uDR,dust,tR), rC=rayL(p,uEx,uDC,dust,tC);
+          vec3 cR=mix(vec3(1.0,0.35,0.18), vec3(1.0,0.22,0.32), uDuo);
+          vec3 cC=mix(vec3(0.35,0.3,1.0), vec3(0.15,0.88,1.0), uDuo);
+          vec2 ve=p-uEx; float re=length(ve);
+          float a1=atan(uDR.y,uDR.x), a2=atan(uDC.y,uDC.x);
+          float da=mod(a2-a1+3.14159265,6.2831853)-3.14159265;
+          float sa=mod(atan(ve.y,ve.x)-a1+3.14159265,6.2831853)-3.14159265;
+          float sw=sa/(abs(da)<1e-4?1e-4:da);
+          float front=step(0.,dot(ve,uDR+uDC));
+          float wedge=front*smoothstep(-0.25,0.0,sw)*(1.-smoothstep(1.0,1.25,sw))*smoothstep(4.,30.,re);
+          float s01=clamp(sw,0.,1.);
+          vec3 wc=mix(mix(cR,cC,s01), spectral(mix(0.92,0.08,s01))*1.35, 1.-uDuo);
+          float streak=0.55+0.9*vn(vec2(sa*300.,t*0.15))*vn(vec2(sa*80.+3.,t*0.1+5.));
+          float rayK=uRayA*reached*uFanK;
+          L+=rayK*(cR*rR*1.15 + cC*rC*1.15 + wc*wedge*(0.045+0.05*uLand)*dust*streak*(uGR*3.2/(re+uGR*1.6)) + wc*wedge*mote*0.6);
+          L+=rayK*mix(cR,cC,.5)*exp(-length(p-uEx)/5.)*1.6;   // la faceta de salida brilla
+          /* salidas secundarias por otras facetas: chispas de dispersión, débiles y titilantes */
+          for(int i=0;i<4;i++){ if(uSW[i]>0.001){ float ts; float rs=rayL(p,uSP[i],uSD[i],dust,ts);
+            L+=rayK*uSCol[i]*rs*uSW[i]*0.6*(0.55+0.45*sin(ts*0.05-t*2.6+float(i)*1.7)); } }
+          /* cáusticas: la gema tira luz de color sobre la sala, y se mueve cuando la gema gira */
+          vec2 dl=p-uLp; float cmk=exp(-dot(dl,dl)/(uGR*uGR*0.32));
+          vec2 qc=dl/(uGR*0.075);
+          float ca=caus(qc,uCph+vec3(t*.15,t*.11,-t*.13)), cb=caus(qc*1.13+3.1,uCph.yzx*1.2+vec3(-t*.12,t*.09,t*.1));
+          L+=rayK*cmk*(vec3(1.0,0.3,0.42)*ca+vec3(0.2,0.85,1.)*cb)*0.13*(0.6+0.4*dust);
+          /* ③ abanico de PROYECCIÓN (gema → pantalla); su borde se separa en rojo/cian con el desenfoque y converge a blanco */
+          vec2 v=p-uG; float r=length(v);
+          float ang=atan(uAx.x*v.y-uAx.y*v.x, dot(uAx,v));
+          float ac=clamp(ang,uFan.x,uFan.y);
+          vec2 dir=vec2(uAx.x*cos(ac)-uAx.y*sin(ac), uAx.x*sin(ac)+uAx.y*cos(ac));
+          vec2 inv=1./(dir+sign(dir)*1e-5+vec2(1e-6));
+          vec2 ta=(uS.xy-uG)*inv, tc=(uS.zw-uG)*inv; vec2 tmn=min(ta,tc);
+          float tN=max(tmn.x,tmn.y);
+          float near=smoothstep(uGR*0.45,uGR*1.25,r);
+          float lim=1.-smoothstep(tN-2.,tN+.5,r);
+          float fall=(uGR*2.6)/(r+uGR*1.4);
+          float base=near*lim*fall*reached*uScrAmt;
+          vec3 mem=vec3(fanM(ang-uDisp,0.004), fanM(ang+uDisp,0.004), fanM(ang+uDisp,0.004));
+          float eLo=exp(-max(ang-uFan.x,0.)/0.018), eHi=exp(-max(uFan.y-ang,0.)/0.018);
+          vec3 avgN=uAvg/max(max(uAvg.r,max(uAvg.g,uAvg.b)),0.2);
+          vec3 tint=mix(mix(vec3(1.),uTint,0.45*uTintAmt), mix(vec3(1.),avgN,0.6), 0.6*uVidAmt);
+          float fray=0.55+0.9*vn(vec2(ang*260.,t*0.18))*vn(vec2(ang*70.+3.,t*0.11+5.));
+          L+=uFanK*mem*tint*(0.085*dust*fray+0.16*(eLo+eHi)*dust+mote*0.9)*base*(1.-uOpen);   // en el case el abanico se retira…
+          L+=beamC*reached*exp(-r/(uGR*0.9))*0.06;
+          /* ④ pantalla */
+          vec2 sc=(uS.xy+uS.zw)*.5, hz=(uS.zw-uS.xy)*.5;
+          float rad=mix(3.,0.,uOpen);
+          vec2 q=abs(p-sc)-hz+rad; float sdb=length(max(q,0.))+min(max(q.x,q.y),0.)-rad;
+          float inside=smoothstep(0.8,-0.8,sdb);
+          vec3 scr=vec3(0.);
+          vec2 uv=(p-uS.xy)/(uS.zw-uS.xy);
+          if(inside>0.001){
+            float hot=mix(1.10-0.55*dot(uv-.5,uv-.5)*2., 1.02-0.3*dot(uv-.5,uv-.5), uOpen);
+            vec3 blank=vec3(0.075,0.08,0.092)*hot*mix(vec3(1.),uTint,0.25*uTintAmt);
+            vec3 img=vec3(0.);
+            if(uVidAmt>0.001){
+              /* ÓPTICA: círculo de confusión con altas luces ya clampeadas (bokeh sin sobrebrillo, desde el FBO a media
+                 resolución) · aberración cromática LATERAL (radial) · respiración del foco (uDefocus con signo) */
+              /* profundidad de campo del case: el plano de foco es el sitio; bajo el texto la imagen queda fuera de foco
+                 (la tipografía del sitio pasa a ser fondo, el título manda) */
+              float loc=uScrim*(1.-smoothstep(0.30,0.58,uv.x)) + uScrimP*smoothstep(0.36,0.62,uv.y);
+              float dfa=max(abs(uDefocus), loc*0.8); vec2 px=1./(uS.zw-uS.xy);
+              vec2 uvc=vec2((uv.x-.5)*uCov.x+.5, uCropT+uv.y*uCov.y*(1.-uCropT));
+              vec2 uvb=(uvc-.5)*(1.0-0.04*uDefocus)+.5;
+              vec3 sharp=tx(uvb);
+              if(dfa<0.004){ img=sharp; }
+              else{
+                float rr0=34.*dfa; vec2 ca=(uvb-.5)*0.05*abs(uDefocus);
+                vec3 acc=vec3(0.), ws=vec3(0.);
+                for(int i=0;i<${Q.bok};i++){ float fi=float(i)+.5; float rr=sqrt(fi/${Q.bok}.)*rr0; float th=fi*2.39996;
+                  vec2 o=vec2(cos(th),sin(th))*rr*px;
+                  vec3 c=vec3(bk(uvb+ca+o).r, bk(uvb+o).g, bk(uvb-ca+o).b);
+                  vec3 w=1.0+3.0*c*c; acc+=c*w; ws+=w; }
+                img=mix(sharp, acc/ws*(1.0+0.32*dfa), smoothstep(0.0,0.07,dfa));   // fuera de foco la luz se abre y brilla
+              }
+              img=mix(img, pow(max(img,vec3(0.)),vec3(0.78))*1.12, uExpo);   // índice: más presencia sin lavar (sitios de home oscuro)
+              img=img*0.94+0.022;   // nivel de negro de un proyector
+              img*=hot;
+            }
+            scr=mix(blank,img,uVidAmt);
+            /* donde el rayo de la gema pega en la pantalla: cáustica de color sobre la imagen */
+            if(uHit.z>0.001){ vec2 dh=p-uHit.xy; vec2 qh=dh/(uGR*0.08); float mh=exp(-dot(dh,dh)/(uGR*uGR*0.6));
+              scr+=(vec3(1.0,0.35,0.45)*caus(qh,uCph+vec3(t*.2))+vec3(0.25,0.85,1.)*caus(qh*1.17+2.,uCph.zxy-vec3(t*.17)))*0.2*mh*uHit.z; }
+            /* case: estamos DENTRO del haz — polvo y motas flotando delante de la imagen */
+            /* scrim (case desktop): oscurece abajo-izq y la franja de la nav para que el texto se lea sobre el video */
+            float sl=(1.-smoothstep(0.30,0.62,uv.x))*0.74 + smoothstep(0.5,1.0,uv.y)*0.3*(1.-smoothstep(0.4,0.8,uv.x));
+            float slp=smoothstep(0.30,0.72,uv.y)*0.8 + uScrollK*0.35;
+            scr*=1.-clamp(sl*uScrim + slp*uScrimP,0.,0.9);
+          }
+          /* la pantalla ILUMINA la sala con su propia luz + reflejo en piso brillante */
+          float out_=max(sdb,0.);
+          vec3 lightC=mix(vec3(0.42,0.46,0.55), uAvg*1.15, uVidAmt);
+          vec3 spill=lightC*(exp(-out_/30.)*0.05 + exp(-out_/170.)*0.022*dust)*uScrAmt*(1.-inside);
+          spill+=mix(vec3(0.9,0.94,1.),lightC*1.6,0.5)*(exp(-out_/2.2)*0.22+exp(-out_/14.)*0.05)*uOpen*uScrAmt*(1.-inside);   // …y la luz SEÑALA: termina en el borde del trabajo
+          if(p.y>uS.w && uv.x>0. && uv.x<1. && uScrAmt>0.01){
+            float d=(p.y-uS.w); float fy=1.-d/(uS.w-uS.y);
+            vec3 rf=vec3(0.); for(int i=0;i<4;i++){ rf+=tx(vec2(uv.x,clamp(fy-float(i)*0.012,0.,1.))); } rf*=0.25;
+            spill+=rf*exp(-d/26.)*0.09*uVidAmt*uScrAmt*smoothstep(0.,0.04,uv.x)*smoothstep(1.,0.96,uv.x);
+          }
+          vec3 bg=vec3(0.043,0.043,0.055);
+          vec2 qq=p/css-.5; bg*=1.0-0.35*dot(qq,qq);
+          vec3 col=bg+aces(L*1.2)*uLightA+spill;
+          col=mix(col,scr+bg*0.2,inside*uScrAmt);
+          col+=(h21(p+fract(t))-.5)/255.;
+          gl_FragColor=vec4(col,1.);
+        }`;
+
+      // gema PRE-RENDERIZADA: mezcla de los dos cuadros vecinos del giro (A y B, uMix), color premultiplicado + alfa en un
+      // RGBA; la palabra es luminancia y su corrimiento RGB se rehace con dos muestras desplazadas
+      const GEM = () => `precision mediump float;
+        uniform vec2 uRes; uniform vec2 uOff; uniform float uAlpha;
+        uniform sampler2D uGA; uniform sampler2D uGB; uniform sampler2D uWA; uniform sampler2D uWB;
+        uniform vec4 uCA; uniform vec4 uCB;   // celda (col, fila) + grilla (cols, filas) de cada cuadro
+        uniform float uMix; uniform float uWordAmt; uniform float uAber; uniform float uTintAmt; uniform vec3 uTint; uniform float uHalf;
+        vec2 cel(vec4 c, vec2 uv){ uv=clamp(uv,vec2(uHalf),vec2(1.-uHalf)); return vec2((c.x+uv.x)/c.z, 1.-(c.y+1.-uv.y)/c.w); }
+        float wl(vec2 uv){ return mix(texture2D(uWA,cel(uCA,uv)).r, texture2D(uWB,cel(uCB,uv)).r, uMix); }
+        void main(){
+          vec2 uv=(gl_FragCoord.xy-uOff)/uRes;
+          vec4 g=mix(texture2D(uGA,cel(uCA,uv)), texture2D(uGB,cel(uCB,uv)), uMix);
+          vec3 col=g.rgb;
+          if(uWordAmt>0.001){ float so=0.0026+uAber*0.006;
+            col+=uWordAmt*vec3(wl(uv+vec2(so,0.)), wl(uv), wl(uv-vec2(so,0.)))*vec3(0.97,0.98,1.0); }
+          /* tinte por proyecto y aberración: actúan sobre los tonos saturados (las aristas cian / rojo del bake) */
+          float mx=max(col.r,max(col.g,col.b)), mn=min(col.r,min(col.g,col.b)); float sat=clamp((mx-mn)*3.,0.,1.);
+          col=mix(col, uTint*mx, sat*uTintAmt*0.6);
+          col*=1.0+uAber*sat*1.6;
+          gl_FragColor=vec4(col,g.a)*uAlpha;
+        }`;
+      // recombina un atlas [color | alfa] (celdas de 2·OUT × OUT) en un RGBA de celdas OUT × OUT
+      const PACK = `precision mediump float;
+        uniform sampler2D uSrc; uniform vec2 uRes; uniform float uCols;
+        void main(){ vec2 t=gl_FragCoord.xy/uRes; float c=floor(t.x*uCols), u=fract(t.x*uCols);
+          vec3 rgb=texture2D(uSrc,vec2((2.*c+u)/(2.*uCols),t.y)).rgb; float a=texture2D(uSrc,vec2((2.*c+1.+u)/(2.*uCols),t.y)).r;
+          gl_FragColor=vec4(rgb,a); }`;
+
+
+      // ── trazado CPU de la faceta real: icosaedro = 20 planos n·p = 1 (mismo sólido que el SDF del shader) ──
+      const PHI = 1.61803398875; const FACES = [];
+      { const nz = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+        for (const sx of [1, -1]) for (const sy of [1, -1]) for (const sz of [1, -1]) FACES.push(nz([sx, sy, sz]));
+        for (const b of [[0, 1, PHI + 1], [PHI + 1, 0, 1], [1, PHI + 1, 0]])
+          for (const s1 of [1, -1]) for (const s2 of [1, -1]) { const v = b.slice(); let k = 0;
+            for (let i = 0; i < 3; i++) if (v[i] !== 0) { v[i] *= k++ ? s2 : s1; } FACES.push(nz(v)); } }
+      const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const refr = (I, N, eta) => { const c = dot3(N, I); const k = 1 - eta * eta * (1 - c * c); if (k < 0) return null;
+        const f = eta * c + Math.sqrt(k); return [eta * I[0] - f * N[0], eta * I[1] - f * N[1], eta * I[2] - f * N[2]]; };
+      // o,d en espacio objeto → { en (entrada), ex (salida), dir (salida) } o null
+      const trace = (o, d, ior) => {
+        let tin = -1e9, nin = null, tout = 1e9;
+        for (const n of FACES) { const dn = dot3(d, n), t = (1 - dot3(o, n)) / dn;
+          if (dn < 0) { if (t > tin) { tin = t; nin = n; } } else if (dn > 0) tout = Math.min(tout, t); }
+        if (!nin || tin > tout) return null;
+        let p = [o[0] + d[0] * tin, o[1] + d[1] * tin, o[2] + d[2] * tin]; const en = p.slice();
+        let dd = refr(d, nin, 1 / ior); if (!dd) return null;
+        for (let b = 0; b < 5; b++) {
+          let tex = 1e9, nex = null;
+          for (const n of FACES) { const dn = dot3(dd, n); if (dn > 1e-6) { const t = (1 - dot3(p, n)) / dn; if (t > 1e-5 && t < tex) { tex = t; nex = n; } } }
+          if (!nex) return null;
+          p = [p[0] + dd[0] * tex, p[1] + dd[1] * tex, p[2] + dd[2] * tex];
+          const out = refr(dd, [-nex[0], -nex[1], -nex[2]], ior);
+          if (out) return { en, ex: p, dir: out };
+          const k = 2 * dot3(dd, nex); dd = [dd[0] - k * nex[0], dd[1] - k * nex[1], dd[2] - k * nex[2]];   // reflexión interna total
+        }
+        return null; };
+      // recorrido COMPLETO de la luz adentro: entrada + rebotes (reflexión parcial o total) + TODAS las salidas.
+      // segE = energía de cada tramo interno; outs = rayos que escapan (el 1º es el principal, los demás son chispas)
+      const tracePath = (o, d, ior) => {
+        let tin = -1e9, nin = null, tout = 1e9;
+        for (const n of FACES) { const dn = dot3(d, n), t = (1 - dot3(o, n)) / dn;
+          if (dn < 0) { if (t > tin) { tin = t; nin = n; } } else if (dn > 0) tout = Math.min(tout, t); }
+        if (!nin || tin > tout) return null;
+        let p = [o[0] + d[0] * tin, o[1] + d[1] * tin, o[2] + d[2] * tin];
+        let dd = refr(d, nin, 1 / ior); if (!dd) return null;
+        const pts = [p.slice()], nrm = [nin], segE = [], outs = []; let e = 1;
+        for (let b = 0; b < 4; b++) {
+          let tex = 1e9, nex = null;
+          for (const n of FACES) { const dn = dot3(dd, n); if (dn > 1e-6) { const t = (1 - dot3(p, n)) / dn; if (t > 1e-5 && t < tex) { tex = t; nex = n; } } }
+          if (!nex) break;
+          p = [p[0] + dd[0] * tex, p[1] + dd[1] * tex, p[2] + dd[2] * tex];
+          pts.push(p.slice()); nrm.push(nex); segE.push(e);
+          const out = refr(dd, [-nex[0], -nex[1], -nex[2]], ior);
+          if (out) { outs.push({ p: p.slice(), dir: out, w: e * (outs.length ? 0.6 : 1) }); e *= 0.5; } else e *= 0.95;
+          const k = 2 * dot3(dd, nex); dd = [dd[0] - k * nex[0], dd[1] - k * nex[1], dd[2] - k * nex[2]];
+        }
+        return { pts, nrm, segE, outs }; };
+      // arista más cercana a un punto de una cara → segmento de "glint" (la arista que toca el haz se enciende)
+      const edgeGlint = (p, n) => { let best = 1e9, nj = null;
+        for (const f of FACES) { if (dot3(f, n) > 0.999) continue; const dist = 1 - dot3(p, f); if (dist < best) { best = dist; nj = f; } }
+        if (!nj) return null; const c = dot3(n, nj); let u = [nj[0] - n[0] * c, nj[1] - n[1] * c, nj[2] - n[2] * c];
+        const ul = Math.hypot(...u) || 1; u = u.map((x) => x / ul);
+        const along = best / Math.max(dot3(u, nj), 1e-3); const pe = [p[0] + u[0] * along, p[1] + u[1] * along, p[2] + u[2] * along];
+        let ed = [n[1] * nj[2] - n[2] * nj[1], n[2] * nj[0] - n[0] * nj[2], n[0] * nj[1] - n[1] * nj[0]]; const el = Math.hypot(...ed) || 1; ed = ed.map((x) => x / el);
+        return { a: [pe[0] - ed[0] * 0.3, pe[1] - ed[1] * 0.3, pe[2] - ed[2] * 0.3], b: [pe[0] + ed[0] * 0.3, pe[1] + ed[1] * 0.3, pe[2] + ed[2] * 0.3], w: Math.exp(-along * 3.2) }; };
+
+      // luz adentro del cristal: hilos rojo/cian del recorrido interno, hotspot + destello en la entrada, salida y glints
+      const INNER = `precision highp float;
+        uniform vec2 uRes; uniform float uDpr; uniform float uTime; uniform float uK; uniform float uW;
+        uniform vec2 uPR[5]; uniform vec2 uPC[5]; uniform float uER[4]; uniform float uEC[4]; uniform float uNR; uniform float uNC;
+        uniform vec4 uGl[4]; uniform float uGlW[4]; uniform vec2 uEn; uniform vec2 uX0; uniform vec3 uIn;
+        float seg(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-4),0.,1.); return length(pa-ba*h); }
+        void main(){
+          vec2 p=vec2(gl_FragCoord.x, uRes.y-gl_FragCoord.y)/uDpr;
+          vec3 c=vec3(0.);
+          vec3 cr=vec3(1.0,0.28,0.38)*mix(vec3(1.),uIn,.55), cc=vec3(0.25,0.9,1.0)*mix(vec3(1.),uIn,.55);
+          float fl=0.82+0.18*sin(uTime*5.1)*sin(uTime*3.7+1.);   // la luz "vive": parpadeo leve, no estático
+          for(int i=0;i<4;i++){
+            if(float(i)<uNR-1.){ float d=seg(p,uPR[i],uPR[i+1]); c+=cr*uER[i]*(exp(-d*d/(uW*uW))*0.95+exp(-d/(uW*5.))*0.2)*fl; }
+            if(float(i)<uNC-1.){ float d=seg(p,uPC[i],uPC[i+1]); c+=cc*uEC[i]*(exp(-d*d/(uW*uW))*0.95+exp(-d/(uW*5.))*0.2)*fl; }
+          }
+          for(int i=0;i<4;i++){ float d=seg(p,uGl[i].xy,uGl[i].zw); c+=vec3(0.92,0.96,1.)*uGlW[i]*(exp(-d*d/(uW*uW*0.45))*1.2+exp(-d/(uW*3.))*0.16); }
+          vec2 q=p-uEn; float r=length(q);
+          c+=vec3(1.,0.97,0.93)*(exp(-r/(uW*1.5))*2.4 + exp(-abs(q.y)/(uW*0.6))*exp(-abs(q.x)/(uW*30.))*0.6*fl
+             + (exp(-abs(q.x+q.y)*0.7/(uW*0.7))+exp(-abs(q.x-q.y)*0.7/(uW*0.7)))*exp(-r/(uW*13.))*0.22);
+          vec2 q2=p-uX0; float r2=length(q2);
+          c+=mix(cr,cc,.5)*(exp(-r2/(uW*1.3))*1.5 + exp(-abs(q2.y)/(uW*0.55))*exp(-abs(q2.x)/(uW*16.))*0.35);
+          gl_FragColor=vec4(c*uK,1.);
+        }`;
+
+      if (gl) {
+        let RU, GU, PU, IU, KU, vtex, wtex, btex, fbo, wordReady = false, texKey = null, bokDirty = true;
+        const BW = 640, BH = 400;
+        // (los errores se leen recién cuando el programa terminó de compilar: consultarlos antes bloquea el hilo)
+        const prog = (vs, fs) => { const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); return sh; };
+          const pr = gl.createProgram(); gl.attachShader(pr, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fs));
+          gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr);
+          const U = {}; const u = (n) => (n in U ? U[n] : (U[n] = gl.getUniformLocation(pr, n))); u.pr = pr; return u; };
+        const mkTex = (unit, w = 1, h = 1) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, w === 1 ? new Uint8Array([0, 0, 0, 255]) : null);
+          [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((k) => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          return t; };
+        const drawWord = () => { if (!gl || gl.isContextLost()) return;
+          const c = document.createElement('canvas'); c.width = 1024; c.height = 384; const x = c.getContext('2d');
+          x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '8px';
+          x.font = '400 300px "Bebas Neue", sans-serif'; x.fillText('blopa', 512, 200);
+          gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, wtex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; invalidate(); };
+        // ── sprites de la gema: primero el cuadro 0 (aparece enseguida), después los 4 atlas empezando por el del giro actual ──
+        const SPR_N = 72, SPR_PER = 18, SPR_COLS = 3, SPR_ROWS = 6, SPR_OUT = 512;
+        const SPR_SET = PORT ? 'p' : 'l', SPR_DIR = '/img/prisma-pre/';
+        const spr = { tex: [null, null, null, null], wtex: [null, null, null, null], f0: null, wf0: null, imgs: [], pending: [] };
+        const sprImg = (name, kind, k) => { const im = new Image(); im.decoding = 'async'; im._kind = kind; im._k = k;
+          im.onload = () => { spr.pending.push(im); invalidate(); }; im.src = SPR_DIR + name; spr.imgs.push(im); return im; };
+        sprImg('gema-' + SPR_SET + '-f0.webp', 'g', -1); sprImg('palabra-' + SPR_SET + '-f0.webp', 'w', -1);
+        { const start = () => [0, 3, 1, 2].forEach((k) => { sprImg('gema-' + SPR_SET + '-' + k + '.webp', 'g', k); sprImg('palabra-' + SPR_SET + '-' + k + '.webp', 'w', k); });
+          if (document.readyState === 'complete') setTimeout(start, 0); else addEventListener('load', start, { once: true }); }
+        const texFrom = (unit, im, fmt) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+          gl.texImage2D(gl.TEXTURE_2D, 0, fmt, fmt, gl.UNSIGNED_BYTE, im);
+          [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((k) => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); return t; };
+        // sube lo que terminó de bajar (de a uno por cuadro: sin tirones). La gema pasa por PACK → RGBA y se libera la fuente
+        const sprPump = () => { const im = spr.pending.shift(); if (!im || !im.naturalWidth) return;
+          if ((im._kind === 'w' ? (im._k < 0 ? spr.wf0 : spr.wtex[im._k]) : (im._k < 0 ? spr.f0 : spr.tex[im._k]))) return;   // ya subido
+          if (im._kind === 'w') { const t = texFrom(7, im, gl.LUMINANCE); if (im._k < 0) spr.wf0 = t; else spr.wtex[im._k] = t; return; }
+          const src = texFrom(7, im, gl.RGB); const cols = im._k < 0 ? 1 : SPR_COLS; const w = im.naturalWidth / 2, h = im.naturalHeight;
+          const dst = gl.createTexture(); gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, dst);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach((k) => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, dst, 0);
+          gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, src);
+          gl.viewport(0, 0, w, h); gl.disable(gl.BLEND); gl.useProgram(KU.pr); gl.uniform2f(KU('uRes'), w, h); gl.uniform1f(KU('uCols'), cols);
+          gl.drawArrays(gl.TRIANGLES, 0, 3); gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb); gl.deleteTexture(src);
+          if (im._k < 0) spr.f0 = dst; else spr.tex[im._k] = dst; };
+        // cuadro f (0..71) → textura + celda; si su atlas todavía no llegó, el cuadro 0
+        const sprCell = (f) => { const k = Math.floor(f / SPR_PER), j = f % SPR_PER;
+          if (spr.tex[k] && spr.wtex[k]) return { t: spr.tex[k], w: spr.wtex[k], c: [j % SPR_COLS, Math.floor(j / SPR_COLS), SPR_COLS, SPR_ROWS] };
+          return spr.f0 && spr.wf0 ? { t: spr.f0, w: spr.wf0, c: [0, 0, 1, 1] } : null; };
+        // todo lo que vive en la GPU se crea acá (también al recuperar un contexto perdido)
+        const initGL = () => {
+          [RU, GU, PU, IU, KU].forEach((u) => u && gl.deleteProgram(u.pr));   // al pasar a perfil BAJO se recompila
+          RU = prog(VERT, ROOM()); GU = prog(VERT, GEM()); PU = prog(VERT, PRE); IU = prog(VERT, INNER); KU = prog(VERT, PACK); progsOK = false;
+          [...spr.tex, ...spr.wtex, spr.f0, spr.wf0].forEach((t) => t && gl.deleteTexture(t));
+          spr.tex.fill(null); spr.wtex.fill(null); spr.f0 = null; spr.wf0 = null; spr.pending = spr.imgs.filter((im) => im.complete && im.naturalWidth);   // (re)subir al estar listos
+          const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+          gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          vtex = mkTex(0); wtex = mkTex(1); btex = mkTex(2, BW, BH);
+          fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, btex, 0);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          texKey = null; bokDirty = true; wordReady = false; };
+        // compilación en paralelo (KHR_parallel_shader_compile): no se toca ningún programa hasta que el driver
+        // terminó, así el hilo principal no se congela (en GPUs viejas / Windows la gema puede tardar segundos)
+        const pcx = gl.getExtension('KHR_parallel_shader_compile');
+        let progsOK = false;
+        const glReady = () => { if (progsOK) return true;
+          if (pcx && ![RU, GU, PU, IU, KU].every((u) => gl.getProgramParameter(u.pr, pcx.COMPLETION_STATUS_KHR))) return false;
+          [RU, GU, PU, IU, KU].forEach((u) => { if (!gl.getProgramParameter(u.pr, gl.LINK_STATUS) && !gl.isContextLost())
+            console.error(gl.getProgramInfoLog(u.pr), ...gl.getAttachedShaders(u.pr).map((sh) => gl.getShaderInfoLog(sh))); });
+          gl.useProgram(RU.pr); gl.uniform1i(RU('uVid'), 0); gl.uniform1i(RU('uBok'), 2);
+          gl.useProgram(GU.pr); gl.uniform1i(GU('uGA'), 3); gl.uniform1i(GU('uGB'), 4); gl.uniform1i(GU('uWA'), 5); gl.uniform1i(GU('uWB'), 6);
+          gl.useProgram(KU.pr); gl.uniform1i(KU('uSrc'), 7);
+          gl.useProgram(PU.pr); gl.uniform1i(PU('uVid'), 0);
+          body.classList.add('gl-on');   // primer cuadro listo: la sala aparece con un fundido (CSS, sin costo de GPU)
+          return (progsOK = true); };
+        initGL();
+        (document.fonts && document.fonts.load ? document.fonts.load('400 300px "Bebas Neue"') : Promise.resolve()).then(drawWord, drawWord);
+        let lost = false;
+        roomC.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; });
+        roomC.addEventListener('webglcontextrestored', () => { lost = false; initGL(); drawWord(); invalidate(); });
+
+        // mismo tamaño que lo que ya está en la GPU → texSubImage2D (sin realocar la textura en cada cuadro de video)
+        let vtexWH = '';
+        const upload = (src) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, vtex);
+          const wh = (src.videoWidth || src.naturalWidth || src.width) + 'x' + (src.videoHeight || src.naturalHeight || src.height);
+          if (wh === vtexWH && texKey !== null) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+          else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); vtexWH = wh; }
+          bokDirty = true; };
+        const avgC = document.createElement('canvas'); avgC.width = 8; avgC.height = 5;
+        const avgX = avgC.getContext('2d', { willReadFrequently: true }); let avgT = 0; const avg = [0.5, 0.55, 0.65];
+        const sampleAvg = (src) => { try { avgX.drawImage(src, 0, 0, 8, 5); const d = avgX.getImageData(0, 0, 8, 5).data;
+          let r = 0, g = 0, b = 0; for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+          const n = d.length / 4 * 255; avg[0] = r / n; avg[1] = g / n; avg[2] = b / n; } catch {} };
+
+        // presupuesto de píxeles (≈2.6 Mpx) + DPR adaptativo por tiempo de frame
+        let RDPR = 1, sMul = 1, W = 0, H = 0;
+        const resize = () => { W = innerWidth; H = innerHeight;
+          RDPR = Math.max(0.5, Math.min(devicePixelRatio || 1, Q.dpr, Math.sqrt(Q.px / (W * H))) * sMul);
+          roomC.width = Math.round(W * RDPR); roomC.height = Math.round(H * RDPR); roomC.style.width = W + 'px'; roomC.style.height = H + 'px'; invalidate(); };
+        resize(); addEventListener('resize', resize);
+
+        let mtx = 0, mty = 0, pmx = 0, pmy = 0;
+        addEventListener('pointermove', (e) => { mtx = e.clientX / innerWidth - 0.5; mty = e.clientY / innerHeight - 0.5; if (reduceMotion) invalidate(); });
+
+        // M fila a fila; el shader recibe M (toGL la pasa a columna-mayor) y hace q = M·mundo → M lleva mundo → objeto
+        const rotR = (ax, ay, az) => {
+          const cX = Math.cos(ax), sX = Math.sin(ax), cY = Math.cos(ay), sY = Math.sin(ay), cZ = Math.cos(az), sZ = Math.sin(az);
+          const rxy = [[cY, 0, sY], [sX * sY, cX, -sX * cY], [-cX * sY, sX, cX * cY]], rz = [[cZ, -sZ, 0], [sZ, cZ, 0], [0, 0, 1]];
+          const m = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let s = 0; for (let k = 0; k < 3; k++) s += rz[r][k] * rxy[k][c]; m[r * 3 + c] = s; }
+          return m; };
+        // Ry(ay)·Rx(ax), fila a fila (misma convención que rotR: q = M·mundo)
+        const rotYX = (ay, ax) => { const c = Math.cos(ay), s = Math.sin(ay), cx = Math.cos(ax), sx = Math.sin(ax);
+          return [c, s * sx, s * cx, 0, cx, -sx, -s, c * sx, c * cx]; };
+        const toGL = (m) => new Float32Array([m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+        const w2o = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+        const o2w = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+
+        // estado de la composición: tween con curva (la "cámara" viaja), luego sigue al slot (scroll del case mobile)
+        const KEYS = ['gx', 'gy', 'gr', 'x0', 'y0', 'x1', 'y1', 'bx', 'by'];
+        const S = { init: false }; const tw = { from: null, t0: 0, dur: 1 };
+        startTween = (dur) => { if (!S.init) return; tw.from = {}; KEYS.forEach((k) => { tw.from[k] = S[k]; }); tw.t0 = performance.now(); tw.dur = reduceMotion ? 0.001 : dur; invalidate(1600); };
+        const eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+        let scrAmt = 0, vidAmt = 0, tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, lit = 1, open = 0, projA = 1, land = 1;
+        let a = 0, aber = 0, last = 0, avR = 0.5, avG = 0.55, avB = 0.65, gyX = 0, gyY = 0;
+        let rayA = 0, ex = [0, 0], en = [0, 0], dR = [1, 0], dC = [1, 0], texA = 1.6, lpool = [0, 0], sweepS = 0, aimK = 0, invited = false, noteKey = '';
+        const hit = [0, 0, 0], bo = [0, 0], bv = [0, 0];   // bo/bv: desvío del haz por el puntero (resorte)
+        const CROP = { valecasenave: PORT ? 0.045 : 0.075 };   // recorte superior por proyecto (Vale: el selector ES/EN/PT suelto)
+        const inner = { pR: new Float32Array(10), pC: new Float32Array(10), eR: new Float32Array(4), eC: new Float32Array(4), nR: 0, nC: 0,
+          gl: new Float32Array(16), glW: new Float32Array(4), x0: [0, 0] };
+        const sec = { p: new Float32Array(8), d: new Float32Array(8), w: new Float32Array(4), c: new Float32Array(12) };
+        const rectOf = (id) => $(id).getBoundingClientRect();
+        const ease3 = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
+        // autofoco: el blur cae, PASA por el foco, vuelve un poco y asienta (con signo: <0 = foco pasado)
+        const defocusAt = (x) => (x <= 0 ? 1 : x >= 1 ? 0 : Math.pow(1 - x, 2.1) * Math.cos(x * Math.PI * 1.5));
+        const DUO = 1;   // 1 = haz cian+rojo (firma de la gema) · 0 = arcoíris completo. Elegido: dúo (el arcoíris se lee Dark Side)
+
+        const render = (now) => {
+          if (lost || gl.isContextLost()) return;
+          now = now || performance.now();
+          const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
+          const lp = (r) => (reduceMotion ? 1 : 1 - Math.exp(-r * dt));
+          const port = W < H;
+
+          // ① destinos (slots del DOM o posiciones calculadas: en el case la gema queda DETRÁS de la cámara)
+          const gI = rectOf('#g-idx'), gL = rectOf('#g-land');
+          const tg = {};
+          if (inCase) {
+            let sR;
+            if (port) sR = rectOf('#s-casep');
+            else { const gut = clamp(W * 0.04, 20.8, 64), band = Math.max(Math.min(H * 0.14, 112), navEl.getBoundingClientRect().bottom - gut + 25);   // en pantallas bajas, no subir hasta la nav
+              const x0 = W * 5 / 12 + gut * 0.4, x1 = W - gut; let fw = x1 - x0, fh = fw / 1.6;
+              const maxH = H - band - gut * 1.2; if (fh > maxH) { fh = maxH; fw = fh * 1.6; }
+              const cy0 = band + (H - band - gut * 0.4) / 2; sR = { left: x1 - fw, top: cy0 - fh / 2, right: x1, bottom: cy0 + fh / 2 }; }
+            Object.assign(tg, { x0: sR.left, y0: sR.top, x1: sR.right, y1: sR.bottom });
+            if (port) Object.assign(tg, { gx: W * 0.18, gy: -H * 0.32, gr: W * 0.5, bx: W * 0.18 - W * 0.4, by: -H * 1.1 });
+            else Object.assign(tg, { gx: gI.left + gI.width / 2 - W * 0.55, gy: -H * 0.4, gr: H * 0.5, bx: gI.left - W * 0.75, by: -H * 1.6 });
+          } else {
+            const g = entered ? gI : gL; const sR = rectOf('#s-idx');
+            Object.assign(tg, { gx: g.left + g.width / 2, gy: g.top + g.height / 2, gr: g.width / 2 });
+            if (entered) Object.assign(tg, { x0: sR.left, y0: sR.top, x1: sR.right, y1: sR.bottom });
+            else Object.assign(tg, { x0: W * 1.1, y0: H * 0.3, x1: W * 1.4, y1: H * 0.7 });
+            if (!entered && !port) { tg.bx = -60; tg.by = tg.gy - H * 0.16; }
+            else if (port) { tg.bx = tg.gx - W * (entered ? 0.32 : 0.12); tg.by = -60; }
+            else { tg.bx = tg.gx - W * 0.09; tg.by = -60; }
+          }
+          if (!S.init) { KEYS.forEach((k) => { S[k] = tg[k]; }); S.init = true; }
+          const tx_ = tw.from ? (now - tw.t0) / (tw.dur * 1000) : 1;
+          const te = tx_ >= 1 ? 1 : eio(clamp(tx_, 0, 1));
+          if (tx_ >= 1) tw.from = null;
+          KEYS.forEach((k) => { S[k] = tw.from ? tw.from[k] + (tg[k] - tw.from[k]) * te : tg[k]; });
+          const tweening = !!tw.from;
+
+          // case mobile: el proyector nunca pisa nav/‹ Proyectos — al scrollear se apaga antes de la franja
+          let projT = 1;
+          if (inCase && port) { const band = backEl.getBoundingClientRect().bottom + 6; projT = clamp((S.y0 - band) / 50 + 1, 0, 1); }
+          projA += (projT - projA) * lp(18);
+
+          // ② intro y capas
+          const beamK = 1, fanK = 1;   // sin intro: el sitio aparece ya armado (la entrada era lo más caro de dibujar)
+          lit += ((beamK >= 0.999 ? 1 : 0) - lit) * lp(5);
+          scrAmt += ((entered ? 1 : 0) - scrAmt) * lp(3.2);
+          land += ((entered ? 0 : 1) - land) * lp(3.2);
+          open += ((inCase ? 1 : 0) - open) * lp(3);
+
+          // ③ diapositiva: video del proyecto · póster si el autoplay falla · reel tenue si no hay proyecto (desktop)
+          const reelOn = entered && !inCase && !cur;   // también en mobile (con los pósters mobile)
+          let reelDef = 0;
+          if (reelOn && !reduceMotion) {
+            if (now >= reel.swapAt && !reel.swapped) { reel.slug = nextOf(reel.slug, 1); reel.swapped = true; }
+            if (now >= reel.swapAt + 5200) { reel.swapAt = now + 420; reel.swapped = false; }
+            reelDef = 0.55 * Math.exp(-Math.pow((now - reel.swapAt) / 260, 2));
+          }
+          if (reelOn) { const p = projOf(reel.slug); setLabelOnce('Reel', p.name); }
+          let want = 0, key = null, src = null;
+          if (cur && entered) { const v = vids[cur], po = posterOf(cur); want = 1;
+            if (v && !v._failed && v.readyState >= 2 && !reduceMotion) { key = 'v:' + cur; src = v; }
+            else if (po.complete && po.naturalWidth) { key = 'p:' + cur; src = po; } }
+          else if (reelOn) { const po = posterOf(reel.slug); want = 0.92; if (po.complete && po.naturalWidth) { key = 'p:' + reel.slug; src = po; } }
+          if (src) {
+            const isV = key[0] === 'v';
+            // el póster pasa a video: el cambio se tapa con un re-enfoque corto (sin "pop")
+            if (isV && texKey === 'p:' + cur && now - focusT0 > 900 && !reduceMotion) focusT0 = now - 250;
+            const ta = isV ? (src.videoWidth / src.videoHeight) : (src.naturalWidth / src.naturalHeight); if (ta > 0) texA = ta;
+            if (key !== texKey || (isV && !src.paused && src.currentTime !== src._lt)) { upload(src); texKey = key; if (isV) src._lt = src.currentTime;
+              if (!isV || now - avgT > 120) { avgT = now; sampleAvg(src); } }
+          } else want = 0;
+          vidAmt += (want - vidAmt) * lp(want ? 7 : 3.2);
+          avR += (avg[0] - avR) * lp(4); avG += (avg[1] - avG) * lp(4); avB += (avg[2] - avB) * lp(4);
+          // desenfoque total = autofoco ∪ dial (distancia al encastre) ∪ cambio de diapositiva del reel
+          dragOff.x += ((drag.on ? drag.dx : 0) - dragOff.x) * lp(drag.on ? 14 : 7);
+          dragOff.y += ((drag.on ? drag.dy : 0) - dragOff.y) * lp(drag.on ? 14 : 7);
+          const dialDef = entered ? clamp(Math.abs(dragOff.x) / 0.14, 0, 1) * 0.95 : 0;
+          const af = reduceMotion ? 0 : defocusAt((now - focusT0 - 100) / 1500);
+          let dfs = af; if (dialDef > Math.abs(dfs)) dfs = dialDef; if (reelDef > Math.abs(dfs)) dfs = reelDef;
+          // sonido: el zumbido sigue al desenfoque; al encajar el foco suena la nota del proyecto
+          snd.focus(entered ? dfs : 0);
+          if (cur && entered && now - focusT0 > 1500 && noteKey !== cur + focusT0) { noteKey = cur + focusT0; snd.note(idxOf(cur)); }
+          const hex = cur ? projOf(cur).accent : '#ffffff';
+          const [tr, tgc, tb] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+          tintR += (tr - tintR) * lp(5); tintG += (tgc - tintG) * lp(5); tintB += (tb - tintB) * lp(5);
+          tintAmt += ((cur && entered ? 1 : 0) - tintAmt) * lp(5);
+
+          // ④ gema: rotación idle + parallax + arrastre + giroscopio
+          a += 0.096 * dt * (cur ? 0.45 : 1) * (reduceMotion ? 0 : 1);
+          pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
+          gyX += (gyro.x - gyX) * lp(4); gyY += (gyro.y - gyY) * lp(4);
+          const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
+          aber += ((Math.min(1, vel * 30) * 0.4) - aber) * lp(6.3); 
+          const pk = entered ? 0.45 : 1;
+          // invitación sin texto: a ~1.2 s el espectro barre y TERMINA apuntando a la zona donde aparecerá el índice;
+          // después, cada 5 s, la gema gira como un faro mientras nadie toca
+          if (!entered && !invited && !reduceMotion && (now - T0) > 1200) { invited = true;
+            if (now - lastInput > 900) aimAt(port ? W * 0.27 : W * 0.2, port ? H * 0.66 : H * 0.62, 0.9); }
+          let sweep = 0;
+          if (!entered && !reduceMotion && !drag.on) { const st = ((now - T0) / 1000 - 4.2); const ph = st > 0 ? st % 5.0 : -1;
+            if (ph >= 0 && ph < 1.8 && now - lastInput > 1500) sweep = Math.sin(Math.PI * ph / 1.8) * 0.6; }
+          sweepS += (sweep - sweepS) * lp(6);
+          const ry = sweepS + (Math.sin(a * 0.5) * 0.2 + Math.sin(a * 0.23) * 0.07 + Math.sin(a * 0.12 + 1.3) * 0.055) + pmx * 0.6 * pk + dragOff.x * 2.6 + gyX * 0.5;
+          const rx = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk + dragOff.y * 1.8 + gyY * 0.35;
+          const rz = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;
+          // R del bake: Ry(ry)·Rx(0.12). rx / rz siguen vivos sólo para la fase de las cáusticas de la sala
+          const R = rotYX(ry, 0.12);
+          const uScaleV = 1.97;
+
+          // ⑤ trazado del haz por la faceta real (R y cian con distinto índice → dispersión) y proyección a pantalla
+          // la luz sigue al cursor (o al giroscopio) con un resorte: el haz de entrada se desvía levemente
+          { const tx = (coarse ? gyX * 0.1 : pmx * 0.12) * W, ty = (coarse ? gyY * 0.07 : pmy * 0.1) * H;
+            bv[0] += ((tx - bo[0]) * 55 - bv[0] * 11) * dt; bv[1] += ((ty - bo[1]) * 55 - bv[1] * 11) * dt;
+            bo[0] += bv[0] * dt; bo[1] += bv[1] * dt; if (reduceMotion) { bo[0] = 0; bo[1] = 0; } }
+          const SBX = S.bx + bo[0], SBY = S.by + bo[1];
+          { const bx = S.gx - SBX, by = S.gy - SBY, bl = Math.hypot(bx, by) || 1;
+            const din = [bx / bl, -by / bl, 0], perp = [-din[1], din[0], 0];
+            const ow = [-din[0] * 4 + perp[0] * 0.52, -din[1] * 4 + perp[1] * 0.52, 0.3];   // entra oblicuo: la luz se quiebra y rebota adentro
+            const o = w2o(R, ow), d = w2o(R, din);
+            const toPx = (P) => { const k = (2.7 * S.gr * 1.75) / (uScaleV * (3 - P[2])); return [S.gx + P[0] * k, S.gy - P[1] * k]; };
+            const pR = tracePath(o, d, 1.46), pC = tracePath(o, d, 1.56);
+            const hR = pR && pR.outs[0] ? { en: pR.pts[0], ex: pR.outs[0].p, dir: pR.outs[0].dir } : null;
+            const hC = pC && pC.outs[0] ? { en: pC.pts[0], ex: pC.outs[0].p, dir: pC.outs[0].dir } : null;
+            // ── luz interna: hilos (proyectados a pantalla), glints de arista, chispas secundarias ──
+            inner.nR = 0; inner.nC = 0; inner.glW.fill(0); sec.w.fill(0);
+            const pathPx = (P, arr, eArr) => { const n = Math.min(5, P.pts.length);
+              for (let i = 0; i < n; i++) { const q = toPx(o2w(R, P.pts[i])); arr[i * 2] = q[0]; arr[i * 2 + 1] = q[1]; }
+              for (let i = 0; i < 4; i++) eArr[i] = i < P.segE.length ? P.segE[i] : 0; return n; };
+            if (pR) { inner.nR = pathPx(pR, inner.pR, inner.eR);
+              for (let i = 0; i < Math.min(4, pR.pts.length); i++) { const g = edgeGlint(pR.pts[i], pR.nrm[i]); if (!g) continue;
+                const a2 = toPx(o2w(R, g.a)), b2 = toPx(o2w(R, g.b)); inner.gl.set([a2[0], a2[1], b2[0], b2[1]], i * 4);
+                inner.glW[i] = g.w * (i === 0 ? 1 : (pR.segE[i - 1] || 0)) * 0.9; } }
+            if (pC) inner.nC = pathPx(pC, inner.pC, inner.eC);
+            let si = 0;
+            for (const [P, col] of [[pR, [1.0, 0.35, 0.42]], [pC, [0.3, 0.88, 1.0]]]) { if (!P) continue;
+              for (let j = 1; j < P.outs.length && j < 3 && si < 4; j++, si++) { const oq = P.outs[j];
+                const q = toPx(o2w(R, oq.p)), D = o2w(R, oq.dir); const l = Math.hypot(D[0], D[1]) || 1;
+                sec.p[si * 2] = q[0]; sec.p[si * 2 + 1] = q[1]; sec.d[si * 2] = D[0] / l; sec.d[si * 2 + 1] = -D[1] / l;
+                sec.w[si] = oq.w * clamp((l - 0.15) / 0.5, 0, 1); sec.c.set(col, si * 3); } }
+            if (hR && hC) {
+              const exW = o2w(R, hC.ex), enW = o2w(R, hR.en), DR = o2w(R, hR.dir), DC = o2w(R, hC.dir);
+              ex = toPx(exW); en = toPx(enW);
+              const l1 = Math.hypot(DR[0], DR[1]) || 1, l2 = Math.hypot(DC[0], DC[1]) || 1;
+              const r0 = [DR[0] / l1, -DR[1] / l1], c0 = [DC[0] / l2, -DC[1] / l2];
+              let am = Math.atan2(r0[1] + c0[1], r0[0] + c0[0]);
+              // aim: el rayo "mira" el nombre (o la zona del índice) y vuelve a la física
+              aimK = aimEnv(now);
+              if (aimK > 0) { let da = Math.atan2(aim.y - ex[1], aim.x - ex[0]) - am; da = Math.atan2(Math.sin(da), Math.cos(da)); am += da * aimK * 0.9; }
+              let dth = Math.atan2(c0[1], c0[0]) - Math.atan2(r0[1], r0[0]); dth = Math.atan2(Math.sin(dth), Math.cos(dth));
+              const spread = Math.sign(dth || 1) * clamp(Math.abs(dth) * 4, 0.06, 0.35);
+              dR = [Math.cos(am - spread / 2), Math.sin(am - spread / 2)]; dC = [Math.cos(am + spread / 2), Math.sin(am + spread / 2)];
+              inner.x0 = ex; const dm = [Math.cos(am), Math.sin(am)];
+              lpool = [ex[0] + dm[0] * S.gr * 1.1, ex[1] + dm[1] * S.gr * 1.1];
+              // ¿el rayo principal pega en la pantalla? → cáustica sobre la imagen
+              hit[2] = 0;
+              if (entered && !inCase) { let t0 = 0, t1 = 1e5;
+                for (const [o1, d1, lo1, hi1] of [[ex[0], dm[0], S.x0, S.x1], [ex[1], dm[1], S.y0, S.y1]]) {
+                  if (Math.abs(d1) < 1e-6) { if (o1 < lo1 || o1 > hi1) t0 = 1e9; } else { const a1 = (lo1 - o1) / d1, b1 = (hi1 - o1) / d1; t0 = Math.max(t0, Math.min(a1, b1)); t1 = Math.min(t1, Math.max(a1, b1)); } }
+                if (t0 <= t1 && t0 < 1e8) { hit[0] = ex[0] + dm[0] * (t0 + 30); hit[1] = ex[1] + dm[1] * (t0 + 30); hit[2] = rayA; } }
+              const inPlane = Math.min(l1, l2);
+              // cuando aparece el trabajo, el efecto baja (la pieza manda)
+              rayA += (Math.max(clamp((inPlane - 0.15) / 0.45, 0, 1), aimK) * (inCase ? 0 : entered ? Math.max(0.42 * (1 - 0.6 * vidAmt), aimK * 0.6) : 1) - rayA) * lp(8);
+            } else { rayA += (0 - rayA) * lp(8); en = [S.gx - (bx / bl) * S.gr * 0.42, S.gy - (by / bl) * S.gr * 0.42]; }
+          }
+
+          // abanico de proyección: eje al centro de la pantalla, límites por sus esquinas
+          const cx = (S.x0 + S.x1) / 2, cy = (S.y0 + S.y1) / 2;
+          let ax = cx - S.gx, ay = cy - S.gy; const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
+          let lo = 1e9, hi = -1e9;
+          for (const [px, py] of [[S.x0, S.y0], [S.x1, S.y0], [S.x0, S.y1], [S.x1, S.y1]]) {
+            const vx = px - S.gx, vy = py - S.gy; const an = Math.atan2(ax * vy - ay * vx, ax * vx + ay * vy);
+            lo = Math.min(lo, an); hi = Math.max(hi, an); }
+          // cover: la diapositiva (16:10) llena la pantalla sin deformarse
+          const cropT = (cur && CROP[cur]) || 0, taE = texA / (1 - cropT);
+          const ra = (S.x1 - S.x0) / Math.max(1, S.y1 - S.y0); const cov = ra > taE ? [1, taE / ra] : [ra / taE, 1];
+
+          // ═ pase 0: prefiltro del bokeh (sólo si hay desenfoque y cambió la imagen) ═
+          if ((Math.abs(dfs) > 0.004 || open > 0.01) && vidAmt > 0.01 && bokDirty) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, BW, BH); gl.disable(gl.BLEND); gl.useProgram(PU.pr);
+            gl.uniform2f(PU('uRes'), BW, BH); gl.uniform2f(PU('uTexel'), 1 / BW, 1 / BH);
+            gl.drawArrays(gl.TRIANGLES, 0, 3); gl.bindFramebuffer(gl.FRAMEBUFFER, null); bokDirty = false;
+          }
+          gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, btex);
+
+          // ═ pase 1: sala ═
+          gl.viewport(0, 0, roomC.width, roomC.height); gl.disable(gl.BLEND); gl.useProgram(RU.pr);
+          gl.uniform2f(RU('uRes'), roomC.width, roomC.height); gl.uniform1f(RU('uDpr'), RDPR);
+          gl.uniform1f(RU('uTime'), reduceMotion ? 3.0 : now * 0.001);
+          gl.uniform2f(RU('uG'), S.gx, S.gy); gl.uniform1f(RU('uGR'), S.gr); gl.uniform2f(RU('uB0'), SBX, SBY); gl.uniform2f(RU('uEn'), en[0], en[1]);
+          gl.uniform4f(RU('uS'), S.x0, S.y0, S.x1, S.y1); gl.uniform2f(RU('uAx'), ax, ay); gl.uniform2f(RU('uFan'), lo, hi);
+          gl.uniform1f(RU('uScrAmt'), scrAmt); gl.uniform1f(RU('uVidAmt'), vidAmt); gl.uniform1f(RU('uDefocus'), dfs);
+          gl.uniform1f(RU('uBeamK'), beamK); gl.uniform1f(RU('uFanK'), fanK);
+          gl.uniform1f(RU('uDisp'), 0.003 + 0.035 * Math.abs(dfs)); gl.uniform1f(RU('uOpen'), open);
+          gl.uniform1f(RU('uLightA'), projA); gl.uniform1f(RU('uScrim'), 0); gl.uniform1f(RU('uLand'), land);   // case editorial: sin velo sobre el sitio
+          gl.uniform1f(RU('uCropT'), cropT); gl.uniform1f(RU('uScrimP'), 0); gl.uniform1f(RU('uScrollK'), port && inCase ? clamp(caseEl.scrollTop / 320, 0, 1) : 0);
+          gl.uniform2f(RU('uEx'), ex[0], ex[1]); gl.uniform2f(RU('uDR'), dR[0], dR[1]); gl.uniform2f(RU('uDC'), dC[0], dC[1]);
+          gl.uniform1f(RU('uRayA'), rayA); gl.uniform1f(RU('uDuo'), DUO); gl.uniform2f(RU('uCov'), cov[0], cov[1]);
+          gl.uniform3f(RU('uTint'), tintR, tintG, tintB); gl.uniform1f(RU('uTintAmt'), tintAmt);
+          gl.uniform3f(RU('uAvg'), avR, avG, avB);
+          gl.uniform2fv(RU('uSP'), sec.p); gl.uniform2fv(RU('uSD'), sec.d); gl.uniform1fv(RU('uSW'), sec.w); gl.uniform3fv(RU('uSCol'), sec.c);
+          gl.uniform3f(RU('uCph'), ry * 5, rx * 6, rz * 8); gl.uniform2f(RU('uLp'), lpool[0], lpool[1]); gl.uniform3f(RU('uHit'), hit[0], hit[1], hit[2]);
+          gl.uniform1f(RU('uExpo'), entered && !inCase ? (port ? 1 : 0.55) : 0);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+          // ═ pase 2: gema (viewport cuadrado de lado 2.7·r, encima de la sala; se saltea si está fuera de cuadro) ═
+          const side = Math.round(S.gr * 2.7 * RDPR), vx0 = Math.round((S.gx - S.gr * 1.35) * RDPR), vy0 = Math.round(roomC.height - (S.gy + S.gr * 1.35) * RDPR);
+          const visible = vx0 < roomC.width && vy0 < roomC.height && vx0 + side > 0 && vy0 + side > 0;
+          if (side > 2 && projA > 0.01 && visible) {
+            let lx = SBX - S.gx, ly = -(SBY - S.gy); const ll = Math.hypot(lx, ly) || 1;
+            const bz = 0.35; const bn = Math.hypot(lx / ll, ly / ll, bz);
+            const fr = (((ry % Math.PI) + Math.PI) % Math.PI) / Math.PI * SPR_N, fa = Math.floor(fr) % SPR_N, fb2 = (fa + 1) % SPR_N;
+            const A = sprCell(fa), B = sprCell(fb2) || A;
+            if (A) {
+            gl.viewport(vx0, vy0, side, side); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.useProgram(GU.pr);   // premultiplicado
+            [[3, A.t], [4, B.t], [5, A.w], [6, B.w]].forEach(([u, t]) => { gl.activeTexture(gl.TEXTURE0 + u); gl.bindTexture(gl.TEXTURE_2D, t); });
+            gl.uniform4f(GU('uCA'), ...A.c); gl.uniform4f(GU('uCB'), ...B.c); gl.uniform1f(GU('uMix'), A.t === spr.f0 || B.t === spr.f0 ? 0 : fr - Math.floor(fr));
+            gl.uniform2f(GU('uRes'), side, side); gl.uniform2f(GU('uOff'), vx0, vy0); gl.uniform1f(GU('uAlpha'), projA); gl.uniform1f(GU('uHalf'), 0.5 / SPR_OUT);
+            gl.uniform1f(GU('uAber'), aber);
+            gl.uniform3f(GU('uTint'), tintR, tintG, tintB); gl.uniform1f(GU('uTintAmt'), tintAmt * 0.7);
+            gl.uniform1f(GU('uWordAmt'), !entered ? Math.min(1, lit * 1.2) : 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 3); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            }
+            // ═ pase 3: la LUZ adentro (aditiva sobre el cristal) ═
+            const mxA = Math.max(avR, avG, avB, 0.2);
+            gl.useProgram(IU.pr); gl.blendFunc(gl.ONE, gl.ONE);
+            gl.uniform2f(IU('uRes'), roomC.width, roomC.height); gl.uniform1f(IU('uDpr'), RDPR); gl.uniform1f(IU('uTime'), reduceMotion ? 3.0 : now * 0.001);
+            gl.uniform1f(IU('uK'), lit * projA * (1 - open)); gl.uniform1f(IU('uW'), Math.max(0.9, S.gr * 0.012));
+            gl.uniform2fv(IU('uPR'), inner.pR); gl.uniform2fv(IU('uPC'), inner.pC); gl.uniform1fv(IU('uER'), inner.eR); gl.uniform1fv(IU('uEC'), inner.eC);
+            gl.uniform1f(IU('uNR'), inner.nR); gl.uniform1f(IU('uNC'), inner.nC);
+            gl.uniform4fv(IU('uGl'), inner.gl); gl.uniform1fv(IU('uGlW'), inner.glW);
+            gl.uniform2f(IU('uEn'), en[0], en[1]); gl.uniform2f(IU('uX0'), inner.x0[0], inner.x0[1]);
+            const ia = tintAmt * 0.8; gl.uniform3f(IU('uIn'), 1 + (avR / mxA - 1) * ia, 1 + (avG / mxA - 1) * ia, 1 + (avB / mxA - 1) * ia);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          }
+          return tweening || Math.abs(dfs) > 0.002 || drag.on || Math.abs(dragOff.x) > 0.001;
+        };
+
+        // loop: continuo con movimiento; con prefers-reduced-motion, render POR DEMANDA (sólo cuando algo cambia)
+        let raf = 0, until = 0;
+        let skip = false, ema = 16, adaptT = performance.now(), lastF = 0;
+        const frame = (t) => { raf = 0; const pn = performance.now();
+          const idle = !reduceMotion && pn - lastInput > 5000 && !drag.on && !tw.from;
+          skip = idle ? !skip : false;
+          let busy = false;
+          if (!glReady()) { raf = requestAnimationFrame(frame); return; }   // compilando: la página sigue viva
+          sprPump();
+          if (!skip) { busy = render(t);
+            if (lastF) { ema += ((pn - lastF) / (idle ? 2 : 1) - ema) * 0.08; } lastF = pn;
+            if (pn - adaptT > 1500) { adaptT = pn;
+              if (ema > 21 && sMul > Q.floor) { sMul *= 0.85; resize(); }
+              else if (ema > 28 && Q === QHI && !qParam && pn - T0 > 4000) { Q = QLO; sMul = 1; initGL(); drawWord(); resize(); }   // ni bajando resolución llega: perfil BAJO
+              else if (ema < 12.5 && sMul < 1) { sMul = Math.min(1, sMul * 1.1); resize(); } } }
+          if (!reduceMotion || busy || spr.pending.length || performance.now() < until) raf = requestAnimationFrame(frame); };
+        invalidate = (ms = 900) => { until = Math.max(until, performance.now() + ms); if (!raf) raf = requestAnimationFrame(frame); };
+        invalidate(2500);
+      }
+      // deep-link al cargar: #proyectos entra al índice; #slug abre el case
+      { const h = curH(); if (h === 'proyectos') enter(false); else if (projOf(h)) openCase(h, { push: false }); }
+    </script>
+  </body>
+</html>

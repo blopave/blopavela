@@ -1,0 +1,487 @@
+---
+// VERSIÓN espectro — el arcoíris que sale del prisma ES el índice.
+// Un haz blanco entra por la izquierda, atraviesa la gema (imagen fija: la misma piedra de Prisma, sin cálculo en
+// vivo) y sale disperso en una banda de color por proyecto. Señalar una banda la ensancha y enciende su nombre en
+// la pared donde pega la luz; el click la abre hasta volverse el case (el sitio nítido, recto, sin velo).
+// Liviano a propósito: sin canvas ni WebGL — clip-path + transiciones CSS (4 polígonos), cero trabajo en reposo.
+import { projects } from '../data/projects';
+// la luz los ordena: del cálido al frío, como sale un espectro real de un prisma
+const HUE_ORDER = ['beokey', 'pulz', 'basslayer', 'valecasenave'];
+const bands = [...projects].sort((a, b) => HUE_ORDER.indexOf(a.slug) - HUE_ORDER.indexOf(b.slug));
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa</title>
+    <meta name="description" content="blopa — portfolio de Pablo Vela: sitios con firma visual propia, desde Buenos Aires." />
+    <meta name="theme-color" content="#0b0b0e" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/img/espectro/gema.webp" as="image" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style is:global>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#0b0b0e; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --dim:#4b4d55; --hair:#22222a;
+        --display:'Bebas Neue',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1.3rem,4vw,4rem); }
+      *{box-sizing:border-box;margin:0}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5}
+      a{color:inherit;text-decoration:none}
+      :focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:3px}
+      .case__title:focus,.case__title:focus-visible{outline:none}
+      .mono{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;font-feature-settings:"case"}
+
+      /* nav */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:center;
+        padding:calc(var(--gut) - 13px) var(--gut);color:var(--mid)}
+      .nav__home{appearance:none;background:none;border:0;font:inherit;font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;text-transform:uppercase;
+        min-height:44px;padding:0;color:var(--mid);cursor:pointer;transition:color .25s var(--ease)}
+      .nav__home:hover,.nav__contact:hover{color:var(--ink)}
+      .nav__contact{font-family:var(--mono);font-size:.75rem;color:var(--mid);white-space:nowrap;min-height:44px;display:inline-flex;align-items:center;transition:color .25s var(--ease)}
+      @media(max-width:640px){ .nav__who{display:none} }
+
+      /* escena: todo lo que no es el case se apaga al abrir uno */
+      .scene{position:fixed;inset:0;z-index:1;transition:opacity .5s var(--ease)}
+      .light{z-index:1}
+      body.in-case .scene{opacity:0;pointer-events:none}
+      .is-layout .band,.is-layout .name{transition:none!important}
+
+      /* haz de entrada: línea blanca + un pulso que viaja hacia la gema (la invitación, sin texto) */
+      .beam{position:absolute;left:0;height:2px;transform-origin:0 50%;pointer-events:none;
+        background:linear-gradient(90deg,rgba(255,255,255,.35),rgba(255,255,255,.95));box-shadow:0 0 10px rgba(255,255,255,.35)}
+
+      /* gema: la piedra de Prisma como imagen; el halo toma el color de la banda señalada */
+      .gem{position:absolute;pointer-events:none;transition:transform 1.2s var(--ease)}
+      .gem img{display:block;width:100%;height:auto;position:relative}
+      .gem__glow{position:absolute;inset:12%;border-radius:50%;opacity:0;transition:opacity .6s var(--ease),background-color .6s var(--ease);
+        background:radial-gradient(closest-side,var(--acc,#fff),transparent);filter:none}
+      body.has-on .gem__glow{opacity:.18}
+      /* chispa en la faceta de salida: late suave, siempre (la señal de que la luz sigue) */
+      .spark{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;pointer-events:none;
+        background:radial-gradient(closest-side,rgba(255,255,255,.9),rgba(255,255,255,0));animation:spark 2.6s ease-in-out infinite}
+      @keyframes spark{0%,100%{opacity:.45;transform:scale(.8)}50%{opacity:.9;transform:scale(1.1)}}
+      body.invite .spark{animation:spark 2.6s ease-in-out infinite,flare .9s ease-out}
+      @keyframes flare{0%{filter:none}25%{filter:brightness(2.6)}100%{filter:none}}
+      /* destello que recorre las aristas de la piedra (offset-path: sólo transform, sin repintar) */
+      .glint{position:absolute;left:0;top:0;width:34px;height:34px;pointer-events:none;opacity:0;offset-rotate:0deg;
+        background:radial-gradient(closest-side,rgba(255,255,255,.95),rgba(255,255,255,0) 60%),
+          linear-gradient(90deg,transparent 46%,rgba(255,255,255,.75) 50%,transparent 54%),
+          linear-gradient(0deg,transparent 46%,rgba(255,255,255,.75) 50%,transparent 54%)}
+      body.glinting .glint{animation:glint 1.9s cubic-bezier(.45,0,.3,1) forwards}
+      @keyframes glint{0%{offset-distance:0%;opacity:0;transform:scale(.5)}18%{opacity:1;transform:scale(1)}82%{opacity:1}100%{offset-distance:100%;opacity:0;transform:scale(.6)}}
+
+      /* bandas: un polígono por proyecto (clip-path también recorta el área clickeable) */
+      .band{position:fixed;inset:0;appearance:none;border:0;padding:0;margin:0;background:none;cursor:pointer;color:inherit;
+        transition:clip-path .7s var(--ease);-webkit-tap-highlight-color:transparent;z-index:2}
+      .band:focus-visible{outline:none}
+
+      /* la LUZ de las bandas: canvas 2D a media resolución (bordes suaves gratis, suma aditiva, bruma);
+         sólo se redibuja mientras algo cambia. Los botones de arriba son el área de toque y la accesibilidad */
+      .light{position:fixed;inset:0;z-index:1;pointer-events:none;width:100%;height:100%;
+        -webkit-mask:url('/img/espectro/bruma.webp') 0 0/180px repeat;mask:url('/img/espectro/bruma.webp') 0 0/180px repeat}   /* bruma: máscara fija, sin costo por cuadro */
+
+      /* pared: donde pega la luz; cada banda deja su barra y su nombre */
+      .wall{position:absolute;background:var(--hair);pointer-events:none}
+      .name{position:absolute;appearance:none;border:0;background:none;padding:0;color:var(--ink);cursor:pointer;text-align:left;
+        transform:translateY(-50%);transition:top .7s var(--ease),color .4s var(--ease),opacity .4s var(--ease);min-height:44px}
+      .name b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(2.2rem,3.9vw,3.8rem);line-height:.95;letter-spacing:.01em;white-space:nowrap}
+      .name small{display:block;margin-top:.35rem;color:var(--soft);opacity:0;transform:translateY(-4px);transition:opacity .35s var(--ease),transform .35s var(--ease)}
+      body.has-on .name{color:var(--dim)}
+      body.has-on .name.on{color:var(--ink)}
+      .name.on b{text-shadow:-1.5px 0 rgba(255,58,84,.8),1.5px 0 rgba(36,226,232,.8)}
+      .name.on small{opacity:1;transform:none}
+
+      /* cartela (vertical): el nombre señalado debajo de la pared */
+      .cap{display:none}
+
+      /* case: la banda abierta es el marco de luz; el sitio, recto y nítido, encima */
+      .band__frame{position:absolute;overflow:hidden;opacity:0;transition:opacity .45s var(--ease);background:#000;
+        box-shadow:0 30px 80px rgba(0,0,0,.45)}
+      .band__frame video,.band__frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0}
+      .band__field{position:absolute;inset:0;opacity:0;transition:opacity .6s var(--ease)}
+      .band.open{z-index:5;cursor:default}
+      .band{transition:clip-path .7s var(--ease),opacity .45s var(--ease)}
+      body.in-case .band:not(.open){opacity:0;pointer-events:none}
+      .band.open .band__field{opacity:1}
+      .band.open .band__frame{opacity:1;transition-delay:.45s}
+
+      .kase{position:fixed;z-index:6;inset:0 auto 0 0;display:flex;align-items:center;pointer-events:none;visibility:hidden}
+      body.in-case .kase{visibility:visible}
+      .kase__info{pointer-events:auto;padding:0 var(--gut);transition:opacity .28s var(--ease)}
+      .kase__info>*{opacity:0;transform:translateY(12px);transition:opacity .55s var(--ease),transform .8s var(--ease)}
+      body.in-case .kase__info>*{opacity:1;transform:none}
+      body.in-case .kase__info>:nth-child(1){transition-delay:.55s} body.in-case .kase__info>:nth-child(2){transition-delay:.62s}
+      body.in-case .kase__info>:nth-child(3){transition-delay:.7s} body.in-case .kase__info>:nth-child(4){transition-delay:.78s}
+      body.in-case .kase__info>:nth-child(5){transition-delay:.86s}
+      .kase__info.swap{opacity:0}
+      .case__eye{color:var(--mid)}
+      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3rem,5.4vw,6.4rem);line-height:.88;letter-spacing:.005em;margin:.4rem 0 0}
+      .case__approach{margin-top:1.1rem;color:#d4d6dc;line-height:1.5;font-size:1rem;max-width:40ch}
+      .cred{display:grid;grid-template-columns:7rem 1fr;margin:1.5rem 0 0;border-top:1px solid rgba(255,255,255,.12)}
+      .cred dt,.cred dd{padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.12);margin:0}
+      .cred dt{color:var(--soft);padding-top:.68rem}
+      .cred dd{font-size:.92rem;line-height:1.45}
+      .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.4rem;flex-wrap:wrap}
+      .case__live,.kase__next{display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.35rem 0;color:var(--ink);background:none;border:0;cursor:pointer;
+        border-bottom:1px solid rgba(242,243,245,.3);transition:border-color .3s var(--ease),color .3s var(--ease)}
+      .case__live:hover{border-color:var(--ink)}
+      .kase__next{color:var(--mid);border-color:transparent}
+      .kase__next b{font-weight:400;color:var(--ink)}
+      .kase__next:hover{color:var(--ink);border-color:var(--ink)}
+      .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;
+        display:inline-flex;align-items:center;gap:.55rem;min-height:44px;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
+        border:1px solid var(--hair);background:rgba(12,12,16,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--mid);
+        opacity:0;visibility:hidden;transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s,border-color .25s}
+      .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
+      .kase__back:hover{color:var(--ink);border-color:var(--soft)}
+      body.in-case .kase__back{opacity:1;visibility:visible;transition-delay:.6s}
+
+      /* ── vertical (teléfono): la luz cae hacia abajo, la pared es horizontal y el nombre va en la cartela ── */
+      @media (orientation:portrait){
+        .name{display:none}
+        .cap{display:block;position:fixed;left:var(--gut);right:var(--gut);z-index:3;pointer-events:none}
+        .cap__eye{color:var(--soft);min-height:1.1em}
+        .cap__name{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,13vw,3.6rem);line-height:.95;margin-top:.3rem;
+          text-shadow:-1.5px 0 rgba(255,58,84,.8),1.5px 0 rgba(36,226,232,.8);transition:opacity .3s var(--ease)}
+        .cap__go{pointer-events:auto;appearance:none;background:none;border:0;border-bottom:1px solid rgba(242,243,245,.3);color:var(--ink);
+          display:inline-flex;align-items:center;gap:.5rem;min-height:44px;margin-top:.5rem;padding:0;cursor:pointer}
+        .cap.swap .cap__name,.cap.swap .cap__eye{opacity:0}
+        .cap{opacity:0;transition:opacity .4s var(--ease)} body.has-on .cap{opacity:1}
+        /* la franja de la nav no se come el sitio: fundido corto arriba del marco */
+        .band__frame::after{content:'';position:absolute;left:0;right:0;top:0;height:7.2rem;background:linear-gradient(#0b0b0e 20%,rgba(11,11,14,0))}
+        body.in-case .cap{opacity:0;visibility:hidden}
+        .kase{inset:auto 0 0 0;top:var(--fh,58svh);display:block;overflow-y:auto;overscroll-behavior:contain;
+          padding:1.4rem 0 calc(6.2rem + env(safe-area-inset-bottom,0px))}
+        .case__title{font-size:clamp(2.8rem,14vw,4.4rem)}
+        .kase__acts{position:fixed;left:0;right:0;bottom:0;margin:0;z-index:7;flex-wrap:nowrap;
+          padding:.5rem var(--gut) calc(.5rem + env(safe-area-inset-bottom,0px));
+          background:rgba(11,11,14,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--hair)}
+        .band__frame{box-shadow:none}
+      }
+
+      /* sin JS: índice plano y real */
+      .nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) var(--gut);max-width:56rem}
+      .nojs h1{font-family:var(--display);font-weight:400;font-size:clamp(3rem,9vw,6rem);line-height:.9}
+      .nojs ul{list-style:none;padding:0;margin:2.4rem 0 0;border-top:1px solid var(--hair)}
+      .nojs li{padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .nojs li a{font-family:var(--display);font-size:clamp(2rem,6vw,3.4rem);line-height:1}
+      .nojs li p{color:var(--mid);font-size:.92rem;margin-top:.35rem;max-width:60ch}
+
+      @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <style is:inline>.scene,.kase,.kase__back,.cap{display:none!important}body{overflow:auto!important}</style>
+      <section class="nojs" aria-label="Proyectos">
+        <h1>BLOPA — Pablo Vela</h1>
+        <ul>{projects.map((p) => (<li><small class="mono">{p.category}</small><br /><a href={p.url} target="_blank" rel="noopener">{p.name} ↗</a><p>{p.blurb}</p></li>))}</ul>
+      </section>
+    </noscript>
+
+    <nav class="nav" aria-label="Navegación">
+      <button type="button" class="nav__home" data-home>blopa</button>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span>blopave@pm.me ↗</a>
+    </nav>
+
+    <main>
+      <h1 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">blopa — proyectos de Pablo Vela</h1>
+      <canvas class="light" data-light aria-hidden="true"></canvas>
+      <div class="scene" data-scene>
+        <div class="beam" data-beam aria-hidden="true"></div>
+        <div class="gem" data-gem aria-hidden="true">
+          <div class="gem__glow"></div>
+          <img src="/img/espectro/gema.webp" width="1120" height="1310" alt="" decoding="async" fetchpriority="high" />
+        </div>
+        <div class="wall" data-wall aria-hidden="true"></div>
+        {bands.map((p, i) => (
+          <button type="button" class="name" data-name data-slug={p.slug} tabindex="-1" aria-hidden="true">
+            <b>{p.name}</b><small class="mono">{p.category} · {p.ended ? p.ended.split('-')[0] : 'En curso'}</small>
+          </button>
+        ))}
+        <div class="spark" data-spark aria-hidden="true"></div>
+        <div class="glint" data-glint aria-hidden="true"></div>
+        <div class="cap" data-cap aria-live="polite">
+          <p class="cap__eye mono" data-cap-eye></p>
+          <p class="cap__name" data-cap-name></p>
+          <button type="button" class="cap__go mono" data-cap-go>Ver proyecto <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+
+      <nav aria-label="Proyectos" data-index>
+        {bands.map((p, i) => (
+          <button type="button" class="band" data-band data-slug={p.slug} style={`--acc:${p.accent};--i:${i}`}
+            aria-label={`${p.name} — ${p.category}`}>
+            <span class="band__field" aria-hidden="true"></span>
+            <span class="band__frame" aria-hidden="true"></span>
+          </button>
+        ))}
+      </nav>
+
+      <section class="kase" data-case aria-hidden="true" aria-labelledby="case-title">
+        <div class="kase__info" data-info>
+          <p class="case__eye mono" data-cat></p>
+          <h2 class="case__title" id="case-title" data-title tabindex="-1"></h2>
+          <p class="case__approach" data-approach></p>
+          <dl class="cred">
+            <dt class="mono">Rol</dt><dd data-role></dd>
+            <dt class="mono">Servicios</dt><dd data-services></dd>
+            <dt class="mono">Stack</dt><dd class="soft" data-stack></dd>
+          </dl>
+          <div class="kase__acts">
+            <a class="case__live mono" data-live target="_blank" rel="noopener">Ver en vivo <span aria-hidden="true">↗</span></a>
+            <button type="button" class="kase__next mono" data-next>Siguiente&nbsp;<b data-next-name></b>&nbsp;<span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <button type="button" class="kase__back mono" data-back aria-label="Volver a proyectos">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Proyectos
+    </button>
+
+    <script is:inline define:vars={{ bands }}>
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s) => Array.from(document.querySelectorAll(s));
+      const body = document.body;
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
+      const N = bands.length, idx = (s) => bands.findIndex((b) => b.slug === s);
+
+      const scene = $('[data-scene]'), beam = $('[data-beam]'), gem = $('[data-gem]'), wall = $('[data-wall]'), spark = $('[data-spark]');
+      const bandEls = $$('[data-band]'), names = $$('[data-name]'), glint = $('[data-glint]');
+      const cap = $('[data-cap]'), capEye = $('[data-cap-eye]'), capName = $('[data-cap-name]');
+      const caseEl = $('[data-case]'), infoEl = $('[data-info]'), backEl = $('[data-back]'), titleEl = $('[data-title]'), indexEl = $('[data-index]');
+
+      // geometría de la imagen de la gema (px de la imagen): centro, entrada del haz y faceta de salida
+      const IMG = { w: 1120, h: 1310, cx: 560, cy: 656, en: [200, 346], ex: [992, 735] };
+      let G = null, active = -1, open = -1, W = 0, H = 0, port = false;
+
+      const px = (n) => n.toFixed(1) + 'px';
+      const poly = (pts) => 'polygon(' + pts.map(([x, y]) => px(x) + ' ' + px(y)).join(',') + ')';
+
+      // reparte un tramo [a,b] entre las bandas; la señalada se lleva más luz
+      const split = (a, b, gap) => { const w = bands.map((_, i) => (active < 0 ? 1 : i === active ? 2.7 : 0.75));
+        const sum = w.reduce((s, x) => s + x, 0), tot = (b - a) - gap * (N - 1); let c = a;
+        return w.map((wi) => { const s0 = c, s1 = c + tot * wi / sum; c = s1 + gap; return [s0, s1]; }); };
+
+      const layout = () => {
+        W = innerWidth; H = innerHeight; port = H > W * 1.05;
+        const gw = port ? Math.min(W * 0.7, H * 0.34 * IMG.w / IMG.h) : Math.min(H * 0.74 * IMG.w / IMG.h, W * 0.34);
+        const k = gw / IMG.w, gcx = port ? W * 0.4 : W * 0.28, gcy = port ? Math.max(H * 0.28, 76 + IMG.cy * k) : H * 0.5;
+        const L = gcx - IMG.cx * k, T = gcy - IMG.cy * k;
+        G = { k, L, T, gw, en: [L + IMG.en[0] * k, T + IMG.en[1] * k], ex: [L + IMG.ex[0] * k, T + IMG.ex[1] * k] };
+        Object.assign(gem.style, { left: px(L), top: px(T), width: px(gw) });
+        // haz: del borde izquierdo a la entrada
+        const bx = G.en[0], by = G.en[1], b0y = by + (port ? 6 : 10) * 1, len = Math.hypot(bx, by - b0y);
+        Object.assign(beam.style, { top: px(b0y), width: px(len), transform: `rotate(${Math.atan2(by - b0y, bx)}rad)` });
+        Object.assign(spark.style, { left: px(G.ex[0]), top: px(G.ex[1]) });
+        // pared
+        if (port) { G.wall = H * 0.68; G.s = [W * 0.3, W * 0.95];
+          Object.assign(wall.style, { left: px(G.s[0]), top: px(G.wall), width: px(G.s[1] - G.s[0]), height: '1px' });
+          cap.style.top = px(G.wall + 22); }
+        else { G.wall = W * 0.665; G.s = [H * 0.15, H * 0.85];
+          Object.assign(wall.style, { left: px(G.wall), top: px(G.s[0] - 30), width: '1px', height: px(G.s[1] - G.s[0] + 60) }); }
+        // case: rect del panel y del marco del sitio
+        if (port) { const fh = Math.round(H * 0.58); G.panel = [0, 0, W, fh]; G.frame = [0, 0, W, fh]; document.documentElement.style.setProperty('--fh', fh + 'px'); }
+        else { const x0 = W * 0.38; G.panel = [x0, 0, W, H];
+          const pw = W - x0, fw = Math.min(pw * 0.84, H * 0.78 * 1.6), fh = fw / 1.6;
+          G.frame = [x0 + (pw - fw) / 2, (H - fh) / 2, x0 + (pw + fw) / 2, (H + fh) / 2];
+          caseEl.style.width = px(x0); }
+        bandEls.forEach((el) => { const fr = el.querySelector('.band__frame');
+          Object.assign(fr.style, { left: px(G.frame[0]), top: px(G.frame[1]), width: px(G.frame[2] - G.frame[0]), height: px(G.frame[3] - G.frame[1]) }); });
+        sizeCanvas(); placeGlint(); paint();
+      };
+
+      // pinta polígonos, barras y nombres según el estado (las transiciones CSS hacen el movimiento)
+      const paint = () => {
+        const segs = split(G.s[0], G.s[1], 0);   // se tocan: la luz no tiene costuras
+        const ap = split(-9, 9, 0.6);   // la "boca" de salida: el espectro nace casi de un punto
+        bandEls.forEach((el, i) => { const acc = bands[i].accent, [s0, s1] = segs[i], [a0, a1] = ap[i];
+          let pts;
+          if (i === open) { const [x0, y0, x1, y1] = G.panel;
+            pts = port ? [[x0, y0], [x0, y1], [x1, y1], [x1, y0]] : [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; }
+          else pts = port ? [[G.ex[0] + a0, G.ex[1]], [s0, G.wall], [s1, G.wall], [G.ex[0] + a1, G.ex[1]]]
+                          : [[G.ex[0], G.ex[1] + a0], [G.wall, s0], [G.wall, s1], [G.ex[0], G.ex[1] + a1]];
+          el.style.clipPath = poly(pts);
+          el.querySelector('.band__field').style.background = `radial-gradient(120% 90% at ${port ? '50% 40%' : '62% 50%'}, color-mix(in srgb, ${acc} 34%, #0b0b0e), #0b0b0e 75%)`;
+          // objetivo para la luz: geometría + intensidad (abierta: se funde mientras se expande; case: el resto se apaga)
+          T[i] = { pts, k: open >= 0 ? 0 : active < 0 ? 0.55 : i === active ? 1 : 0.2 };
+          if (!port) Object.assign(names[i].style, { left: px(G.wall + Math.max(24, W * 0.022)), top: px((s0 + s1) / 2) });
+        });
+        wake();
+      };
+
+      // ═══ LUZ (canvas 2D) ═══ cada banda: degradado que nace casi blanco en la faceta y se disipa hacia la pared,
+      // halo suave (la media resolución difumina los bordes), suma aditiva ('lighter') entre bandas, bruma estática
+      // y el golpe de luz donde pega en la pared. Se dibuja sólo mientras algo se mueve.
+      const cv = $('[data-light]'), cx = cv.getContext('2d');
+      const T = [], C = []; let raf = 0, lastT = 0, Q = 0.5, invT = -1e9;
+      // la luz es difusa: alcanza con ~0,35 Mpx (la escala hacia arriba la suaviza todavía más)
+      const sizeCanvas = () => { Q = Math.min(port ? 0.6 : 0.45, Math.sqrt(3.5e5 / (W * H)));
+        cv.width = Math.round(W * Q); cv.height = Math.round(H * Q); };
+      const rgb = (hex) => [1, 3, 5].map((j) => parseInt(hex.slice(j, j + 2), 16));
+      const RGB = bands.map((b) => rgb(b.accent));
+      const col = (c, a, w = 0) => `rgba(${Math.round(c[0] + (255 - c[0]) * w)},${Math.round(c[1] + (255 - c[1]) * w)},${Math.round(c[2] + (255 - c[2]) * w)},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+      const draw = (now) => {
+        cx.setTransform(1, 0, 0, 1, 0, 0); cx.globalCompositeOperation = 'source-over'; cx.clearRect(0, 0, cv.width, cv.height);
+        cx.setTransform(Q, 0, 0, Q, 0, 0); cx.globalCompositeOperation = 'lighter';
+        const wv = (now - invT) / 1250;   // onda de la invitación: sale de la faceta hacia la pared
+        C.forEach((c, i) => { if (!c || c.k < 0.004) return; const p = c.pts, ac = RGB[i];
+          const mx = (p[1][0] + p[2][0]) / 2, my = (p[1][1] + p[2][1]) / 2, ex = (p[0][0] + p[3][0]) / 2, ey = (p[0][1] + p[3][1]) / 2;
+          const g = cx.createLinearGradient(ex, ey, mx, my), k = c.k;
+          // perfil a lo largo de la banda: casi blanca en la faceta → su color → se disipa hacia la pared.
+          // La onda de la invitación suma un bulto suave que viaja (sin frentes duros)
+          const S = [[0, 1, 0.8], [0.07, 0.85, 0.35], [0.32, 0.4, 0.05], [0.75, 0.17, 0], [1, 0.13, 0]];
+          const base = (u) => { for (let j = 1; j < S.length; j++) if (u <= S[j][0]) { const t = (u - S[j - 1][0]) / (S[j][0] - S[j - 1][0]);
+            return [S[j - 1][1] + (S[j][1] - S[j - 1][1]) * t, S[j - 1][2] + (S[j][2] - S[j - 1][2]) * t]; } return [S[4][1], 0]; };
+          const stops = S.map((q) => q[0]);
+          if (wv > 0 && wv < 1) for (let j = -4; j <= 4; j++) { const u = wv + j * 0.04; if (u > 0.08 && u < 1) stops.push(u); }
+          stops.sort((x, y) => x - y).forEach((u) => { const [a0, w0] = base(u);
+            const bump = wv > 0 && wv < 1 ? Math.exp(-((u - wv) ** 2) / 0.006) * 0.55 * Math.sin(Math.PI * wv) : 0;
+            g.addColorStop(u, col(ac, (a0 + bump) * k, w0 + bump * 0.4)); });
+          const path = (grow) => { cx.beginPath(); cx.moveTo(p[0][0], p[0][1]);
+            const dx = (p[2][0] - p[1][0]), dy = (p[2][1] - p[1][1]), L = Math.hypot(dx, dy) || 1, ox = dx / L * grow, oy = dy / L * grow;
+            cx.lineTo(p[1][0] - ox, p[1][1] - oy); cx.lineTo(p[2][0] + ox, p[2][1] + oy); cx.lineTo(p[3][0], p[3][1]); cx.closePath(); };
+          cx.fillStyle = g; cx.globalAlpha = 0.35; path(14); cx.fill();   // halo: la luz se abre más allá del borde
+          cx.globalAlpha = 1; path(0); cx.fill();
+          // golpe en la pared (sólo con la banda en el abanico)
+          if (open < 0 || i !== open) { const sl = Math.hypot(p[2][0] - p[1][0], p[2][1] - p[1][1]);
+            cx.save(); cx.beginPath(); if (port) cx.rect(0, 0, W, G.wall + 1); else cx.rect(0, 0, G.wall + 1, H); cx.clip();   // la luz no pasa la pared
+            // golpe: elipse aplastada contra la pared (larga como el tramo, poco profunda)
+            const ang = Math.atan2(p[2][1] - p[1][1], p[2][0] - p[1][0]);
+            cx.translate(mx, my); cx.rotate(ang); cx.scale(1, 34 / (sl * 0.6));
+            const r = cx.createRadialGradient(0, 0, 0, 0, 0, sl * 0.6);
+            r.addColorStop(0, col(ac, 0.5 * k, 0.35)); r.addColorStop(1, col(ac, 0));
+            cx.fillStyle = r; cx.beginPath(); cx.arc(0, 0, sl * 0.6, 0, 7); cx.fill(); cx.restore();
+            cx.strokeStyle = col(ac, 0.35 + 0.6 * k, 0.6); cx.lineWidth = 1.5 + 1.5 * k; cx.beginPath(); cx.moveTo(p[1][0], p[1][1]); cx.lineTo(p[2][0], p[2][1]); cx.stroke(); } });
+      };
+      const step = (now) => { raf = 0; const dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0.016); lastT = now;
+        const fg = reduceMotion ? 1 : 1 - Math.exp(-dt * 6.5), fk = reduceMotion ? 1 : 1 - Math.exp(-dt * 5);
+        let moving = false;
+        T.forEach((t, i) => { if (!C[i]) { C[i] = { pts: t.pts.map((q) => q.slice()), k: t.k }; return; }
+          const c = C[i]; c.pts.forEach((q, j) => { q[0] += (t.pts[j][0] - q[0]) * fg; q[1] += (t.pts[j][1] - q[1]) * fg;
+            if (Math.abs(t.pts[j][0] - q[0]) + Math.abs(t.pts[j][1] - q[1]) > 0.3) moving = true; });
+          c.k += (t.k - c.k) * fk; if (Math.abs(t.k - c.k) > 0.003) moving = true; });
+        const wave = now - invT < 1400; draw(now);
+        if (moving || wave) raf = requestAnimationFrame(step); else lastT = 0; };
+      function wake() { if (!raf) raf = requestAnimationFrame(step); }
+
+      // destello por las aristas: el camino sigue la silueta superior de la piedra (vértices de la imagen)
+      const EDGE = [[128, 375], [574, 58], [1050, 404], [1050, 951]];
+      const placeGlint = () => { const d = 'M' + EDGE.map(([x, y]) => (G.L + x * G.k).toFixed(1) + ' ' + (G.T + y * G.k).toFixed(1)).join(' L');
+        glint.style.offsetPath = `path('${d}')`; };
+      const runGlint = () => { if (reduceMotion || open >= 0 || document.hidden) return;
+        body.classList.remove('glinting'); void glint.offsetWidth; body.classList.add('glinting'); };
+
+      // ── estado ──
+      const setActive = (i) => { if (i === active) return; active = i;
+        body.classList.toggle('has-on', i >= 0);
+        [bandEls, names].forEach((list) => list.forEach((el, j) => el.classList.toggle('on', j === i)));
+        if (i >= 0) { gem.style.setProperty('--acc', bands[i].accent);
+          const put = () => { capEye.textContent = bands[i].category + ' · ' + yearOf(bands[i].ended); capName.textContent = bands[i].name; cap.classList.remove('swap'); };
+          if (!capName.textContent) put(); else { cap.classList.add('swap'); setTimeout(put, 160); } }
+        paint(); };
+
+      const fill = (p) => {
+        $('[data-cat]').textContent = p.category + ' · ' + yearOf(p.ended);
+        titleEl.textContent = p.name; $('[data-approach]').textContent = p.approach || '';
+        $('[data-role]').textContent = p.role || ''; $('[data-services]').textContent = (p.services || []).join(', ');
+        $('[data-stack]').textContent = (p.stack || []).join(', ');
+        const live = $('[data-live]'); if (p.url) { live.href = p.url; live.style.display = ''; } else live.style.display = 'none';
+        $('[data-next-name]').textContent = bands[(idx(p.slug) + 1) % N].name; };
+
+      // video: uno solo decodificando, bajo demanda; vertical → la versión mobile del sitio
+      const media = (i) => { const fr = bandEls[i].querySelector('.band__frame'), p = bands[i], m = port ? '-m' : '';
+        if (!fr.firstChild) {
+          if (reduceMotion) { const im = new Image(); im.alt = ''; im.src = '/img/poster/' + p.slug + m + '.jpg'; fr.appendChild(im); }
+          else { const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('playsinline', '');
+            v.preload = 'auto'; v.poster = '/img/poster/' + p.slug + m + '.jpg'; v.src = '/video/' + p.slug + m + '.mp4'; fr.appendChild(v); } }
+        return fr.querySelector('video'); };
+      const stopAll = () => $$('.band__frame video').forEach((v) => v.pause());
+
+      const syncInert = () => { const inCase = open >= 0;
+        indexEl.inert = inCase; scene.inert = inCase; caseEl.inert = !inCase; backEl.inert = !inCase;
+        caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+
+      let pushed = false;
+      const openCase = (i, { push = true } = {}) => { if (i < 0) return; const prev = open;
+        if (prev >= 0 && prev !== i) bandEls[prev].classList.remove('open');
+        open = i; setActive(i); fill(bands[i]); bandEls[i].classList.add('open'); body.classList.add('in-case');
+        stopAll(); const v = media(i); if (v) { try { v.currentTime = 0; } catch {} v.play().catch(() => {}); }
+        caseEl.scrollTop = 0; paint(); syncInert();
+        document.title = 'blopa — ' + bands[i].name;
+        if (push && location.hash !== '#' + bands[i].slug) { if (pushed) history.replaceState(null, '', '#' + bands[i].slug); else { history.pushState(null, '', '#' + bands[i].slug); pushed = true; } }
+        let tries = 0; const ft = () => { if (open !== i) return; titleEl.focus({ preventScroll: true }); if (document.activeElement !== titleEl && tries++ < 10) setTimeout(ft, 120); };
+        setTimeout(ft, 650); };
+      const switchCase = (i) => { infoEl.classList.add('swap'); setTimeout(() => { openCase(i); infoEl.classList.remove('swap'); }, 240); };
+      const closeCase = ({ pop = false } = {}) => { if (open < 0) return; const i = open;
+        bandEls[i].classList.remove('open'); open = -1; body.classList.remove('in-case'); stopAll();
+        if (!coarse) setActive(-1); paint(); syncInert(); document.title = 'blopa';
+        if (!pop) { if (pushed) { pushed = false; history.back(); } else history.replaceState(null, '', location.pathname + location.search); }
+        if (lastKey) setTimeout(() => bandEls[i].focus({ preventScroll: true }), 80); };
+
+      // ── entrada: mouse / teclado / táctil ──
+      let lastKey = false, lastInput = 0, leaveT = 0;
+      addEventListener('keydown', () => { lastKey = true; }, true); addEventListener('pointerdown', () => { lastKey = false; }, true);
+      ['pointermove', 'pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true }));
+
+      bandEls.forEach((el, i) => {
+        if (!coarse) { el.addEventListener('pointerenter', () => { clearTimeout(leaveT); if (open < 0) setActive(i); });
+          el.addEventListener('pointerleave', () => { clearTimeout(leaveT); leaveT = setTimeout(() => { if (open < 0) setActive(-1); }, 160); }); }
+        el.addEventListener('focus', () => { if (open < 0) setActive(i); });
+        el.addEventListener('blur', () => { if (open < 0 && !coarse) setActive(-1); });
+        // táctil: el primer toque señala, el segundo abre (mouse/teclado: abre directo)
+        el.addEventListener('click', (e) => { if (open >= 0) return;
+          if (coarse && e.detail !== 0 && active !== i) { setActive(i); return; } openCase(i); });
+      });
+      names.forEach((el, i) => {
+        el.addEventListener('pointerenter', () => { clearTimeout(leaveT); if (open < 0) setActive(i); });
+        el.addEventListener('pointerleave', () => { clearTimeout(leaveT); leaveT = setTimeout(() => { if (open < 0) setActive(-1); }, 160); });
+        el.addEventListener('click', () => openCase(i));
+      });
+      $('[data-cap-go]').addEventListener('click', () => openCase(active < 0 ? 0 : active));
+      indexEl.addEventListener('keydown', (e) => { const i = bandEls.indexOf(document.activeElement); if (i < 0) return;
+        const d = ['ArrowDown', 'ArrowRight'].includes(e.key) ? 1 : ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 0;
+        if (d) { e.preventDefault(); bandEls[(i + d + N) % N].focus(); } });
+      addEventListener('keydown', (e) => { if (open < 0) return;
+        if (e.key === 'Escape') closeCase();
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); switchCase((open + (e.key === 'ArrowRight' ? 1 : -1) + N) % N); } });
+      backEl.addEventListener('click', () => closeCase());
+      $('[data-home]').addEventListener('click', () => { if (open >= 0) closeCase(); else setActive(-1); });
+      $('[data-next]').addEventListener('click', () => switchCase((open + 1) % N));
+      addEventListener('popstate', () => { const i = idx(location.hash.slice(1)); if (i >= 0) { pushed = false; openCase(i, { push: false }); } else closeCase({ pop: true }); });
+
+      // la gema acompaña apenas al puntero (transform: sin repintar)
+      if (!coarse && !reduceMotion) addEventListener('pointermove', (e) => { if (open >= 0) return;
+        gem.style.transform = `translate(${((e.clientX / W) - 0.5) * -8}px, ${((e.clientY / H) - 0.5) * -6}px)`; }, { passive: true });
+
+      // invitación sin texto: la faceta chispea y una onda de luz sale por el espectro hasta la pared; el destello
+      // recorre las aristas. A los 0,4 s y después cada 7 s si nadie toca nada. Táctil: el espectro se recorre solo.
+      const invite = () => { if (reduceMotion || open >= 0 || document.hidden) return;
+        body.classList.remove('invite'); void body.offsetWidth; body.classList.add('invite');
+        invT = performance.now() + 120; wake(); setTimeout(runGlint, 900);
+        setTimeout(() => body.classList.remove('invite'), 2000); };
+      setTimeout(invite, 400);
+      setInterval(() => { if (performance.now() - lastInput > 6000 && (active < 0 || coarse)) invite(); }, 7000);
+      setInterval(() => { if (performance.now() - lastInput > 2500) runGlint(); }, 5300);
+      if (coarse) {
+        setInterval(() => { if (open >= 0 || document.hidden || performance.now() - lastInput < 6000) return; setActive((active + 1) % N); }, 4200); }
+
+      let rT = 0;
+      addEventListener('resize', () => { body.classList.add('is-layout'); layout(); clearTimeout(rT); rT = setTimeout(() => body.classList.remove('is-layout'), 60); });
+      body.classList.add('is-layout'); layout(); requestAnimationFrame(() => requestAnimationFrame(() => body.classList.remove('is-layout')));
+      if (coarse) setActive(0);   // táctil: desde el primer cuadro ya hay un proyecto elegido
+      syncInert();
+      { const i = idx(location.hash.slice(1)); if (i >= 0) openCase(i, { push: false }); }
+      window.__espectro = { setActive, openCase, closeCase };
+    </script>
+  </body>
+</html>
