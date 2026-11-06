@@ -43,7 +43,8 @@ import { projects } from '../data/projects';
       :focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:3px}
       .case__title:focus,.case__title:focus-visible{outline:none}
 
-      canvas.room{position:fixed;inset:0;z-index:1;pointer-events:none}
+      canvas.room{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity .9s var(--ease)}
+      body.gl-on canvas.room{opacity:1}
 
       /* slots: sólo MEDIDAS (dónde va la gema / la pantalla en cada estado). Invisibles. */
       .slot{position:fixed;visibility:hidden;pointer-events:none}
@@ -290,7 +291,6 @@ import { projects } from '../data/projects';
       let cur = null;          // proyecto que la gema proyecta (hover / case / auto en táctil / dial)
       let focusT0 = -1e9;      // cuándo arrancó el autofoco actual
       const T0 = performance.now();
-      let bootT0 = T0 + 650;   // la gema se arma cuando el haz la toca
       let lastCase = null, lastManual = 0;
       let invalidate = () => {};   // render por demanda (lo define el bloque GL)
       let startTween = () => {};
@@ -396,7 +396,7 @@ import { projects } from '../data/projects';
         invalidate(); };
       const goHome = (push = true) => { inCase = false; entered = false; startTween(1.0);
         body.classList.remove('in-case', 'entered'); setProj(null); syncInert();
-        document.title = 'blopa'; bootT0 = performance.now(); if (push) pushHash(''); invalidate(); };
+        document.title = 'blopa'; if (push) pushHash(''); invalidate(); };
 
       let leaveT = 0, fromT = 0;
       rows.forEach((row) => {
@@ -525,6 +525,18 @@ import { projects } from '../data/projects';
       const roomC = $('[data-room]');
       let gl = roomC.getContext('webgl', { alpha: false, antialias: false, powerPreference: 'high-performance' });
       if (!gl) { body.classList.add('no-gl'); navEl.inert = false; enterEl.inert = true; }
+      // ── calidad: GPU integrada vieja / por software arranca en BAJA (menos pasos y rebotes en la gema, bokeh de 8
+      //    muestras, menos píxeles). Si igual no llega a ~35 fps, el loop baja a BAJA solo (ver frame()) ──
+      const weakGPU = (() => { if (!gl) return false;
+        let r = ''; try { const e = gl.getExtension('WEBGL_debug_renderer_info'); r = String(gl.getParameter(e ? e.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ''); } catch {}
+        if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(r)) return true;
+        if (/intel/i.test(r) && !/iris\(r\) xe|iris xe|arc/i.test(r)) return true;
+        if (/mali-[gt]?[0-7]\d\b|adreno[^\d]{0,12}[3-5]\d\d|powervr|geforce (gt |mx|[2-9]\d\d\b)|radeon(\(tm\))? (r[2-7]|hd)/i.test(r)) return true;
+        return (navigator.hardwareConcurrency || 8) <= 4 && !/apple/i.test(r); })();
+      const QHI = { steps: coarse ? 72 : 110, gin: coarse ? 26 : 42, gb: coarse ? 2 : 3, aa: 4, bok: 16, px: 2.6e6, dpr: 2, floor: 0.62 };
+      const QLO = { steps: 48, gin: 16, gb: 2, aa: 2, bok: 8, px: 1.15e6, dpr: 1.25, floor: 0.5 };
+      const qParam = new URLSearchParams(location.search).get('q');   // ?q=bajo / ?q=alto fuerzan el perfil (para comparar)
+      let Q = qParam === 'bajo' ? QLO : qParam === 'alto' ? QHI : weakGPU ? QLO : QHI;
       const VERT = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 
       // prefiltro: la diapositiva a MEDIA resolución, con downsample 2×2 y clamp suave de altas luces
@@ -537,7 +549,7 @@ import { projects } from '../data/projects';
           float l=max(c.r,max(c.g,c.b)); c*=1./(1.+max(l-.78,0.)*1.6);
           gl_FragColor=vec4(c,1.); }`;
 
-      const ROOM = `precision highp float;
+      const ROOM = () => `precision highp float;
         uniform vec2 uRes; uniform float uDpr; uniform float uTime;
         uniform vec2 uG; uniform float uGR; uniform vec2 uB0; uniform vec2 uEn;   // gema, origen del haz, punto de ENTRADA real
         uniform vec4 uS;                                          // pantalla (x0,y0,x1,y1) px CSS, y hacia abajo
@@ -656,7 +668,7 @@ import { projects } from '../data/projects';
               else{
                 float rr0=34.*dfa; vec2 ca=(uvb-.5)*0.05*abs(uDefocus);
                 vec3 acc=vec3(0.), ws=vec3(0.);
-                for(int i=0;i<16;i++){ float fi=float(i)+.5; float rr=sqrt(fi/16.)*rr0; float th=fi*2.39996;
+                for(int i=0;i<${Q.bok};i++){ float fi=float(i)+.5; float rr=sqrt(fi/${Q.bok}.)*rr0; float th=fi*2.39996;
                   vec2 o=vec2(cos(th),sin(th))*rr*px;
                   vec3 c=vec3(bk(uvb+ca+o).r, bk(uvb+o).g, bk(uvb-ca+o).b);
                   vec3 w=1.0+3.0*c*c; acc+=c*w; ws+=w; }
@@ -694,10 +706,10 @@ import { projects } from '../data/projects';
           gl_FragColor=vec4(col,1.);
         }`;
 
-      const GSTEPS = coarse ? 72 : 110, GIN = coarse ? 26 : 42, GB = coarse ? 2 : 3;   // GB = rebotes internos
-      const GEM = `precision highp float;
+      // pasos de marcha · pasos adentro · GB = rebotes internos (salen del perfil de calidad Q)
+      const GEM = () => `precision highp float;
         uniform vec2 uRes; uniform float uScale; uniform mat3 uRot; uniform float uAber;
-        uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime; uniform float uBreak;
+        uniform sampler2D uWord; uniform float uWordAmt; uniform float uTime;
         uniform vec3 uTint; uniform float uTintAmt; uniform vec3 uBeam; uniform float uLit;
         uniform vec2 uOff; uniform float uAlpha;   // origen del viewport (gl_FragCoord es de ventana, no del viewport)
         #define PHI 1.61803398875
@@ -708,20 +720,7 @@ import { projects } from '../data/projects';
           d=smax(d,dot(p,normalize(vec3(PHI+1.,0.,1.))),k);
           d=smax(d,dot(p,normalize(vec3(1.,PHI+1.,0.))),k);
           return d-1.0; }
-        /* nacimiento/ruptura = GRIETAS DE CRISTAL: celdas de Voronoi 3D; cada esquirla se desplaza hacia afuera según su
-           centro y entre celdas se abre una grieta de aristas nítidas que se cierra cuando la gema se arma */
-        vec3 h33(vec3 p){ p=vec3(dot(p,vec3(127.1,311.7,74.7)),dot(p,vec3(269.5,183.3,246.1)),dot(p,vec3(113.5,271.9,124.6))); return fract(sin(p)*43758.5453); }
-        float sdC(vec3 p){
-          if(uBreak<0.004) return sdIco(p)-0.008;
-          vec3 q=p*2.3; vec3 ip=floor(q), fp=fract(q);
-          float d1=9., d2=9.; vec3 c1=vec3(0.);
-          for(int k=-1;k<=1;k++) for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){
-            vec3 g=vec3(float(i),float(j),float(k)); vec3 o=h33(ip+g); vec3 r=g+o-fp; float dd=dot(r,r);
-            if(dd<d1){ d2=d1; d1=dd; c1=ip+g+o; } else if(dd<d2) d2=dd; }
-          float edge=(sqrt(d2)-sqrt(d1))*0.5/2.3;
-          float hh=fract(sin(dot(c1,vec3(12.9898,78.233,37.719)))*43758.5453);
-          vec3 off=normalize(c1/2.3+vec3(1e-3))*uBreak*(0.2+0.3*hh);
-          return max(sdIco(p-off)-0.008, uBreak*0.07-edge); }
+        float sdC(vec3 p){ return sdIco(p)-0.008; }
         vec3 nrm(vec3 p){ vec2 e=vec2(0.006,0.);
           return normalize(vec3(sdC(p+e.xyy)-sdC(p-e.xyy),sdC(p+e.yxy)-sdC(p-e.yxy),sdC(p+e.yyx)-sdC(p-e.yyx))); }
         vec3 nrmC(vec3 p){ vec2 e=vec2(0.05,0.);
@@ -743,17 +742,21 @@ import { projects } from '../data/projects';
         vec4 shade(vec2 frag, out float ef){ ef=0.;
           vec2 uv=(frag-0.5*uRes)/uRes.y; uv*=uScale;
           vec3 ro=vec3(0.,0.,3.0); vec3 rd=normalize(vec3(uv,-1.75));
-          float t=0.; float hit=-1.; float md=1e9;
-          for(int i=0;i<${GSTEPS};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
-            if(d<0.0008+0.0007*t){hit=t;break;} t+=d*0.8; if(t>7.)break; }
-          float bf=(1.0-smoothstep(0.35,0.9,uBreak));
+          /* esfera envolvente: piedra (circunradio 1.2584) + halo (md<0.2 ⇒ |p|<1.2584·1.2).
+             El rayo que no la toca no ve ni piedra ni halo → sale sin marchar (la mayoría de los píxeles del viewport) */
+          float bR=1.52; float bb=dot(ro,rd), bc=dot(ro,ro)-bR*bR, bh=bb*bb-bc;
+          if(bh<0.) return vec4(0.);
+          bh=sqrt(bh); float tEnd=-bb+bh;
+          float t=max(0.,-bb-bh); float hit=-1.; float md=1e9;
+          for(int i=0;i<${Q.steps};i++){ vec3 q=uRot*(ro+rd*t); float d=sdC(q); md=min(md,d);
+            if(d<0.0008+0.0007*t){hit=t;break;} t+=d*0.8; if(t>tEnd)break; }
           if(hit<0.){
             ef=step(md,0.02);
             float e=smoothstep(0.012,0.0,md); float glow=smoothstep(0.20,0.0,md);
             if(e<=0.001&&glow<=0.001){ return vec4(0.); }
             vec3 hc=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.08,0.08,uv.x));
             hc=mix(hc,uTint,uTintAmt*0.85);
-            return vec4((hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5)*bf, max(e*0.8,glow*glow*0.32)*bf);
+            return vec4(hc*e*0.8+vec3(0.12,0.16,0.24)*glow*glow*0.5, max(e*0.8,glow*glow*0.32));
           }
           for(int i=0;i<3;i++){ hit+=sdC(uRot*(ro+rd*hit))*0.8; }
           vec3 po=uRot*(ro+rd*hit); vec3 n=nrm(po); vec3 nw=n*uRot;
@@ -763,11 +766,11 @@ import { projects } from '../data/projects';
           vec3 rin=refract(rd,nw,1.0/iorG);
           if(length(rin)<0.5){ col=env(reflect(rd,nw)); }
           else{
-            /* adentro: hasta ${GB} rebotes con reflexión total interna; la luz sale (con dispersión) por la faceta que la deja */
+            /* adentro: hasta ${Q.gb} rebotes con reflexión total interna; la luz sale (con dispersión) por la faceta que la deja */
             vec3 dirO=uRot*rin; vec3 pos=po; vec3 thr=vec3(1.15); col=vec3(0.);
-            for(int b=0;b<${GB};b++){
+            for(int b=0;b<${Q.gb};b++){
               float ti=0.02;
-              for(int i=0;i<${GIN};i++){ float d=sdC(pos+dirO*ti); if(d>0.)break; ti+=max(0.01,-d)*0.9; if(ti>6.)break; }
+              for(int i=0;i<${Q.gin};i++){ float d=sdC(pos+dirO*ti); if(d>0.)break; ti+=max(0.01,-d)*0.9; if(ti>6.)break; }
               pos+=dirO*ti; vec3 ne=-nrm(pos); vec3 dW=dirO*uRot, neW=ne*uRot;
               thr*=exp(-ti*vec3(0.55,0.42,0.28)*0.32);
               vec3 oG=refract(dW,neW,iorG);
@@ -794,7 +797,6 @@ import { projects } from '../data/projects';
             col+=uWordAmt*vec3(wr,wg,wb)*vec3(0.97,0.98,1.0);
           }
           float al=clamp(0.28+fres*0.8+max(col.r,max(col.g,col.b))*0.6,0.,1.);
-          al*=bf;
           return vec4(col,al);
         }
         void main(){
@@ -802,10 +804,10 @@ import { projects } from '../data/projects';
           if(ef>0.35){
             vec3 acc=c.rgb*c.a; float aa=c.a; float e2; vec4 s;
             s=shade(fc+vec2(0.45,0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
+            s=shade(fc+vec2(-0.45,-0.15),e2); acc+=s.rgb*s.a; aa+=s.a;${Q.aa > 2 ? `
             s=shade(fc+vec2(-0.15,0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
-            s=shade(fc+vec2(0.15,-0.45),e2); acc+=s.rgb*s.a; aa+=s.a;
-            s=shade(fc+vec2(-0.45,-0.15),e2); acc+=s.rgb*s.a; aa+=s.a;
-            c=vec4(acc/max(aa,1e-4),aa*0.2);
+            s=shade(fc+vec2(0.15,-0.45),e2); acc+=s.rgb*s.a; aa+=s.a;` : ''}
+            c=vec4(acc/max(aa,1e-4),aa/${Q.aa + 1}.);
           }
           c.a*=uAlpha; gl_FragColor=c;
         }`;
@@ -895,8 +897,8 @@ import { projects } from '../data/projects';
       if (gl) {
         let RU, GU, PU, IU, vtex, wtex, btex, fbo, wordReady = false, texKey = null, bokDirty = true;
         const BW = 640, BH = 400;
-        const prog = (vs, fs) => { const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
-            if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS) && !gl.isContextLost()) console.error(gl.getShaderInfoLog(sh)); return sh; };
+        // (los errores se leen recién cuando el programa terminó de compilar: consultarlos antes bloquea el hilo)
+        const prog = (vs, fs) => { const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); return sh; };
           const pr = gl.createProgram(); gl.attachShader(pr, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fs));
           gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr);
           const U = {}; const u = (n) => (n in U ? U[n] : (U[n] = gl.getUniformLocation(pr, n))); u.pr = pr; return u; };
@@ -913,7 +915,8 @@ import { projects } from '../data/projects';
           gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); wordReady = true; invalidate(); };
         // todo lo que vive en la GPU se crea acá (también al recuperar un contexto perdido)
         const initGL = () => {
-          RU = prog(VERT, ROOM); GU = prog(VERT, GEM); PU = prog(VERT, PRE); IU = prog(VERT, INNER);
+          [RU, GU, PU, IU].forEach((u) => u && gl.deleteProgram(u.pr));   // al pasar a perfil BAJO se recompila
+          RU = prog(VERT, ROOM()); GU = prog(VERT, GEM()); PU = prog(VERT, PRE); IU = prog(VERT, INNER); progsOK = false;
           const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
           gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
           gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -922,19 +925,34 @@ import { projects } from '../data/projects';
           fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
           gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, btex, 0);
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          texKey = null; bokDirty = true; wordReady = false; };
+        // compilación en paralelo (KHR_parallel_shader_compile): no se toca ningún programa hasta que el driver
+        // terminó, así el hilo principal no se congela (en GPUs viejas / Windows la gema puede tardar segundos)
+        const pcx = gl.getExtension('KHR_parallel_shader_compile');
+        let progsOK = false;
+        const glReady = () => { if (progsOK) return true;
+          if (pcx && ![RU, GU, PU, IU].every((u) => gl.getProgramParameter(u.pr, pcx.COMPLETION_STATUS_KHR))) return false;
+          [RU, GU, PU, IU].forEach((u) => { if (!gl.getProgramParameter(u.pr, gl.LINK_STATUS) && !gl.isContextLost())
+            console.error(gl.getProgramInfoLog(u.pr), ...gl.getAttachedShaders(u.pr).map((sh) => gl.getShaderInfoLog(sh))); });
           gl.useProgram(RU.pr); gl.uniform1i(RU('uVid'), 0); gl.uniform1i(RU('uBok'), 2);
           gl.useProgram(GU.pr); gl.uniform1i(GU('uWord'), 1);
           gl.useProgram(PU.pr); gl.uniform1i(PU('uVid'), 0);
-          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-          texKey = null; bokDirty = true; wordReady = false; };
+          body.classList.add('gl-on');   // primer cuadro listo: la sala aparece con un fundido (CSS, sin costo de GPU)
+          return (progsOK = true); };
         initGL();
         (document.fonts && document.fonts.load ? document.fonts.load('400 300px "Bebas Neue"') : Promise.resolve()).then(drawWord, drawWord);
         let lost = false;
         roomC.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; });
         roomC.addEventListener('webglcontextrestored', () => { lost = false; initGL(); drawWord(); invalidate(); });
 
+        // mismo tamaño que lo que ya está en la GPU → texSubImage2D (sin realocar la textura en cada cuadro de video)
+        let vtexWH = '';
         const upload = (src) => { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, vtex);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); bokDirty = true; };
+          const wh = (src.videoWidth || src.naturalWidth || src.width) + 'x' + (src.videoHeight || src.naturalHeight || src.height);
+          if (wh === vtexWH && texKey !== null) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+          else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); vtexWH = wh; }
+          bokDirty = true; };
         const avgC = document.createElement('canvas'); avgC.width = 8; avgC.height = 5;
         const avgX = avgC.getContext('2d', { willReadFrequently: true }); let avgT = 0; const avg = [0.5, 0.55, 0.65];
         const sampleAvg = (src) => { try { avgX.drawImage(src, 0, 0, 8, 5); const d = avgX.getImageData(0, 0, 8, 5).data;
@@ -944,7 +962,7 @@ import { projects } from '../data/projects';
         // presupuesto de píxeles (≈2.6 Mpx) + DPR adaptativo por tiempo de frame
         let RDPR = 1, sMul = 1, W = 0, H = 0;
         const resize = () => { W = innerWidth; H = innerHeight;
-          RDPR = Math.max(0.6, Math.min(devicePixelRatio || 1, 2, Math.sqrt(2.6e6 / (W * H))) * sMul);
+          RDPR = Math.max(0.5, Math.min(devicePixelRatio || 1, Q.dpr, Math.sqrt(Q.px / (W * H))) * sMul);
           roomC.width = Math.round(W * RDPR); roomC.height = Math.round(H * RDPR); roomC.style.width = W + 'px'; roomC.style.height = H + 'px'; invalidate(); };
         resize(); addEventListener('resize', resize);
 
@@ -966,8 +984,8 @@ import { projects } from '../data/projects';
         const S = { init: false }; const tw = { from: null, t0: 0, dur: 1 };
         startTween = (dur) => { if (!S.init) return; tw.from = {}; KEYS.forEach((k) => { tw.from[k] = S[k]; }); tw.t0 = performance.now(); tw.dur = reduceMotion ? 0.001 : dur; invalidate(1600); };
         const eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-        let scrAmt = 0, vidAmt = 0, tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, lit = 0, open = 0, projA = 1, land = 1;
-        let a = 0, aber = 0, brk = reduceMotion ? 0 : 0.85, last = 0, avR = 0.5, avG = 0.55, avB = 0.65, gyX = 0, gyY = 0;
+        let scrAmt = 0, vidAmt = 0, tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, lit = 1, open = 0, projA = 1, land = 1;
+        let a = 0, aber = 0, last = 0, avR = 0.5, avG = 0.55, avB = 0.65, gyX = 0, gyY = 0;
         let rayA = 0, ex = [0, 0], en = [0, 0], dR = [1, 0], dC = [1, 0], texA = 1.6, lpool = [0, 0], sweepS = 0, aimK = 0, invited = false, noteKey = '';
         const hit = [0, 0, 0], bo = [0, 0], bv = [0, 0];   // bo/bv: desvío del haz por el puntero (resorte)
         const CROP = { valecasenave: PORT ? 0.045 : 0.075 };   // recorte superior por proyecto (Vale: el selector ES/EN/PT suelto)
@@ -1022,9 +1040,7 @@ import { projects } from '../data/projects';
           projA += (projT - projA) * lp(18);
 
           // ② intro y capas
-          const it = (now - T0) / 1000;
-          const beamK = reduceMotion ? 1 : ease3((it - 0.15) / 0.7);
-          const fanK = reduceMotion ? 1 : ease3((it - 0.95) / 0.9);
+          const beamK = 1, fanK = 1;   // sin intro: el sitio aparece ya armado (la entrada era lo más caro de dibujar)
           lit += ((beamK >= 0.999 ? 1 : 0) - lit) * lp(5);
           scrAmt += ((entered ? 1 : 0) - scrAmt) * lp(3.2);
           land += ((entered ? 0 : 1) - land) * lp(3.2);
@@ -1069,19 +1085,11 @@ import { projects } from '../data/projects';
           tintAmt += ((cur && entered ? 1 : 0) - tintAmt) * lp(5);
 
           // ④ gema: rotación idle + parallax + arrastre + giroscopio
-          const ts = (now - bootT0) / 1000;
-          let brkT = 0, birth = 1;
-          if (!reduceMotion) {
-            if (ts < 0) { brkT = 0.85; birth = 1 / 0.06; }
-            else if (ts < 1.15) { const x = ts / 1.15; brkT = 0.85 * Math.pow(1 - x, 3); birth = 1 / (0.06 + 0.94 * (1 - Math.pow(1 - x, 3))); }
-          }
-          brk += (brkT - brk) * lp(9);
-          const burst = brk * (1 - brk) * 4.0;
           a += 0.096 * dt * (cur ? 0.45 : 1) * (reduceMotion ? 0 : 1);
           pmx += (mtx - pmx) * lp(3.7); pmy += (mty - pmy) * lp(3.7);
           gyX += (gyro.x - gyX) * lp(4); gyY += (gyro.y - gyY) * lp(4);
           const vel = Math.hypot(mtx - pmx, mty - pmy) * (0.0166 / Math.max(dt, 0.008));
-          aber += ((Math.min(1, vel * 30) * 0.4) - aber) * lp(6.3); aber = Math.max(aber, burst * 1.2);
+          aber += ((Math.min(1, vel * 30) * 0.4) - aber) * lp(6.3); 
           const pk = entered ? 0.45 : 1;
           // invitación sin texto: a ~1.2 s el espectro barre y TERMINA apuntando a la zona donde aparecerá el índice;
           // después, cada 5 s, la gema gira como un faro mientras nadie toca
@@ -1095,7 +1103,7 @@ import { projects } from '../data/projects';
           const rx = (0.12 + Math.sin(a * 0.33) * 0.07 + Math.sin(a * 0.17 + 0.6) * 0.045) - pmy * 0.45 * pk + dragOff.y * 1.8 + gyY * 0.35;
           const rz = Math.sin(a * 0.21 + 2.0) * 0.06 + Math.sin(a * 0.09) * 0.04;
           const R = rotR(rx, ry, rz);
-          const uScaleV = 1.97 * birth * (1 + brk * 0.75);
+          const uScaleV = 1.97;
 
           // ⑤ trazado del haz por la faceta real (R y cian con distinto índice → dispersión) y proyección a pantalla
           // la luz sigue al cursor (o al giroscopio) con un resorte: el haz de entrada se desvía levemente
@@ -1201,17 +1209,17 @@ import { projects } from '../data/projects';
             gl.viewport(vx0, vy0, side, side); gl.enable(gl.BLEND); gl.useProgram(GU.pr);
             gl.uniform2f(GU('uRes'), side, side); gl.uniform2f(GU('uOff'), vx0, vy0); gl.uniform1f(GU('uAlpha'), projA);
             gl.uniform1f(GU('uScale'), uScaleV);
-            gl.uniform1f(GU('uAber'), aber); gl.uniform1f(GU('uTime'), reduceMotion ? 3.0 : now * 0.001); gl.uniform1f(GU('uBreak'), brk);
+            gl.uniform1f(GU('uAber'), aber); gl.uniform1f(GU('uTime'), reduceMotion ? 3.0 : now * 0.001);
             gl.uniform3f(GU('uTint'), tintR, tintG, tintB); gl.uniform1f(GU('uTintAmt'), tintAmt * 0.7);
             gl.uniform3f(GU('uBeam'), lx / ll / bn, ly / ll / bn, bz / bn); gl.uniform1f(GU('uLit'), lit);
-            gl.uniform1f(GU('uWordAmt'), wordReady && !entered && brk < 0.12 ? Math.min(1, lit * 1.2) : 0);
+            gl.uniform1f(GU('uWordAmt'), wordReady && !entered ? Math.min(1, lit * 1.2) : 0);
             gl.uniformMatrix3fv(GU('uRot'), false, toGL(R));
             gl.drawArrays(gl.TRIANGLES, 0, 3);
             // ═ pase 3: la LUZ adentro (aditiva sobre el cristal) ═
             const mxA = Math.max(avR, avG, avB, 0.2);
             gl.useProgram(IU.pr); gl.blendFunc(gl.ONE, gl.ONE);
             gl.uniform2f(IU('uRes'), roomC.width, roomC.height); gl.uniform1f(IU('uDpr'), RDPR); gl.uniform1f(IU('uTime'), reduceMotion ? 3.0 : now * 0.001);
-            gl.uniform1f(IU('uK'), lit * projA * (1 - open) * clamp(1.2 - brk * 3, 0, 1)); gl.uniform1f(IU('uW'), Math.max(0.9, S.gr * 0.012));
+            gl.uniform1f(IU('uK'), lit * projA * (1 - open)); gl.uniform1f(IU('uW'), Math.max(0.9, S.gr * 0.012));
             gl.uniform2fv(IU('uPR'), inner.pR); gl.uniform2fv(IU('uPC'), inner.pC); gl.uniform1fv(IU('uER'), inner.eR); gl.uniform1fv(IU('uEC'), inner.eC);
             gl.uniform1f(IU('uNR'), inner.nR); gl.uniform1f(IU('uNC'), inner.nC);
             gl.uniform4fv(IU('uGl'), inner.gl); gl.uniform1fv(IU('uGlW'), inner.glW);
@@ -1230,10 +1238,13 @@ import { projects } from '../data/projects';
           const idle = !reduceMotion && pn - lastInput > 5000 && !drag.on && !tw.from;
           skip = idle ? !skip : false;
           let busy = false;
+          if (!glReady()) { raf = requestAnimationFrame(frame); return; }   // compilando: la página sigue viva
           if (!skip) { busy = render(t);
             if (lastF) { ema += ((pn - lastF) / (idle ? 2 : 1) - ema) * 0.08; } lastF = pn;
             if (pn - adaptT > 1500) { adaptT = pn;
-              if (ema > 21 && sMul > 0.62) { sMul *= 0.85; resize(); } else if (ema < 12.5 && sMul < 1) { sMul = Math.min(1, sMul * 1.1); resize(); } } }
+              if (ema > 21 && sMul > Q.floor) { sMul *= 0.85; resize(); }
+              else if (ema > 28 && Q === QHI && !qParam && pn - T0 > 4000) { Q = QLO; sMul = 1; initGL(); drawWord(); resize(); }   // ni bajando resolución llega: perfil BAJO
+              else if (ema < 12.5 && sMul < 1) { sMul = Math.min(1, sMul * 1.1); resize(); } } }
           if (!reduceMotion || busy || performance.now() < until) raf = requestAnimationFrame(frame); };
         invalidate = (ms = 900) => { until = Math.max(until, performance.now() + ms); if (!raf) raf = requestAnimationFrame(frame); };
         invalidate(2500);
