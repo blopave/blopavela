@@ -18,4 +18,5 @@ const versionesDev = {
 };
 
 export default defineConfig({ site: 'https://www.blopavela.com', trailingSlash: 'ignore', build: { inlineStylesheets: 'auto' },
+  redirects: { '/orbita': '/' },
   integrations: [versionesDev] });
