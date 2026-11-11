@@ -38,6 +38,9 @@ import { projects } from '../data/projects';
       body{font-family:var(--body);background:var(--bg);color:var(--ink);min-height:100svh;overflow:hidden;
         -webkit-font-smoothing:antialiased;line-height:1.5}
       a{color:inherit;text-decoration:none}
+      ::selection{background:rgba(36,226,232,.3);color:#fff}
+      /* flechas: un solo trazo dibujado (no glifos unicode) */
+      .ar{width:.95em;height:.95em;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.12em}
       .nav__home,.kase__back,.case__eye,.case__live,.kase__next,.scr__label,.cred dt{font-feature-settings:"case"}
       /* foco visible y consistente (teclado) */
       :focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:3px}
@@ -57,6 +60,7 @@ import { projects } from '../data/projects';
       .scr__label{display:flex;justify-content:space-between;gap:1rem;margin-top:.9rem;font-family:var(--mono);font-size:.6875rem;
         letter-spacing:.08em;text-transform:uppercase;color:var(--soft);opacity:0;transition:opacity .5s var(--ease)}
       .scr__label b{font-weight:400;color:var(--mid)}
+      .scr__label.idle b{color:var(--soft)}
       body.entered:not(.in-case) .scr__label.on{opacity:1;transition-delay:.25s}
 
       .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:center;
@@ -71,16 +75,7 @@ import { projects } from '../data/projects';
         display:inline-flex;align-items:center;min-height:44px}
       .nav__contact:hover{color:var(--ink)}
       .nav__r{display:inline-flex;align-items:center;gap:1.4rem}
-      body.entered .nav .nav__snd{pointer-events:auto}
-      .nav__snd{appearance:none;background:none;border:0;padding:0 .2rem;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:.55rem;
-        font:inherit;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);cursor:pointer;transition:color .25s var(--ease)}
-      .nav__snd:hover,.nav__snd[aria-pressed="true"]{color:var(--ink)}
-      .snd__bars{display:inline-flex;align-items:flex-end;gap:2px;height:10px}
-      .snd__bars i{display:block;width:2px;height:3px;background:currentColor;border-radius:1px;transition:height .3s var(--ease)}
-      .nav__snd[aria-pressed="true"] .snd__bars i{animation:sndb 1.1s ease-in-out infinite}
-      .nav__snd[aria-pressed="true"] .snd__bars i:nth-child(2){animation-delay:-.4s} .nav__snd[aria-pressed="true"] .snd__bars i:nth-child(3){animation-delay:-.75s}
-      @keyframes sndb{0%,100%{height:3px}50%{height:10px}}
-      @media(max-width:640px){ .snd__lbl{display:none} .nav__r{gap:.6rem} }
+      @media(max-width:640px){ .nav__r{gap:.6rem} }
       @media(max-width:640px){ .nav__who{display:none} }
 
       /* entrada: toda la pantalla es el disparador; táctil: el gesto (arrastre/swipe) lo maneja el JS */
@@ -97,16 +92,21 @@ import { projects } from '../data/projects';
       body.in-case .index{opacity:0;pointer-events:none;transition-delay:0s}
       body.from-case .index{transition-delay:.85s}   /* a la vuelta, los nombres esperan a que la pantalla se achique */
       .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;color:inherit;position:relative;
-        display:flex;align-items:baseline;gap:1rem;padding:.45rem 0;transition:padding .35s var(--ease)}
+        display:flex;align-items:baseline;gap:1rem;padding:.45rem 0;
+        opacity:0;transform:translateY(.9rem);transition:opacity .6s var(--ease),transform .9s var(--ease)}
+      /* los nombres suben uno tras otro cuando el índice aparece (a la salida se van juntos) */
+      body.entered .prow{opacity:1;transform:none;transition-delay:calc(.5s + var(--i) * .07s)}
+      body.from-case .prow{transition-delay:0s}
       .prow__name{font-family:var(--display);font-weight:400;font-size:clamp(2.6rem,4.9vw,4.4rem);
-        letter-spacing:.01em;line-height:1;color:var(--ink);white-space:nowrap;transition:color .35s var(--ease),text-shadow .35s var(--ease)}
+        letter-spacing:.01em;line-height:1;color:var(--ink);white-space:nowrap;
+        transition:color .35s var(--ease),text-shadow .35s var(--ease),transform .45s var(--ease)}
       /* la lista "refracta": el nombre señalado toma el borde cian/rojo del haz */
       .prow.on .prow__name{text-shadow:-1.5px 0 rgba(255,58,84,.85),1.5px 0 rgba(36,226,232,.85)}
       .index.has-on .prow:not(.on) .prow__name{color:var(--dim)}
-      .prow.on{padding-left:.9rem}
+      .prow.on .prow__name{transform:translateX(.9rem)}
       .prow__idx{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;color:var(--soft);opacity:0;transform:translateX(-6px);
         transition:opacity .3s var(--ease),transform .3s var(--ease)}
-      .prow.on .prow__idx{opacity:1;transform:none}
+      .prow.on .prow__idx{opacity:1;transform:translateX(.9rem)}
 
       /* case = la proyección a pantalla completa (escala de cine); la info flota abajo-izq sobre el scrim del shader */
       .kase{position:fixed;inset:0;z-index:6;pointer-events:none;opacity:0;visibility:hidden;
@@ -118,35 +118,38 @@ import { projects } from '../data/projects';
       body.in-case .kase__info>:nth-child(1){transition-delay:.86s} body.in-case .kase__info>:nth-child(2){transition-delay:.93s}
       body.in-case .kase__info>:nth-child(3){transition-delay:1.02s} body.in-case .kase__info>:nth-child(4){transition-delay:1.1s}
       body.in-case .kase__info>:nth-child(5){transition-delay:1.18s} body.in-case .kase__info>:nth-child(6){transition-delay:1.26s}
-      .kase__info{position:absolute;left:var(--gut);top:calc(50% + 2rem);transform:translateY(-50%);width:calc(41.667vw - var(--gut) * 1.6);max-width:36rem;pointer-events:auto;
+      .kase__info{position:absolute;left:var(--gut);top:calc(50% + 2rem);transform:translateY(-50%);width:calc(41.667vw - var(--gut) * 1.6);max-width:44rem;pointer-events:auto;
         transition:opacity .28s var(--ease)}
       .kase__frame{display:none}
       .kase__info.swap{opacity:0}
-      .case__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
-      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,7rem);line-height:.88;letter-spacing:.005em;margin:.4rem 0 0}
-      .case__approach{margin-top:1.1rem;color:#d4d6dc;line-height:1.5;font-size:1rem;max-width:40ch}
+      .case__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);margin-top:.85rem}
+      .case__title{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,7rem);line-height:.88;letter-spacing:.005em;margin:0}
+      .case__approach{margin-top:1.3rem;color:#d4d6dc;line-height:1.55;font-size:clamp(1rem,.55rem + .55vw,1.2rem);max-width:40ch;text-wrap:pretty}
       .cred{display:grid;grid-template-columns:7rem 1fr;margin:1.5rem 0 0;border-top:1px solid rgba(255,255,255,.12)}
       .cred dt,.cred dd{padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.12);margin:0}
       .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.68rem}
-      .cred dd{font-size:.92rem;color:var(--ink);line-height:1.45}
+      .cred dd{font-size:clamp(.92rem,.5rem + .45vw,1.05rem);color:var(--ink);line-height:1.45}
       .cred dd.soft{color:var(--mid)}
-      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.4rem;flex-wrap:wrap}
-      .kase__next{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
-        display:inline-flex;align-items:center;gap:.5rem;min-height:44px;padding:.35rem 0;background:none;border:0;cursor:pointer;
-        border-bottom:1px solid transparent;transition:border-color .3s var(--ease),color .3s var(--ease)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:2rem;flex-wrap:wrap}
+      .kase__next{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;text-align:left;
+        display:grid;grid-template-columns:auto auto;align-items:center;justify-content:start;column-gap:.75rem;row-gap:.35rem;
+        min-height:44px;padding:.35rem 0;background:none;border:0;cursor:pointer;color:var(--soft);transition:color .3s var(--ease)}
+      .kase__nl{grid-column:1/-1}
+      .kase__next b{font-family:var(--display);font-weight:400;font-size:clamp(1.9rem,2.6vw,2.8rem);line-height:1;letter-spacing:.01em;
+        color:var(--ink);transition:text-shadow .35s var(--ease)}
+      .kase__next .ar{width:1.35rem;height:1.35rem;color:var(--mid);transition:transform .45s var(--ease),color .3s var(--ease)}
+      .kase__next:hover b{text-shadow:-1.5px 0 rgba(255,58,84,.85),1.5px 0 rgba(36,226,232,.85)}
+      .kase__next:hover .ar{transform:translateX(5px);color:var(--ink)}
       /* la acción principal del case: píldora llena justo bajo el título (donde va la mirada), con el color del proyecto */
       .case__live{--acc:#fff;display:inline-flex;align-items:center;gap:.6rem;min-height:48px;margin-top:1.2rem;padding:.7rem 1.25rem .7rem 1rem;
         border-radius:999px;background:var(--ink);color:#0b0b0e;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
         transition:background-color .3s var(--ease),transform .3s var(--ease)}
       .case__w{font-weight:inherit}
       .case__dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--acc);box-shadow:0 0 0 1px rgba(11,11,14,.35)}
-      .case__live span{transition:transform .3s var(--ease)}
+      .case__live .ar{transition:transform .3s var(--ease)}
       .case__live:hover{background:#fff}
-      .case__live:hover span{transform:translate(2px,-2px)}
+      .case__live:hover .ar{transform:translate(2px,-2px)}
       .case__live:focus-visible{outline-color:var(--acc)}
-      .kase__next{color:var(--mid)}
-      .kase__next b{font-weight:400;color:var(--ink)}
-      .kase__next:hover{color:var(--ink);border-color:var(--ink)}
       .kase__back{position:fixed;left:var(--gut);top:calc(var(--gut) + 2.4rem);z-index:9;appearance:none;cursor:pointer;
         display:inline-flex;align-items:center;gap:.55rem;min-height:44px;padding:.6rem 1rem .6rem .8rem;border-radius:999px;
         border:1px solid var(--hair);background:rgba(12,12,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
@@ -154,6 +157,7 @@ import { projects } from '../data/projects';
         opacity:0;visibility:hidden;pointer-events:none;transition:opacity .5s var(--ease),visibility .5s var(--ease),color .25s,border-color .25s}
       .kase__back svg{width:.9em;height:.9em;stroke:currentColor;fill:none;stroke-width:2}
       .kase__back:hover{color:var(--ink);border-color:var(--soft)}
+      .kase{scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
       body.in-case .kase__back{opacity:1;visibility:visible;pointer-events:auto;transition-delay:.8s}
 
       /* sin WebGL: el sitio sigue siendo un índice funcional */
@@ -185,9 +189,9 @@ import { projects } from '../data/projects';
         .index{max-width:50vw;justify-content:flex-start;right:auto;
           padding-top:calc(30svh + 4.4rem);padding-bottom:1.5rem}
         .prow{padding:.1rem 0;min-height:44px;align-items:center}
-        .prow.on{padding-left:0}   /* mobile: el activo se marca SÓLO por color */
+        .prow.on .prow__name{transform:none}   /* mobile: el activo se marca SÓLO por color */
         .prow__idx{display:none}
-        .prow__name{font-size:clamp(1.6rem,8vw,2.6rem)}
+        .prow__name{font-size:clamp(1.6rem,8vw,3.2rem)}
         /* case mobile: el sitio vertical a todo el ancho (fijo, bajo la franja de la nav) y la info sube por encima;
            título dentro del 60% superior; CTA en barra fija abajo */
         .kase{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;
@@ -200,7 +204,9 @@ import { projects } from '../data/projects';
           padding:.5rem var(--gut) calc(.5rem + env(safe-area-inset-bottom,0px));
           background:rgba(11,11,14,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--hair)}
         .kase__acts{justify-content:flex-end;min-height:calc(64px + env(safe-area-inset-bottom,0px))}
-        .kase__next{min-height:48px}
+        .kase__next{min-height:48px;display:inline-flex;align-items:center;gap:.6rem;font-size:.75rem}
+        .kase__next b{font-family:var(--mono);font-size:.75rem;letter-spacing:.08em}
+        .kase__next .ar{width:.95em;height:.95em}
         .case__live{position:fixed;left:var(--gut);bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:8;margin:0}
         body:not(.in-case) .case__live{pointer-events:none}
         .case__w,.kase__nl{display:none}   /* barra del pulgar: "Ver en vivo" + "BassLayer →" entran sin pisarse */
@@ -219,6 +225,9 @@ import { projects } from '../data/projects';
         .case__title{font-size:clamp(2.4rem,13svh,3.6rem)}
         .case__approach{font-size:.92rem;margin-top:.8rem}
         .cred{margin-top:1rem}
+        /* la pantalla es angosta: la cartela pierde el prefijo y no se parte */
+        :global(.scr__pre){display:none}
+        .scr__label span,.scr__label b{white-space:nowrap}
       }
       @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
     </style>
@@ -249,15 +258,14 @@ import { projects } from '../data/projects';
     <nav class="nav" aria-label="Navegación" data-nav>
       <button type="button" class="nav__home" data-home>blopa</button>
       <span class="nav__r">
-      <button type="button" class="nav__snd" data-snd aria-pressed="false" aria-label="Sonido"><span class="snd__bars" aria-hidden="true"><i></i><i></i><i></i></span><span class="snd__lbl">Sonido</span></button>
-      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span><span class="nav__mail">blopave@pm.me ↗</span></a>
+      <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela&nbsp;·&nbsp;</span><span class="nav__mail">blopave@pm.me</span>&nbsp;<svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></a>
       </span>
     </nav>
 
     <main>
     <section class="index" data-index aria-label="Proyectos">
       {projects.map((p, i) => (
-        <button type="button" class="prow" data-row data-slug={p.slug}>
+        <button type="button" class="prow" data-row data-slug={p.slug} style={`--i:${i}`}>
           <span class="prow__name">{p.name}</span>
           <span class="prow__idx" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
         </button>
@@ -267,9 +275,9 @@ import { projects } from '../data/projects';
     <section class="kase" data-case aria-hidden="true" aria-labelledby="case-title">
       <div class="kase__frame" aria-hidden="true"><div id="s-casep"></div></div>
       <div class="kase__info" data-info>
-        <p class="case__eye" data-cat></p>
         <h2 class="case__title" id="case-title" data-name tabindex="-1"></h2>
-        <a class="case__live" data-live target="_blank" rel="noopener"><i class="case__dot" aria-hidden="true"></i>Ver <b class="case__w">sitio </b>en vivo <span aria-hidden="true">↗</span></a>
+        <p class="case__eye" data-cat></p>
+        <a class="case__live" data-live target="_blank" rel="noopener"><i class="case__dot" aria-hidden="true"></i>Ver <b class="case__w">sitio </b>en vivo <svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg></a>
         <p class="case__approach" data-approach></p>
         <dl class="cred">
           <dt>Rol</dt><dd data-role></dd>
@@ -277,7 +285,7 @@ import { projects } from '../data/projects';
           <dt>Stack</dt><dd class="soft" data-stack></dd>
         </dl>
         <div class="kase__acts">
-          <button type="button" class="kase__next" data-next><span class="kase__nl">Siguiente&nbsp;</span><b data-next-name></b>&nbsp;<span aria-hidden="true">→</span></button>
+          <button type="button" class="kase__next" data-next><span class="kase__nl">Siguiente</span><b data-next-name></b><svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg></button>
         </div>
       </div>
     </section>
@@ -303,7 +311,7 @@ import { projects } from '../data/projects';
       let cur = null;          // proyecto que la gema proyecta (hover / case / auto en táctil / dial)
       let focusT0 = -1e9;      // cuándo arrancó el autofoco actual
       const T0 = performance.now();
-      let lastCase = null, lastManual = 0;
+      let lastCase = null;
       let invalidate = () => {};   // render por demanda (lo define el bloque GL)
       let startTween = () => {};
 
@@ -338,15 +346,21 @@ import { projects } from '../data/projects';
       const posterOf = (slug) => { let im = posters[slug];
         if (!im) { im = new Image(); im.decoding = 'async'; im.src = '/img/poster/' + slug + (PORT ? '-m' : '') + '.jpg';
           im.addEventListener('load', () => invalidate(), { once: true }); posters[slug] = im; } return im; };
+      const START = { basslayer: 3.2 };   // segundo en que cada tour ya muestra el sitio
       const vidOf = (slug) => { let v = vids[slug];
         if (!v) { v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true;
           v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.preload = 'none';
           v.poster = '/img/poster/' + slug + (PORT ? '-m' : '') + '.jpg';
-          v.src = '/video/' + slug + (PORT ? '-m' : SMALL ? '-640' : '') + '.mp4'; vids[slug] = v; } return v; };
+          v.src = '/video/' + slug + (PORT ? '-m' : SMALL ? '-640' : '') + '.mp4'; vids[slug] = v;
+          const st = START[slug] || 0;   // saltea la pantalla de carga negra del sitio (también al repetir)
+          if (st) { v.loop = false;
+            v.addEventListener('loadedmetadata', () => { if (v.currentTime < st) v.currentTime = st; });
+            v.addEventListener('ended', () => { v.currentTime = st; v.play().catch(() => {}); }); } } return v; };
 
-      let lastLabel = '';
-      function setLabelOnce(a2, b2) { const k = a2 + '|' + b2; if (k === lastLabel) return; lastLabel = k; setLabel(a2, b2); labelEl.classList.add('on'); }
       const setLabel = (a, b) => { labelA.innerHTML = '<span class="scr__pre">Proyección · </span>' + a; labelB.textContent = b; };
+      // sin proyecto señalado la pantalla queda vacía; la cartela sólo dice que está en espera
+      const setIdle = () => { setLabel('En espera', coarse ? 'Tocá un proyecto' : 'Señalá un proyecto'); labelEl.classList.add('on', 'idle'); };
+      setIdle();
       const setProj = (slug) => {
         if (slug === cur) return;
         cur = slug; focusT0 = performance.now();
@@ -355,19 +369,15 @@ import { projects } from '../data/projects';
         indexEl.classList.toggle('has-on', !!slug);
         if (slug) { const p = projOf(slug); posterOf(slug);
           if (!reduceMotion) { const v = vidOf(slug); v.preload = 'auto'; v._failed = false;
-            try { v.currentTime = 0; } catch {}   // cada proyecto arranca en su HOME
+            try { v.currentTime = START[slug] || 0; } catch {}   // cada proyecto arranca en su HOME
             v.play().catch(() => { v._failed = true; invalidate(); }); }
-          setLabel(p.name, p.category + ' · ' + yearOf(p.ended)); labelEl.classList.add('on');
-        } else labelEl.classList.remove('on');
-        lastLabel = '';
+          setLabel(p.name, p.category + ' · ' + yearOf(p.ended)); labelEl.classList.add('on'); labelEl.classList.remove('idle');
+        } else setIdle();
         invalidate();
       };
-      const stepFrom = () => cur || reel.slug || projects[0].slug;
       const nextOf = (s, d) => projects[(idxOf(s) + d + projects.length) % projects.length].slug;
 
       const enter = (push = true) => { if (entered) return; entered = true; startTween(1.0); body.classList.add('entered');
-        projects.forEach((p) => posterOf(p.slug));   // el reel necesita los pósters
-        if (coarse && !cur) setTimeout(() => { if (entered && !inCase && !cur) setProj(projects[0].slug); }, 3400);   // táctil: primero el reel
         syncInert(); invalidate(); if (push) pushHash('proyectos'); };
       let suppressClick = false;
       // teclado (Enter/Espacio en el botón): entra y el foco pasa al primer proyecto
@@ -388,7 +398,7 @@ import { projects } from '../data/projects';
       const openCase = (slug, { push = true } = {}) => { const p = projOf(slug); if (!p) return;
         if (!entered) { entered = true; body.classList.add('entered'); }
         fill(p); setProj(slug); caseEl.scrollTop = 0; lastCase = slug;
-        if (!inCase) { startTween(1.25); snd.whoosh(false); }
+        if (!inCase) startTween(1.25);
         inCase = true; body.classList.add('in-case'); syncInert();
         document.title = 'blopa — ' + p.name; if (push) pushHash(slug);
         // el foco va al título cuando el case ya es visible (reintenta mientras dura la transición)
@@ -399,7 +409,7 @@ import { projects } from '../data/projects';
       const switchCase = (slug) => { infoEl.classList.add('swap');
         setTimeout(() => { openCase(slug); infoEl.classList.remove('swap'); }, 240); };
       const closeCase = (push = true) => { if (!inCase) return;
-        inCase = false; startTween(1.05); snd.whoosh(true); body.classList.add('from-case'); body.classList.remove('in-case'); syncInert();
+        inCase = false; startTween(1.05); body.classList.add('from-case'); body.classList.remove('in-case'); syncInert();
         clearTimeout(fromT); fromT = setTimeout(() => body.classList.remove('from-case'), 1600);
         if (!coarse) setProj(null);
         document.title = 'blopa'; if (push) pushHash('proyectos');
@@ -430,19 +440,12 @@ import { projects } from '../data/projects';
         if (inCase && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); switchCase(nextOf(cur, e.key === 'ArrowRight' ? 1 : -1)); }
       });
 
-      // táctil: el proyector pasa diapositivas solo (pausa unos segundos tras un gesto manual)
-      if (coarse) setInterval(() => { if (!entered || inCase || document.hidden || performance.now() - lastManual < 6000) return;
-        setProj(nextOf(cur || projects[projects.length - 1].slug, 1)); aimRow(cur); }, 4600);
-
       addEventListener('popstate', () => { const h = location.hash.replace('#', '');
         if (projOf(h)) openCase(h, { push: false });
         else if (h === 'proyectos') { if (inCase) closeCase(false); else enter(false); }
         else goHome(false); });
       syncInert();
       caseEl.addEventListener('scroll', () => invalidate(), { passive: true });
-
-      // ── reel: con el puntero fuera de los nombres la pantalla no queda vacía — pasan los 4 sitios, tenues ──
-      const reel = { slug: projects[0].slug, swapAt: performance.now() + 1500, swapped: true };
 
       // ── manipulación directa: arrastrar gira la gema (desvía el haz); en índice/case es un DIAL entre proyectos:
       //    el desenfoque/RGB crece con la distancia al encastre y al soltar encaja y enfoca ──
@@ -464,7 +467,7 @@ import { projects } from '../data/projects';
           if (!entered && vert && drag.dy < -0.06) enter();                       // swipe hacia arriba en la entrada: entra
           else if (!entered && !vert && drag.pt === 'touch' && Math.abs(drag.dx) > 0.12) enter();   // swipe lateral (táctil) también
           else if (entered && !vert && Math.abs(drag.dx) > 0.12) {                  // dial: pasa de proyecto y encaja
-            lastManual = performance.now(); const nx = nextOf(stepFrom(), drag.dx < 0 ? 1 : -1);
+            const nx = cur ? nextOf(cur, drag.dx < 0 ? 1 : -1) : projects[drag.dx < 0 ? 0 : projects.length - 1].slug;
             if (inCase) switchCase(nx); else setProj(nx); } }
         drag.dx = 0; drag.dy = 0; invalidate(); };
       addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
@@ -480,46 +483,6 @@ import { projects } from '../data/projects';
         if (x < 0) return 0; if (x < 0.25) return sm(x / 0.25); if (x < 0.25 + aim.hold) return 1;
         const y = (x - 0.25 - aim.hold) / 0.9; return y >= 1 ? 0 : 1 - sm(y); };
 
-      // ── SONIDO (opt-in, sintetizado con Web Audio, sin archivos): hum de proyector, zumbido de enfoque,
-      //    nota al encajar (distinta por proyecto) y whoosh filtrado en el viaje. Silencio con la pestaña oculta ──
-      const snd = (() => {
-        let on = false, ctx = null, master, buzz, buzzF, buzzG, nbuf;
-        try { on = localStorage.getItem('blopa-sound') === '1'; } catch {}
-        const init = () => { if (ctx) return; const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-          ctx = new AC(); master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
-          nbuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); const nd = nbuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-          const hg = ctx.createGain(); hg.gain.value = 0.045; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 360; hg.connect(lp); lp.connect(master);
-          [[55, 'triangle', 0.5], [110.4, 'sine', 0.25], [165.3, 'sine', 0.08]].forEach(([f, ty, a]) => { const o = ctx.createOscillator(); o.type = ty; o.frequency.value = f;
-            const g = ctx.createGain(); g.gain.value = a; o.connect(g); g.connect(hg); o.start(); });
-          const ns = ctx.createBufferSource(); ns.buffer = nbuf; ns.loop = true; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7;
-          const ng = ctx.createGain(); ng.gain.value = 0.01; ns.connect(bp); bp.connect(ng); ng.connect(master); ns.start();
-          buzz = ctx.createOscillator(); buzz.type = 'sawtooth'; buzz.frequency.value = 180; buzzF = ctx.createBiquadFilter(); buzzF.type = 'lowpass'; buzzF.frequency.value = 500;
-          buzzG = ctx.createGain(); buzzG.gain.value = 0; buzz.connect(buzzF); buzzF.connect(buzzG); buzzG.connect(master); buzz.start(); };
-        const setOn = (v) => { on = v; try { localStorage.setItem('blopa-sound', v ? '1' : '0'); } catch {}
-          if (v) { init(); if (!ctx) return; ctx.resume(); master.gain.setTargetAtTime(0.9, ctx.currentTime, reduceMotion ? 0.8 : 0.4); }
-          else if (ctx) master.gain.setTargetAtTime(0, ctx.currentTime, 0.15); };
-        let lastF = 0;
-        const focus = (df) => { if (!ctx || !on) return; const now = performance.now(); if (now - lastF < 50) return; lastF = now;
-          const a = Math.min(1, Math.abs(df)), t = ctx.currentTime;
-          buzzG.gain.setTargetAtTime(a * 0.03, t, 0.06); buzz.frequency.setTargetAtTime(170 + (1 - a) * 160, t, 0.08); buzzF.frequency.setTargetAtTime(380 + (1 - a) * 1500, t, 0.08); };
-        const note = (i) => { if (!ctx || !on) return; const f = [220, 277.18, 329.63, 369.99][i % 4], t = ctx.currentTime;
-          [[1, 0.09, 1.4], [2, 0.035, 1.0], [3.01, 0.014, 0.7]].forEach(([m, a, d]) => { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * m;
-            const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + (reduceMotion ? 0.08 : 0.006));
-            g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.05); }); };
-        const whoosh = (rev) => { if (!ctx || !on || reduceMotion) return; const t = ctx.currentTime;
-          const s = ctx.createBufferSource(); s.buffer = nbuf; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3; const g = ctx.createGain();
-          bp.frequency.setValueAtTime(rev ? 2400 : 280, t); bp.frequency.exponentialRampToValueAtTime(rev ? 280 : 2400, t + 1.1);
-          g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.11, t + 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
-          s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t + 1.3); };
-        document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else if (on) ctx.resume(); });
-        return { get on() { return on; }, setOn, focus, note, whoosh };
-      })();
-      const sndBtn = $('[data-snd]');
-      const syncSnd = () => sndBtn.setAttribute('aria-pressed', snd.on ? 'true' : 'false');
-      sndBtn.addEventListener('click', () => { snd.setOn(!snd.on); syncSnd(); });
-      syncSnd();
-      // preferencia guardada: el audio arranca con el primer gesto (los navegadores lo exigen)
-      if (snd.on) addEventListener('pointerdown', () => { if (snd.on) snd.setOn(true); }, { once: true });
       ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true }));
       // giroscopio (mobile): inclinar el teléfono gira la piedra
       const gyro = { x: 0, y: 0 };
@@ -998,7 +961,7 @@ import { projects } from '../data/projects';
         const eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
         let scrAmt = 0, vidAmt = 0, tintR = 1, tintG = 1, tintB = 1, tintAmt = 0, lit = 1, open = 0, projA = 1, land = 1;
         let a = 0, aber = 0, last = 0, avR = 0.5, avG = 0.55, avB = 0.65, gyX = 0, gyY = 0;
-        let rayA = 0, ex = [0, 0], en = [0, 0], dR = [1, 0], dC = [1, 0], texA = 1.6, lpool = [0, 0], sweepS = 0, aimK = 0, invited = false, noteKey = '';
+        let rayA = 0, ex = [0, 0], en = [0, 0], dR = [1, 0], dC = [1, 0], texA = 1.6, lpool = [0, 0], sweepS = 0, aimK = 0, invited = false;
         const hit = [0, 0, 0], bo = [0, 0], bv = [0, 0];   // bo/bv: desvío del haz por el puntero (resorte)
         const CROP = { valecasenave: PORT ? 0.045 : 0.075 };   // recorte superior por proyecto (Vale: el selector ES/EN/PT suelto)
         const inner = { pR: new Float32Array(10), pC: new Float32Array(10), eR: new Float32Array(4), eC: new Float32Array(4), nR: 0, nC: 0,
@@ -1058,20 +1021,11 @@ import { projects } from '../data/projects';
           land += ((entered ? 0 : 1) - land) * lp(3.2);
           open += ((inCase ? 1 : 0) - open) * lp(3);
 
-          // ③ diapositiva: video del proyecto · póster si el autoplay falla · reel tenue si no hay proyecto (desktop)
-          const reelOn = entered && !inCase && !cur;   // también en mobile (con los pósters mobile)
-          let reelDef = 0;
-          if (reelOn && !reduceMotion) {
-            if (now >= reel.swapAt && !reel.swapped) { reel.slug = nextOf(reel.slug, 1); reel.swapped = true; }
-            if (now >= reel.swapAt + 5200) { reel.swapAt = now + 420; reel.swapped = false; }
-            reelDef = 0.55 * Math.exp(-Math.pow((now - reel.swapAt) / 260, 2));
-          }
-          if (reelOn) { const p = projOf(reel.slug); setLabelOnce('Reel', p.name); }
+          // ③ diapositiva: video del proyecto · póster si el autoplay falla · vacía si no hay proyecto
           let want = 0, key = null, src = null;
           if (cur && entered) { const v = vids[cur], po = posterOf(cur); want = 1;
             if (v && !v._failed && v.readyState >= 2 && !reduceMotion) { key = 'v:' + cur; src = v; }
             else if (po.complete && po.naturalWidth) { key = 'p:' + cur; src = po; } }
-          else if (reelOn) { const po = posterOf(reel.slug); want = 0.92; if (po.complete && po.naturalWidth) { key = 'p:' + reel.slug; src = po; } }
           if (src) {
             const isV = key[0] === 'v';
             // el póster pasa a video: el cambio se tapa con un re-enfoque corto (sin "pop")
@@ -1082,15 +1036,12 @@ import { projects } from '../data/projects';
           } else want = 0;
           vidAmt += (want - vidAmt) * lp(want ? 7 : 3.2);
           avR += (avg[0] - avR) * lp(4); avG += (avg[1] - avG) * lp(4); avB += (avg[2] - avB) * lp(4);
-          // desenfoque total = autofoco ∪ dial (distancia al encastre) ∪ cambio de diapositiva del reel
+          // desenfoque total = autofoco ∪ dial (distancia al encastre)
           dragOff.x += ((drag.on ? drag.dx : 0) - dragOff.x) * lp(drag.on ? 14 : 7);
           dragOff.y += ((drag.on ? drag.dy : 0) - dragOff.y) * lp(drag.on ? 14 : 7);
           const dialDef = entered ? clamp(Math.abs(dragOff.x) / 0.14, 0, 1) * 0.95 : 0;
           const af = reduceMotion ? 0 : defocusAt((now - focusT0 - 100) / 1500);
-          let dfs = af; if (dialDef > Math.abs(dfs)) dfs = dialDef; if (reelDef > Math.abs(dfs)) dfs = reelDef;
-          // sonido: el zumbido sigue al desenfoque; al encajar el foco suena la nota del proyecto
-          snd.focus(entered ? dfs : 0);
-          if (cur && entered && now - focusT0 > 1500 && noteKey !== cur + focusT0) { noteKey = cur + focusT0; snd.note(idxOf(cur)); }
+          let dfs = af; if (dialDef > Math.abs(dfs)) dfs = dialDef;
           const hex = cur ? projOf(cur).accent : '#ffffff';
           const [tr, tgc, tb] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
           tintR += (tr - tintR) * lp(5); tintG += (tgc - tintG) * lp(5); tintB += (tb - tintB) * lp(5);

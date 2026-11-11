@@ -41,10 +41,6 @@ const data = JSON.stringify(projects);
       :is(button,a):focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:2px}
       .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
       /* la señal: anillo que se expande desde la gema (sin texto), cada 2,6 s desde el segundo 1,1 */
-      .ping{position:fixed;left:50%;top:50%;width:62vmin;aspect-ratio:1;border-radius:50%;border:1px solid rgba(242,243,245,.3);
-        z-index:3;pointer-events:none;opacity:0;transform:translate(-50%,-50%) scale(.8);animation:ping 2.6s cubic-bezier(.2,.7,.3,1) 1.1s infinite}
-      @keyframes ping{0%{opacity:0;transform:translate(-50%,-50%) scale(.8)}12%{opacity:.6}100%{opacity:0;transform:translate(-50%,-50%) scale(1.22)}}
-      body.entered .ping{display:none}
       canvas.orb{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:1;touch-action:none}
       body.entered canvas.orb{cursor:grab}
       canvas.orb.drag{cursor:grabbing}
@@ -72,18 +68,25 @@ const data = JSON.stringify(projects);
       @media(max-width:640px){ .nav__who{display:none} }
 
       /* índice: nombres sobre una veladura oscura (nunca se enciman con la pantalla de al lado) */
-      .index{position:fixed;left:var(--gut);bottom:clamp(3rem,10vh,6rem);z-index:5;display:flex;flex-direction:column;gap:.1rem;
+      .index{position:fixed;left:var(--gut);top:0;bottom:0;z-index:5;display:flex;flex-direction:column;justify-content:center;gap:.1rem;
         opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .7s var(--ease),transform .9s var(--ease)}
       .index::before{content:"";position:fixed;left:0;top:0;bottom:0;width:min(44vw,36rem);z-index:-1;pointer-events:none;
         background:linear-gradient(90deg,rgba(7,7,10,.94) 0%,rgba(7,7,10,.82) 45%,rgba(7,7,10,0) 100%)}
-      body.entered .index{opacity:1;transform:none;pointer-events:auto;transition-delay:.7s}
+      body.entered .index{opacity:1;transform:none;pointer-events:none;transition-delay:.7s}
+      body.entered .index .prow{pointer-events:auto}
       body.in-case .index{opacity:0;transform:translateX(-24px);pointer-events:none;transition-delay:0s}
-      .prow{appearance:none;background:none;border:0;cursor:pointer;text-align:left;padding:.2rem 0;min-height:44px;display:flex;align-items:baseline;gap:.9rem;
-        font-family:var(--display);font-size:clamp(2.2rem,4.4vw,3.8rem);line-height:1;color:rgba(242,243,245,.34);
+      /* sin proyecto elegido todos se leen parejo; al posarse en uno, los demás se apagan (misma regla que el home) */
+      .prow{position:relative;appearance:none;background:none;border:0;cursor:pointer;text-align:left;padding:.2rem 0;min-height:44px;display:flex;align-items:baseline;gap:.9rem;
+        font-family:var(--display);font-size:clamp(2.2rem,4.4vw,3.8rem);line-height:1;color:rgba(242,243,245,.9);
         transition:color .35s var(--ease),padding .35s var(--ease)}
-      .prow small{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;color:var(--soft);opacity:0;transition:opacity .35s var(--ease)}
-      .prow.on{color:var(--ink);padding-left:.8rem}
-      .prow.on small{opacity:1}
+      .index.has-on .prow{color:rgba(242,243,245,.3)}
+      /* el elegido: se corre y le nace una raya con el color del proyecto */
+      .prow::before{content:"";position:absolute;left:0;top:50%;width:2px;height:.56em;margin-top:-.32em;background:var(--acc,var(--ink));
+        transform:scaleY(0);transition:transform .4s var(--ease)}
+      .prow.on::before{transform:none}
+      .index .prow:focus-visible{outline:none}
+      .prow:focus-visible .prow__n{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.14em}
+      .index .prow.on{color:var(--ink);padding-left:.8rem}
 
       /* ficha del case: a la izquierda de la pantalla (desktop) / debajo (mobile) */
       .kase{position:fixed;left:var(--gut);top:50%;transform:translateY(-46%);z-index:6;width:min(22rem,calc(100vw - 2*var(--gut)));
@@ -133,14 +136,14 @@ const data = JSON.stringify(projects);
       body.drum .kase{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))!important}
 
       @media(orientation:portrait){
-        .index{left:var(--gut);right:var(--gut);bottom:clamp(2rem,6vh,3.5rem)}
+        .index{left:var(--gut);right:var(--gut);top:auto;bottom:clamp(2rem,6vh,3.5rem);justify-content:flex-end}
         .index::before{top:auto;width:auto;right:0;height:46svh;background:linear-gradient(0deg,rgba(7,7,10,.96) 0%,rgba(7,7,10,.8) 55%,rgba(7,7,10,0) 100%)}
-        .prow{font-size:clamp(1.9rem,9.6vw,2.7rem)}
+        .prow{font-size:clamp(1.9rem,9.6vw,3.6rem)}
         .kase{top:var(--kase-top,52svh);bottom:0;transform:translateY(16px);width:auto;right:var(--gut);overflow-y:auto;overscroll-behavior:contain;
           padding-bottom:calc(1.6rem + env(safe-area-inset-bottom,0px))}
         body.in-case .kase{transform:none}
         .kase__back{position:fixed;top:calc(var(--gut) + 2.2rem);left:var(--gut);margin:0;background:rgba(7,7,10,.6);backdrop-filter:blur(8px)}
-        .kase__name{font-size:3.2rem;margin:.2rem 0 .6rem}
+        .kase__name{font-size:clamp(3.2rem,9vw,4.8rem);margin:.2rem 0 .6rem}
         .kase__txt{font-size:.9rem;max-width:none}
         .cred{margin-top:1rem}
       }
@@ -164,7 +167,6 @@ const data = JSON.stringify(projects);
       body.no-gl .index{position:static;opacity:1;transform:none;pointer-events:auto;padding:calc(var(--gut) + 4rem) var(--gut) 3rem}
       body.no-gl .index::before{display:none}
       body.no-gl .prow{color:var(--ink);flex-direction:column;gap:.2rem;padding:1rem 0;border-bottom:1px solid var(--hair);width:100%}
-      body.no-gl .prow small{opacity:1}
       body.no-gl .index{max-width:48rem}
       body.no-gl{overflow:auto}
       body.no-gl.in-case .index{display:none}
@@ -173,14 +175,13 @@ const data = JSON.stringify(projects);
       body.no-gl .kase__img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--hair);border-radius:6px;margin-bottom:1.5rem}
       body.no-gl:not(.in-case) .kase{display:none}
 
-      @media (prefers-reduced-motion:reduce){*{transition:none!important} .ping,.cbar{animation:none;opacity:.35} .cbar{opacity:1}}
+      @media (prefers-reduced-motion:reduce){*{transition:none!important} .cbar{animation:none;opacity:1}}
     </style>
   </head>
   <body>
     <h1 class="sr">blopa — sitios de Pablo Vela</h1>
     <canvas class="orb" data-canvas aria-hidden="true"></canvas>
     <!-- señal sin texto: un pulso que sale de la gema invita a tocar antes de los 3 s -->
-    <div class="ping" aria-hidden="true"></div>
     <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
     <nav class="nav" aria-label="Navegación" data-nav>
       <button type="button" class="nav__home" data-home>blopa</button>
@@ -189,7 +190,7 @@ const data = JSON.stringify(projects);
     <main>
     <section class="index" data-index aria-label="Proyectos">
       {projects.map((p) => (
-        <button type="button" class="prow" data-row data-slug={p.slug}>{p.name}<small>{p.category}</small></button>
+        <button type="button" class="prow" data-row data-slug={p.slug} style={`--acc:${p.accent}`}><span class="prow__n">{p.name}</span></button>
       ))}
     </section>
     <section class="kase" data-case aria-hidden="true" aria-labelledby="kase-name">
@@ -215,7 +216,7 @@ const data = JSON.stringify(projects);
     </div>
     </main>
     <noscript>
-      <style is:inline>.nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) 3rem;max-width:48rem}.nojs h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.4rem);line-height:1}.nojs li{list-style:none;padding:1rem 0;border-bottom:1px solid var(--hair)}.nojs p{color:var(--mid);font-size:.92rem;margin-top:.35rem}.nojs ul{padding:0}.nav{opacity:1!important;pointer-events:auto!important}canvas.orb,.enter,.ping,.index,.kase,.cbar{display:none!important}body{overflow:auto!important}</style>
+      <style is:inline>.nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) 3rem;max-width:48rem}.nojs h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.4rem);line-height:1}.nojs li{list-style:none;padding:1rem 0;border-bottom:1px solid var(--hair)}.nojs p{color:var(--mid);font-size:.92rem;margin-top:.35rem}.nojs ul{padding:0}.nav{opacity:1!important;pointer-events:auto!important}canvas.orb,.enter,.index,.kase,.cbar{display:none!important}body{overflow:auto!important}</style>
       <section class="nojs" aria-label="Proyectos"><ul>
         {projects.map((p) => (<li><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>))}
       </ul></section>
@@ -237,6 +238,11 @@ const data = JSON.stringify(projects);
       const enterEl = document.querySelector('[data-enter]'), navEl = document.querySelector('[data-nav]'), backEl = document.querySelector('[data-back]');
       const $ = (q) => caseEl.querySelector(q);
       let entered = false, inCase = false, caseI = -1, hoverI = -1, GL = false;
+      // regla de Pablo (igual que el home): si el usuario no se posa sobre un proyecto, no se muestra ninguno.
+      // engaged = hay un proyecto elegido (hover/foco en la lista o en la pantalla del frente, arrastre, rueda, flechas, toque)
+      let engaged = false, overFront = false, stickyT = 0, relT = 0;
+      const engage = (sticky) => { clearTimeout(relT); engaged = true; if (sticky) stickyT = performance.now() + 1800; };
+      const release = () => { clearTimeout(relT); relT = setTimeout(() => { if (hoverI < 0 && !inCase && !coarse && !overFront) engaged = false; }, 160); };
       // el anillo de foco se muestra sólo si se viene navegando con teclado (el foco se mueve igual para lectores)
       let kbd = false;
       addEventListener('keydown', () => { kbd = true; }, true); addEventListener('pointerdown', () => { kbd = false; }, true);
@@ -286,18 +292,18 @@ const data = JSON.stringify(projects);
         if (focus) setTimeout(() => { if (inCase) focusEl(backEl); }, instant || !GL ? 0 : 950);
       };
       const closeCase = ({ push = true, focus = true } = {}) => { if (!inCase) return; inCase = false;
-        body.classList.remove('in-case'); hooks.close(); syncInert(); document.title = 'blopa';
+        body.classList.remove('in-case'); engaged = coarse; hooks.close(); syncInert(); document.title = 'blopa';
         if (push) nav('proyectos');
         if (focus) focusEl(rows[caseI]); };
       const goHome = ({ push = true } = {}) => { closeCase({ push: false, focus: false });
         if (!GL) { if (push) nav(''); return; }   // sin gema no hay home: la lista ES la entrada
-        entered = false; body.classList.remove('entered'); hooks.home(); syncInert(); if (push) nav(''); };
+        entered = false; engaged = false; body.classList.remove('entered'); hooks.home(); syncInert(); if (push) nav(''); };
 
       rows.forEach((row, i) => {
-        row.addEventListener('pointerenter', (e) => { if (!inCase && e.pointerType === 'mouse') { hoverI = i; hooks.hover(i); } });
-        row.addEventListener('focus', () => { if (!inCase) { hoverI = i; hooks.hover(i); } });
-        row.addEventListener('pointerleave', () => { hoverI = -1; });
-        row.addEventListener('blur', () => { hoverI = -1; });
+        row.addEventListener('pointerenter', (e) => { if (!inCase && e.pointerType === 'mouse') { hoverI = i; engage(); hooks.hover(i); } });
+        row.addEventListener('focus', () => { if (!inCase) { hoverI = i; engage(); hooks.hover(i); } });
+        row.addEventListener('pointerleave', () => { hoverI = -1; release(); });
+        row.addEventListener('blur', () => { hoverI = -1; release(); });
         row.addEventListener('click', () => openCase(i));
       });
       backEl.addEventListener('click', () => closeCase());
@@ -355,6 +361,8 @@ const data = JSON.stringify(projects);
         // COMPOSICIÓN (se calcula según el alto de la vista, ver layout()): la pantalla en foco arriba, ENTERA y nítida;
         // la gema debajo, como pedestal-espejo que la refleja. Nunca se superponen.
         const GEMP = new THREE.Vector3(); let GR = 1, FLOORY = -2;
+        // gema en reposo (sin proyecto elegido): centrada y más grande; al elegir baja a pedestal (GEMP/GR)
+        const GEMI = new THREE.Vector3(); let GRI = 1, gsel = 0;
         const MARGIN = 0.07;
         const KEY = new THREE.Vector3(-0.55, 0.75, 0.45).normalize();   // la luz clave de la escena
         const ring = new THREE.Group(); scene.add(ring);
@@ -373,7 +381,7 @@ const data = JSON.stringify(projects);
         // pantalla: el sitio + el vidrio, que refleja SÓLO la luz clave (un barrido cuando gira) + filete finísimo.
         // uRead=1 leyendo el case: el trabajo queda limpio. uFade: aparece/desaparece, nunca un corte.
         const SCREEN_FRAG = `uniform sampler2D map; uniform float uDim; uniform float uFocus; uniform float uRefl; uniform float uDrum;
-          uniform float uRead; uniform float uFade; uniform float uAsp; uniform float uCr;
+          uniform float uRead; uniform float uFade; uniform float uAsp; uniform float uCr; uniform float uNear; uniform float uVid;
           varying vec2 vUv; varying float vDist; varying vec3 vNw; varying vec3 vWp;
           ${UVMAP}
           void main(){
@@ -383,14 +391,15 @@ const data = JSON.stringify(projects);
             float d=length(max(abs(q)-b,0.0))-uCr;
             if(d>0.0) discard;
             // fuera del case la pantalla es una FUENTE DE LUZ: el sitio desenfocado (la lectura pasa en la gema)
-            float bl=0.035*(1.0-uRead); vec2 o1=vec2(bl,0.), o2=vec2(0.,bl*uAsp), o3=vec2(bl,bl*uAsp)*1.6, o4=vec2(bl,-bl*uAsp)*1.6;
+            // desenfoque por mipmaps (suave, sin copias fantasma del sitio); el video no tiene mips pero sólo corre en foco
+            float bl=0.022*(1.0-uRead); vec2 o1=vec2(bl,0.), o2=vec2(0.,bl*uAsp);
             vec3 c=texture2D(map,uv).rgb;
             if(bl>0.0005){
-              vec3 ring1=(texture2D(map,uv+o1)+texture2D(map,uv-o1)+texture2D(map,uv+o2)+texture2D(map,uv-o2)).rgb;
-              vec3 ring2=(texture2D(map,uv+o3)+texture2D(map,uv-o3)+texture2D(map,uv+o4)+texture2D(map,uv-o4)).rgb;
-              vec3 blur=c*0.12+ring1*0.12+ring2*0.1;
+              vec3 blur=texture2D(map,uv,4.5).rgb*0.4+(texture2D(map,uv+o1,4.5)+texture2D(map,uv-o1,4.5)+texture2D(map,uv+o2,4.5)+texture2D(map,uv-o2,4.5)).rgb*0.15;
               c=mix(c,blur,1.0-uRead);
             }
+            // three sube el VIDEO sin decodificar sRGB (las imágenes sí): se decodifica acá o el sitio sale lavado
+            if(uVid>0.5) c=sRGBTransferEOTF(vec4(c,1.)).rgb;
             c*=uDim;
             vec3 n=normalize(vNw), v=normalize(cameraPosition-vWp), r=reflect(-v,n);
             float deco=1.0-uRead;
@@ -398,7 +407,8 @@ const data = JSON.stringify(projects);
             c+=vec3(1.0,0.98,0.95)*sh*0.14*(0.4+0.6*uFocus)*deco;
             float edge=smoothstep(0.006,0.0,abs(d+0.002));
             c+=edge*mix(vec3(0.75,0.82,0.92),mix(vec3(0.15,0.85,1.0),vec3(1.0,0.25,0.38),uv.x),0.5)*(0.12+0.3*uFocus)*deco;
-            c*=exp(-max(vDist-7.0,0.0)*0.11)*uFade;
+            // niebla RELATIVA a la pantalla más cercana (con lente larga la cámara está lejos); la que se lee, sin velo
+            c*=mix(exp(-max(vDist-uNear,0.0)*0.12),1.0,uRead)*uFade;
             if(uRefl>0.5){ c*=0.09*(1.0-smoothstep(0.0,0.5,uv.y)); }
             gl_FragColor=vec4(c,1.0);
             #include <tonemapping_fragment>
@@ -407,7 +417,7 @@ const data = JSON.stringify(projects);
             if(uRefl<0.5) gl_FragColor.rgb=mix(gl_FragColor.rgb,sRGBTransferOETF(vec4(c,1.)).rgb,uRead*uFade);
           }`;
         // marco: metal oscuro; el canto agarra la luz clave del lado que la mira
-        const PLATE_FRAG = `uniform float uDrum; uniform float uFocus; uniform vec3 uAcc; uniform vec2 uK; uniform float uFade; uniform float uRead; uniform float uCr;
+        const PLATE_FRAG = `uniform float uDrum; uniform float uFocus; uniform vec3 uAcc; uniform vec2 uK; uniform float uFade; uniform float uRead; uniform float uCr; uniform float uNear;
           varying vec2 vUv; varying float vDist; varying vec3 vNw; varying vec3 vWp;
           ${UVMAP}
           void main(){
@@ -424,11 +434,12 @@ const data = JSON.stringify(projects);
             // el canto: más luz del lado de la clave (arriba-izquierda de la pantalla)
             float side=clamp(0.5+0.8*((0.5-uv.x)+(uv.y-0.5)),0.,1.);
             c+=ch*(0.05+0.35*side+0.5*s1)*mix(vec3(1.0),uAcc,0.25)*(1.0-uRead*0.7);
-            c*=exp(-max(vDist-7.0,0.0)*0.11)*uFade;
+            c*=exp(-max(vDist-uNear,0.0)*0.12)*uFade;
             gl_FragColor=vec4(c,1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
           }`;
+        const NEAR = { value: 7 };   // distancia cámara → pantalla más cercana (se actualiza por cuadro)
         const screenGeo = (m, margin) => {
           if (m === 'ring') { const r = R + (margin ? 0.045 : 0), th = TH + (2 * margin) / r;
             return new THREE.CylinderGeometry(r, r, SH + 2 * margin, 72, 1, true, -th / 2, th); }
@@ -441,17 +452,19 @@ const data = JSON.stringify(projects);
         //    Póster liviano siempre; video sólo en la del frente. En el tambor, el sitio MOBILE real (-m). ──
         const loader = new THREE.TextureLoader();
         const posterCache = {};
-        const posterOf = (slug, m) => { const k = slug + m; if (!posterCache[k]) { const t = loader.load('/img/poster/' + slug + (m === 'drum' ? '-m' : '') + '.jpg'); t.colorSpace = THREE.SRGBColorSpace;
+        // BassLayer: el video abre con ~3 s de pantalla de carga negra → arranca después; su póster de escritorio es negro → la captura de la onda
+        const START = { basslayer: 3.2 }, POSTER = { basslayer: '/img/src/basslayer-2.jpg' };
+        const posterOf = (slug, m) => { const k = slug + m; if (!posterCache[k]) { const t = loader.load(m !== 'drum' && POSTER[slug] ? POSTER[slug] : '/img/poster/' + slug + (m === 'drum' ? '-m' : '') + '.jpg'); t.colorSpace = THREE.SRGBColorSpace;
             t.anisotropy = renderer.capabilities.getMaxAnisotropy(); posterCache[k] = t; } return posterCache[k]; };
         const pickers = [];
         const screens = projects.map((p, i) => {
           const phi = (i / N) * Math.PI * 2;
           const pivot = new THREE.Group(), rpivot = new THREE.Group(); ring.add(pivot); mirror.add(rpivot);
           const uni = { map: { value: null }, uDim: { value: 0.5 }, uFocus: { value: 0 }, uRefl: { value: 0 }, uDrum: { value: 0 },
-            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 }, uFlat: { value: 0 } };
+            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 }, uFlat: { value: 0 }, uNear: NEAR, uVid: { value: 0 } };
           const mesh = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: SCREEN_FRAG, uniforms: uni, side: THREE.BackSide }));
           mesh.userData.i = i; pivot.add(mesh); pickers.push(mesh);
-          const puni = { uDrum: uni.uDrum, uFocus: uni.uFocus, uFade: uni.uFade, uRead: uni.uRead, uCr: uni.uCr, uFlat: uni.uFlat, uAcc: { value: new THREE.Color(p.accent) }, uK: { value: new THREE.Vector2(1.6, 1) } };
+          const puni = { uDrum: uni.uDrum, uFocus: uni.uFocus, uFade: uni.uFade, uRead: uni.uRead, uCr: uni.uCr, uFlat: uni.uFlat, uNear: NEAR, uAcc: { value: new THREE.Color(p.accent) }, uK: { value: new THREE.Vector2(1.6, 1) } };
           const plate = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: PLATE_FRAG, uniforms: puni, side: THREE.BackSide }));
           pivot.add(plate);
           const runi = { ...uni, uRefl: { value: 1 }, uRead: { value: 0 }, uFlat: { value: 0 } };
@@ -462,8 +475,13 @@ const data = JSON.stringify(projects);
           v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-label', 'Video del sitio de ' + p.name);
           const vtex = new THREE.VideoTexture(v); vtex.colorSpace = THREE.SRGBColorSpace;
           const s = { p, i, mesh, plate, rmesh, pivot, rpivot, uni, runi, puni, v, vtex, phi, live: false, srcMode: '',
-            dim: 0.4, focus: 0, fade: 0, cur: 0, curV: 0, onT: 0, offT: 0, avg: new THREE.Color(0.2, 0.2, 0.25) };
-          v.addEventListener('playing', () => { s.live = true; uni.map.value = vtex; runi.map.value = vtex; });
+            dim: 0.4, focus: 0, fade: 0, out: 0, cur: 0, curV: 0, onT: 0, offT: 0, avg: new THREE.Color(0.2, 0.2, 0.25) };
+          const st = START[p.slug] || 0;
+          const goLive = () => { if (v.paused || v.currentTime < st - 0.1) return; s.live = true; uni.map.value = vtex; runi.map.value = vtex; };
+          v.addEventListener('playing', goLive); v.addEventListener('seeked', goLive);
+          if (st) { v.loop = false;
+            v.addEventListener('loadedmetadata', () => { if (v.currentTime < st) v.currentTime = st; });
+            v.addEventListener('ended', () => { v.currentTime = st; v.play().catch(() => {}); }); }
           s.src = () => (s.live && v.readyState >= 2 ? v : uni.map.value && uni.map.value.image);
           return s;
         });
@@ -509,12 +527,12 @@ const data = JSON.stringify(projects);
           fragmentShader: `uniform vec2 uSP[4]; uniform vec3 uSC[4]; uniform vec3 uGem; varying vec2 vW; varying vec2 vP;
             void main(){ float r=length(vP)/${(R + 1.4).toFixed(1)};
               vec3 L=vec3(0.0);
-              for(int i=0;i<4;i++){ vec2 dl=vW-uSP[i]; L+=uSC[i]*exp(-dot(dl,dl)*0.9); }
+              for(int i=0;i<4;i++){ vec2 dl=vW-uSP[i]; L+=uSC[i]*exp(-dot(dl,dl)*0.32); }
               vec2 kd=vec2(${KEY.x.toFixed(4)},${KEY.z.toFixed(4)});
               vec2 sp=vW-(uGem.xy-kd*0.9); float shadow=exp(-dot(sp,sp)*1.4)*uGem.z;       // sombra corrida, lejos de la clave
               vec2 kp=vW-(uGem.xy+kd*1.4); float keyPool=exp(-dot(kp,kp)*0.18)*uGem.z;      // charco de la clave
               float a=0.66*(1.0-smoothstep(0.42,0.98,r));   // el piso se disuelve en la atmósfera (sin disco)
-              vec3 c=vec3(0.0021,0.0021,0.003)+L*0.8*(1.0-smoothstep(0.55,0.92,r))+vec3(1.0,0.95,0.88)*keyPool*0.035;
+              vec3 c=vec3(0.0021,0.0021,0.003)+L*0.34*(1.0-smoothstep(0.35,0.92,r))+vec3(1.0,0.95,0.88)*keyPool*0.035;
               c*=1.0-0.85*shadow;
               gl_FragColor=vec4(c, clamp(a+shadow*0.3,0.,1.));
               #include <tonemapping_fragment>
@@ -527,18 +545,23 @@ const data = JSON.stringify(projects);
         //    pantallas reales en su dirección real (con su física): al girar, los reflejos giran en la piedra. ──
         const gem = new THREE.Object3D(); scene.add(gem);
         const wordTex = new THREE.CanvasTexture(document.createElement('canvas'));
+        const qInv = new THREE.Quaternion();
         const gemU = { uInvM: { value: new THREE.Matrix4() }, uRot: { value: new THREE.Matrix3() }, uTint: { value: new THREE.Color(1, 1, 1) },
           uTintAmt: { value: 0 }, uS0: { value: null }, uS1: { value: null }, uS2: { value: null }, uS3: { value: null },
           uAng: { value: new THREE.Vector4() }, uBr: { value: new THREE.Vector4() },
           uDrum: { value: 0 }, uRr: { value: R }, uTh: { value: TH }, uYc: { value: 0 }, uAx: { value: SH },
           uWord: { value: wordTex }, uWordAmt: { value: 0 }, uRingAmt: { value: 0 }, uBurst: { value: 0 },
-          uSiteA: { value: null }, uSiteB: { value: null }, uSiteMix: { value: 1 }, uSiteAsp: { value: 1.6 }, uMirror: { value: 0 }, uAlpha: { value: 1 } };
+          uSiteA: { value: null }, uSiteB: { value: null }, uSiteMix: { value: 1 }, uSiteAsp: { value: 1.6 }, uMirror: { value: 0 }, uAlpha: { value: 1 }, uVid4: { value: new THREE.Vector4() }, uVidAB: { value: new THREE.Vector2() },
+          uFlash: { value: 0 },
+          uCamR: { value: new THREE.Vector3(1, 0, 0) }, uCamU: { value: new THREE.Vector3(0, 1, 0) } };
         const GEM_FRAG = `precision highp float;
           uniform mat4 uInvM; uniform mat3 uRot; uniform vec3 uTint; uniform float uTintAmt;
           uniform sampler2D uS0; uniform sampler2D uS1; uniform sampler2D uS2; uniform sampler2D uS3;
           uniform vec4 uAng; uniform vec4 uBr; uniform float uDrum; uniform float uRr; uniform float uTh; uniform float uYc; uniform float uAx;
           uniform sampler2D uWord; uniform float uWordAmt; uniform float uRingAmt; uniform float uBurst;
           uniform sampler2D uSiteA; uniform sampler2D uSiteB; uniform float uSiteMix; uniform float uSiteAsp; uniform float uMirror; uniform float uAlpha;
+          uniform vec4 uVid4; uniform vec2 uVidAB; uniform float uFlash; uniform vec3 uCamR; uniform vec3 uCamU;
+          vec3 dec(vec3 c, float v){ return v>0.5 ? sRGBTransferEOTF(vec4(c,1.)).rgb : c; }
           float hash3(vec3 p){ return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453); }
           vec3 siteAt(sampler2D t, vec2 uv){ if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.) return vec3(0.); return texture2D(t,uv).rgb; }
           // el sitio en la faceta: proyectado a lo ancho de la piedra (legible en la cara frontal); cada faceta lo corre
@@ -560,7 +583,7 @@ const data = JSON.stringify(projects);
           float box(vec3 d,vec3 c,vec3 up,vec2 sz,float soft){ c=normalize(c); float k=dot(d,c); if(k<=0.) return 0.;
             vec3 q=d/k-c; vec3 r=normalize(cross(up,c)); vec3 u=cross(c,r); vec2 a=abs(vec2(dot(q,r),dot(q,u)));
             return (1.0-smoothstep(sz.x-soft,sz.x,a.x))*(1.0-smoothstep(sz.y-soft,sz.y,a.y)); }
-          vec3 panel(sampler2D tex, float a0, float br, vec3 d){
+          vec3 panel(sampler2D tex, float a0, float br, vec3 d, float vid){
             float ang, along, rad;
             if(uDrum>0.5){ ang=atan(d.y,d.z); rad=length(d.yz); along=d.x/max(rad,1e-3)*uRr; }
             else { ang=atan(d.x,d.z); rad=length(d.xz); along=d.y/max(rad,1e-3)*uRr-uYc; }
@@ -569,7 +592,7 @@ const data = JSON.stringify(projects);
             vec2 uv = uDrum>0.5 ? vec2((along+uAx*0.5)/uAx, 1.0-s) : vec2(1.0-s, (along+uAx*0.5)/uAx);
             if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.) return vec3(0.);
             float e=smoothstep(0.,0.015,uv.x)*smoothstep(0.,0.015,1.-uv.x)*smoothstep(0.,0.02,uv.y)*smoothstep(0.,0.02,1.-uv.y);
-            return texture2D(tex,uv).rgb*br*e;
+            return dec(texture2D(tex,uv).rgb,vid)*br*e;
           }
           // entorno: UNA luz clave (softbox grande arriba-izquierda) + un filete frío de contra + las pantallas
           vec3 env(vec3 d){
@@ -578,8 +601,13 @@ const data = JSON.stringify(projects);
             c+=vec3(0.75,0.86,1.0)*0.55*box(d,vec3(0.8,0.1,-0.6),vec3(0.,1.,0.),vec2(0.05,0.9),0.04);
             vec3 gel=mix(mix(vec3(0.20,0.88,1.0),vec3(1.0,0.22,0.36),step(0.,d.x)),uTint,uTintAmt*0.7);
             c+=gel*0.32*(1.0-0.5*uRingAmt)*box(d,vec3(sign(d.x),0.0,0.2),vec3(0.,1.,0.),vec2(0.06,0.9),0.05);
-            if(uRingAmt>0.01) c+=(panel(uS0,uAng.x,uBr.x,d)+panel(uS1,uAng.y,uBr.y,d)+panel(uS2,uAng.z,uBr.z,d)+panel(uS3,uAng.w,uBr.w,d))*uRingAmt;
+            if(uRingAmt>0.01) c+=(panel(uS0,uAng.x,uBr.x,d,uVid4.x)+panel(uS1,uAng.y,uBr.y,d,uVid4.y)+panel(uS2,uAng.z,uBr.z,d,uVid4.z)+panel(uS3,uAng.w,uBr.w,d,uVid4.w))*uRingAmt;
             return c; }
+          float wordAt(vec3 q){ if(sdIco(q)>-0.02) return 0.;   // sólo dentro de la piedra
+            vec2 uv=vec2(dot(q,uCamR)*0.5684, dot(q,uCamU)*1.5347)+0.5;
+            if(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.) return 0.; return texture2D(uWord,uv).g; }
+          float wordRay(vec3 o, vec3 d, float off){ vec3 nP=normalize(cross(uCamR,uCamU)); float dn=dot(d,nP);
+            if(abs(dn)<1e-3) return 0.; float t=(off-dot(o,nP))/dn; if(t<0.) return 0.; return wordAt(o+d*t); }
           void main(){
             vec3 ro=(uInvM*vec4(cameraPosition,1.)).xyz; vec3 pw=(uInvM*vec4(vWorld,1.)).xyz; vec3 rd=normalize(pw-ro);
             float b=dot(ro,rd), cc=dot(ro,ro)-1.7424, h=b*b-cc; if(h<0.) discard;
@@ -600,6 +628,12 @@ const data = JSON.stringify(projects);
               if(length(oR)<0.5)oR=reflect(rin,ne); if(length(oG)<0.5)oG=reflect(rin,ne); if(length(oB)<0.5)oB=reflect(rin,ne);
               col=vec3(env(uRot*oR).r,env(uRot*oG).g,env(uRot*oB).b);
               col*=exp(-ti*vec3(0.30,0.22,0.16)*0.3)*1.15;
+              if(uWordAmt>0.002){
+                // cada canal entra con su índice: el nombre se quiebra en cada faceta y se abre en cian/rojo en los cantos
+                float dsp=0.035; vec3 rR=refract(rd,n,1.0/(ior-dsp)), rB=refract(rd,n,1.0/(ior+dsp));
+                vec3 w=vec3(wordRay(po,rR,0.), wordRay(po,rin,0.), wordRay(po,rB,0.))*1.05;
+                col=col*(1.0-0.35*clamp(max(w.r,max(w.g,w.b)),0.,1.)*uWordAmt)+w*uWordAmt;
+              }
             }
             col=mix(col,env(uRot*reflect(rd,n)),fres*0.7);
             float dnn=1.0-dot(n,nrmC(po));
@@ -613,7 +647,7 @@ const data = JSON.stringify(projects);
               // el sitio que llega se apodera de la gema faceta por faceta (cascada, no fundido)
               float fid=hash3(floor(nv*4.0+0.5));
               float take=smoothstep(fid-0.12,fid+0.04,uSiteMix*1.25-0.12);
-              vec3 site=mix(siteFacet(uSiteB,base,off,disp), siteFacet(uSiteA,base,off,disp), take);
+              vec3 site=mix(dec(siteFacet(uSiteB,base,off,disp),uVidAB.y), dec(siteFacet(uSiteA,base,off,disp),uVidAB.x), take);
               float mw=uMirror*smoothstep(0.06,0.45,ci)*(0.6+0.4*ci);
               col=mix(col, site*1.08, mw);
             }
@@ -622,13 +656,9 @@ const data = JSON.stringify(projects);
             vec3 rimC=mix(vec3(0.13,0.85,1.0),vec3(1.0,0.22,0.35),smoothstep(-0.45,0.45,nw.x)); rimC=mix(rimC,uTint,uTintAmt*0.5);
             col+=pow(1.0-ci,3.0)*0.42*rimC;
             col+=smoothstep(0.06,0.5,dnn)*smoothstep(0.0,0.25,ci)*0.24*vec3(1.0,0.97,0.92);
+            // DISPARO: al salir una ventana, los cantos se encienden en cian/rojo y el núcleo da un golpe de luz
+            if(uFlash>0.002){ col+=uFlash*(pow(1.0-ci,1.3)*1.9*rimC + smoothstep(0.06,0.5,dnn)*1.1*rimC); }
             col=col/(1.0+col*0.45);
-            if(uWordAmt>0.002){
-              vec2 wuv=vec2(vQ.x*1.62, vQ.y*1.62*2.7)+0.5+(uRot*rin).xy*0.045;
-              float so=0.004;
-              vec3 w=vec3(texture2D(uWord,wuv+vec2(so,0.)).r, texture2D(uWord,wuv).g, texture2D(uWord,wuv-vec2(so,0.)).b);
-              col+=uWordAmt*w*0.97;
-            }
             float al=clamp(0.42+fres*0.7+max(col.r,max(col.g,col.b))*0.5+uMirror*0.35,0.,1.)*uAlpha;
             gl_FragColor=vec4(col,al);
             #include <colorspace_fragment>
@@ -678,7 +708,7 @@ const data = JSON.stringify(projects);
           if (e.key === 'Escape' && inCase) { closeCase(); return; }
           if (!entered && (e.key === 'Enter' || e.key === ' ') && document.activeElement === document.body) { e.preventDefault(); enter(); return; }
           if (entered && !inCase && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-            e.preventDefault(); const fw = e.key === 'ArrowRight' || e.key === 'ArrowDown'; const k = (focusIndex() + (fw ? 1 : N - 1)) % N;
+            e.preventDefault(); const fw = e.key === 'ArrowRight' || e.key === 'ArrowDown'; const k = engaged ? (focusIndex() + (fw ? 1 : N - 1)) % N : focusIndex(); engage(true);
             target = shortest(rot, angleFor(k)); if (rows.includes(document.activeElement)) rows[k].focus({ preventScroll: true }); }
         });
 
@@ -702,18 +732,23 @@ const data = JSON.stringify(projects);
             lastP = p; lastT = now; moved += Math.abs(dp);
             const k = (TAU / N) / spanOf();
             rot += dp * k; vel = vel * 0.6 + (dp * k / (dtt / 1000)) * 0.4; }
-          else if (entered && !inCase && !coarse) { const i = pick(e.clientX, e.clientY); canvas.style.cursor = onGem(e.clientX, e.clientY) || (i >= 0 && i === focusIndex()) ? 'pointer' : ''; }
+          else if (entered && !inCase && !coarse) { const i = pick(e.clientX, e.clientY);
+            overFront = onGem(e.clientX, e.clientY) || (i >= 0 && i === focusIndex()); canvas.style.cursor = overFront ? 'pointer' : '';
+            if (overFront) engage(); else if (hoverI < 0 && performance.now() > stickyT) engaged = false; }
         });
         const up = (e) => { if (!dragging) return; dragging = false; canvas.classList.remove('drag');
           if (performance.now() - lastT > 90) vel = 0;
           vel = Math.max(-9, Math.min(9, vel));
           const tap = moved < 10 && Math.hypot(e.clientX - downX, e.clientY - downY) < 12 && performance.now() - downT < 450;
+          if (moved >= 10) engage(true);
           if (tap && !wasSpinning) {
-            if (onGem(e.clientX, e.clientY)) { openCase(focusIndex()); return; }
+            // táctil: el primer toque muestra el proyecto del frente, el segundo lo abre (como el home)
+            if (onGem(e.clientX, e.clientY)) { if (engaged) openCase(focusIndex()); else engage(true); return; }
             const i = pick(e.clientX, e.clientY);
-            if (i >= 0 && i === focusIndex()) openCase(i); else if (i >= 0) target = shortest(rot, angleFor(i)); } };
+            if (i >= 0 && i === focusIndex()) { if (engaged) openCase(i); else engage(true); }
+            else if (i >= 0) { target = shortest(rot, angleFor(i)); engage(true); } } };
         canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-        addEventListener('wheel', (e) => { if (inCase || !entered || unfold < 0.6) return; target = null; vel += -(e.deltaY + e.deltaX) * 0.0035; }, { passive: true });
+        addEventListener('wheel', (e) => { if (inCase || !entered || unfold < 0.6) return; target = null; vel += -(e.deltaY + e.deltaX) * 0.0035; engage(true); }, { passive: true });
 
         // ── tamaño ──
         let W = 0, H = 0, portrait = false, baseFov = 34;
@@ -745,15 +780,18 @@ const data = JSON.stringify(projects);
             const yc = 72 + 0.2 * k * H, camY = C.y + (yc - 0.5 * H) * pxS;
             const pxG = 2 * camZ * t / H; GR = 0.095 * k * H * pxG;
             GEMP.set(0, camY - (72 + 0.52 * k * H - 0.5 * H) * pxG, 0);
+            const bot = (indexEl.offsetTop || H * 0.6) - 14, yi = (72 + bot) / 2;   // reposo: centrada en el hueco sobre los nombres
+            GRI = Math.min(0.15 * H, (bot - 72) * 0.3) * pxG; GEMI.set(0, camY - (yi - 0.5 * H) * pxG, 0);
             poseIndex.set(0, camY, camZ); lookIndex.set(0, camY, -10);
-            poseHome.set(0, GEMP.y, GR / (0.62 * t * camera.aspect)); lookHome.copy(GEMP);
+            poseHome.set(0, GEMI.y, GRI / (0.62 * t * camera.aspect)); lookHome.copy(GEMI);
           } else {
             const L = SH / (2 * t * 0.36), camZ = L - R, pxS = 2 * L * t / H;
             const camY = RING_Y + (0.34 * H - 0.5 * H) * pxS;
             const pxG = 2 * camZ * t / H; GR = 0.17 * H * pxG;
             GEMP.set(0, camY - (0.74 * H - 0.5 * H) * pxG, 0);
+            GRI = 0.22 * H * pxG; GEMI.set(0, camY, 0);                              // reposo: centro de la vista, diámetro 44%
             poseIndex.set(0, camY, camZ); lookIndex.set(0, camY, -R);
-            poseHome.set(0, GEMP.y, GR / (0.6 * t)); lookHome.copy(GEMP);
+            poseHome.set(0, GEMI.y, GRI / (0.6 * t)); lookHome.copy(GEMI);
           }
           FLOORY = GEMP.y - GR - 0.28; floor.position.y = FLOORY + 0.001; mirror.position.y = 2 * FLOORY - RING_Y;
         };
@@ -794,7 +832,9 @@ const data = JSON.stringify(projects);
         addEventListener('pointermove', (e) => { if (e.pointerType !== 'mouse') return; mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
         const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3();
         const qA = new THREE.Quaternion(), qR = new THREE.Quaternion(), radial = new THREE.Vector3(), AX = new THREE.Vector3();
+        const slotC = new THREE.Vector3(), gemL = new THREE.Vector3(), midC = new THREE.Vector3();
         const tint = new THREE.Color(0.86, 0.93, 1.0), base = new THREE.Color(0.86, 0.93, 1.0), tmpC = new THREE.Color();
+        let shot = 0, flash = 0;
         let spinA = 0, prevF = 0, homeT = 0, homeI = 0, siteI = -1;
         const loop = (now) => {
           const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -805,6 +845,8 @@ const data = JSON.stringify(projects);
           unfold += ((entered ? 1 : 0) - unfold) * lp(reduce ? 60 : entered ? 1.5 : 2.4);
           const ue = eio(Math.min(1, Math.max(0, unfold)));
 
+          // si no hay ninguna ventana afuera, la órbita se acomoda al instante: la elegida sale derecho al frente
+          if (target !== null && !inCase && screens.every((s) => s.out < 0.04)) { rot = target; screens.forEach((s) => { s.cur = rot + spinA; s.curV = 0; }); }
           if (target !== null) { rot += (target - rot) * lp(inCase ? 4.5 : 3.0); vel = 0; }
           else if (!dragging) {
             vel *= Math.exp(-dt * 2.6); rot += vel * dt;
@@ -823,13 +865,14 @@ const data = JSON.stringify(projects);
           const par = (1 - f * 0.85) * (0.4 + 0.6 * ue);
           camPos.x += pmx * 0.35 * par; camPos.y += -pmy * 0.22 * par;
           camera.position.copy(camPos); camera.lookAt(camLook);
+          NEAR.value = Math.max(1.5, camera.position.distanceTo(ring.position) - (drum ? RD : R) - 0.4);
           // zoom de la grúa: la lente se cierra a mitad del vuelo y vuelve al llegar
           const fv = baseFov - (reduce ? 0 : 7 * Math.sin(Math.PI * f));
           if (Math.abs(camera.fov - fv) > 0.01) { camera.fov = fv; camera.updateProjectionMatrix(); }
 
           // pantallas con física: cada una persigue al anillo con su propio resorte (se atrasa al girar) y se inclina
           // según esa demora; flotan con un balanceo lento y desfasado. Fundido, nunca cortes. Un solo video.
-          const fi = inCase ? caseI : focusIndex();
+          const fi = inCase ? caseI : focusIndex(), sel = inCase || engaged; shot = 0;
           const calm = Math.abs(vel) < 1.2 && !dragging;
           screens.forEach((s, i) => {
             const k = 26 + i * 5, c = 2 * Math.sqrt(k) * 0.72;          // resorte sub-amortiguado: un rebote leve
@@ -846,18 +889,30 @@ const data = JSON.stringify(projects);
             qR.setFromAxisAngle(radial, (-lag * 0.9 + bob * 0.012) * (1 - still));
             s.pivot.quaternion.copy(qA).multiply(qR); s.rpivot.quaternion.copy(s.pivot.quaternion);
             const by = reduce ? 0 : Math.sin(now * 0.0008 + i * 2.3) * 0.06 * (1 - still);
-            if (drum) s.pivot.position.set(by, 0, 0); else s.pivot.position.set(0, by, 0);
-            s.rpivot.position.copy(s.pivot.position);
-            const on = i === fi ? 1 : 0;
+            const on = sel && i === (inCase ? caseI : hoverI >= 0 ? hoverI : fi) ? 1 : 0;   // sólo la elegida, no las que pasan girando
+            // NACE DE LA GEMA: la ventana elegida sale de la piedra creciendo hasta su lugar; al soltarla, vuelve a entrar
+            const prevOut = s.out;
+            s.out += (on - s.out) * lp(reduce ? 60 : on ? 3.2 : 4.5);
+            if (s.out > prevOut + 1e-4 && !inCase && !reduce) shot = Math.max(shot, Math.sin(Math.PI * Math.min(1, s.out * 1.8)));
+            const e = eio(Math.min(1, Math.max(0, s.out))), ks = 0.03 + 0.97 * e, Rr = drum ? RD : R;
+            slotC.set(0, 0, Rr).applyQuaternion(s.pivot.quaternion);              // centro de la pantalla en su lugar
+            gemL.copy(gem.position).sub(ring.position).divideScalar(Math.max(0.001, ring.scale.x));   // la gema, en el anillo
+            midC.lerpVectors(gemL, slotC, e);
+            if (!drum) midC.y += Math.sin(Math.PI * e) * Rr * 0.08;               // sube en arco, no en línea recta
+            s.pivot.position.copy(midC).addScaledVector(slotC, -ks);
+            if (drum) s.pivot.position.x += by; else s.pivot.position.y += by;
+            s.pivot.scale.setScalar(ks); s.pivot.visible = s.out > 0.006;
+            s.rpivot.position.copy(s.pivot.position); s.rpivot.scale.setScalar(ks); s.rpivot.visible = s.pivot.visible;
             s.focus += (on - s.focus) * lp(4);
-            const dimT = inCase ? (on ? 1.0 : 0.06) : (on ? 1.0 : (drum ? 0.16 : 0.24));   // el foco se LEE limpio
+            // sólo se muestra el proyecto elegido (hover / toque / click); las demás son paneles de vidrio apagados
+            const dimT = on ? 1.0 : 0.02;
             s.dim += (dimT - s.dim) * lp(4);
             // mobile: al llegar, el teléfono 3D se funde y queda el video del DOM (mismo cuadro, scrolleable)
             let away = 1;
             if (drum) { let da = wrap(a - (Math.PI - DOFF)); if (da > Math.PI) da -= TAU; away = 1 - THREE.MathUtils.smoothstep(Math.abs(da), 0.75, 1.25); }
-            const fadeT = ue * away * (inCase && !on ? 0 : 1) * (drum && inCase && on && f > 0.9 ? 0 : 1);
+            const fadeT = ue * away * (inCase && !on ? 0 : 1) * (drum && inCase && on && f > 0.9 ? 0 : 1) * THREE.MathUtils.smoothstep(s.out, 0.0, 0.35);
             s.fade += (fadeT - s.fade) * lp(inCase && !on ? 9 : inCase ? 3 : 5);   // en el case las otras se van YA
-            s.uni.uDim.value = s.dim; s.uni.uFocus.value = s.focus; s.uni.uFade.value = s.fade;
+            s.uni.uDim.value = s.dim; s.uni.uFocus.value = s.focus; s.uni.uFade.value = s.fade; s.uni.uVid.value = s.uni.map.value === s.vtex ? 1 : 0;
             s.uni.uRead.value = on ? Math.max(f, s.focus) : 0;                        // foco: sin desenfoque ni brillos
             s.uni.uFlat.value = on ? f : 0;
             if (!s.uni.map.value) s.uni.map.value = s.runi.map.value = posterOf(s.p.slug, mode);
@@ -867,20 +922,29 @@ const data = JSON.stringify(projects);
             floorU.uSP.value[i].set(Math.sin(a) * R * 0.86 * ue, Math.cos(a) * R * 0.86 * ue);
             floorU.uSC.value[i].copy(s.avg).multiplyScalar(s.dim * (0.45 + 0.9 * s.focus) * s.fade);
           });
-          rows.forEach((r, i) => r.classList.toggle('on', hoverI >= 0 ? i === hoverI : i === fi));
+          const ri = hoverI >= 0 ? hoverI : sel ? fi : -1;
+          rows.forEach((r, i) => r.classList.toggle('on', i === ri)); indexEl.classList.toggle('has-on', ri >= 0);
 
           // gema: centro de la órbita. En el case se hunde y se achica con un destello de dispersión
           // el case NACE de la gema: el reflejo se expande hacia la cámara y se disuelve mientras ella lo atraviesa
           const gk = 1 + f * 1.5;
-          gem.position.set(GEMP.x, GEMP.y + (reduce ? 0 : Math.sin(now * 0.0009) * GR * 0.03), GEMP.z); gem.scale.setScalar((GR / 1.26) * gk);
+          // al elegir, la gema baja y se achica (retroceso del disparo) mientras la ventana sube; al soltar vuelve al centro
+          gsel += ((entered && sel ? 1 : 0) - gsel) * lp(reduce ? 60 : sel ? 3.2 : 3.6);
+          const ge2 = eio(Math.min(1, Math.max(0, gsel))), gR = THREE.MathUtils.lerp(GRI, GR, ge2);
+          tmpV.lerpVectors(GEMI, GEMP, ge2);
+          gem.position.set(tmpV.x, tmpV.y + (reduce ? 0 : Math.sin(now * 0.0009) * gR * 0.03), tmpV.z); gem.scale.setScalar((gR / 1.26) * gk);
           gemU.uAlpha.value = 1 - THREE.MathUtils.smoothstep(f, 0.25, 0.7);
           if (!reduce) { gem.rotation.y += dt * 0.13; gem.rotation.x = 0.3 + Math.sin(now * 0.00035) * 0.12; gem.rotation.z = Math.sin(now * 0.00027) * 0.08; }
           tmpC.set(projects[fi].accent).lerp(base, 0.55); tint.lerp(tmpC, lp(3));
           gem.updateMatrixWorld(); gemU.uInvM.value.copy(gem.matrixWorld).invert();
           gemU.uRot.value.setFromMatrix4(rotM4.makeRotationFromQuaternion(gem.quaternion));
-          gemU.uTint.value.set(projects[fi].accent); gemU.uTintAmt.value += ((hoverI >= 0 ? 1 : 0) - gemU.uTintAmt.value) * lp(5);
+          qInv.copy(gem.quaternion).invert();
+          gemU.uCamR.value.set(1, 0, 0).applyQuaternion(camera.quaternion).applyQuaternion(qInv);
+          gemU.uCamU.value.set(0, 1, 0).applyQuaternion(camera.quaternion).applyQuaternion(qInv);
+          gemU.uTint.value.set(projects[fi].accent); gemU.uTintAmt.value += ((sel && entered ? 1 : 0) - gemU.uTintAmt.value) * lp(5);
           screens.forEach((s, i) => { gemU['uS' + i].value = s.uni.map.value; });
-          const ph = screens.map((s) => s.phi + s.cur), br = screens.map((s) => (0.22 + 0.5 * s.dim) * (0.75 + 0.55 * s.focus));
+          gemU.uVid4.value.set(...screens.map((s) => s.uni.uVid.value));
+          const ph = screens.map((s) => s.phi + s.cur), br = screens.map((s) => 0.72 * s.dim * (0.75 + 0.55 * s.focus));
           gemU.uAng.value.set(ph[0], ph[1], ph[2], ph[3]); gemU.uBr.value.set(br[0], br[1], br[2], br[3]);
           gemU.uDrum.value = drum ? 1 : 0; gemU.uRr.value = drum ? RD : R; gemU.uTh.value = drum ? THD : TH;
           gemU.uAx.value = drum ? PW : SH; gemU.uYc.value = drum ? 0 : RING_Y - gem.position.y;
@@ -892,9 +956,12 @@ const data = JSON.stringify(projects);
           else if (tex !== gemU.uSiteA.value) gemU.uSiteA.value = tex;   // póster → video sin cascada
           if (!gemU.uSiteB.value) gemU.uSiteB.value = tex;
           gemU.uSiteMix.value = Math.min(1, gemU.uSiteMix.value + dt / (reduce ? 0.01 : 0.9));
+          gemU.uVidAB.value.set(gemU.uSiteA.value && gemU.uSiteA.value.isVideoTexture ? 1 : 0, gemU.uSiteB.value && gemU.uSiteB.value.isVideoTexture ? 1 : 0);
           gemU.uSiteAsp.value = drum ? PW / PH : 1.6;
-          gemU.uMirror.value += ((entered ? 0.72 : 0.2) - gemU.uMirror.value) * lp(2.5); gemU.uWordAmt.value = wordReady ? Math.max(0, 1 - ue * 2.2) : 0;
-          gemU.uBurst.value = Math.sin(Math.PI * Math.min(1, f * 1.3)) * (f > prevF ? 1 : 0.4); prevF = f;
+          gemU.uMirror.value += ((entered && sel ? 0.72 : 0) - gemU.uMirror.value) * lp(2.5);
+          gemU.uWordAmt.value = wordReady ? Math.max(0, 1 - ue * 2.2) : 0;
+          flash += (shot - flash) * lp(shot > flash ? 30 : 6); gemU.uFlash.value = flash;
+          gemU.uBurst.value = Math.sin(Math.PI * Math.min(1, f * 1.3)) * (f > prevF ? 1 : 0.4) + flash * 0.9; prevF = f;
           gemQuad.position.copy(gem.position); gemQuad.quaternion.copy(camera.quaternion); gemQuad.scale.setScalar(gem.scale.x * 2.85);
           gemQuad.visible = f < 0.75;
           floorU.uGem.value.set(gem.position.x, gem.position.z, (1 - f) * ue);

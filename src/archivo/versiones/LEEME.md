@@ -11,3 +11,6 @@ y volver a agregarlo en `src/data/versiones.ts`.
 - lupa.astro — muro apagado de los 4 sitios + gema-lupa que los revela (archivada 2026-11-04, ronda 6)
 - anterior.astro — el home publicado hasta noviembre 2026 (gema + índice + collage). Archivado 2026-11-04 al publicar Prisma:
   regla de Pablo = cada evolución es el nuevo punto de partida, no se compara contra lo superado.
+- facetas.astro, cine.astro, espectro.astro, cuarto-oscuro.astro, linea.astro, prisma-pre.astro — archivadas 2026-11-11:
+  Pablo se quedó con Prisma (home) + Órbita para seguir refinando. Los assets de espectro y prisma-pre se movieron de
+  `public/img/` a `assets/` (para no publicarlos); si se restauran, devolverlos a `public/img/<slug>/`.
