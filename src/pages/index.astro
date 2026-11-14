@@ -1,6 +1,6 @@
 ---
 // HOME — Órbita (publicada 2026-11-11; antes fue la versión en exploración /v/orbita).
-// HOME: la gema sola con BLOPA adentro (regla de Pablo: sin texto alrededor). Click / rueda / swipe / Enter →
+// HOME: la gema sola con BLOPA adentro (sólo una leyenda chica que dice cómo se usa). Click / rueda / swipe / Enter →
 // el anillo de pantallas se DESPLIEGA desde la gema y la órbita queda alrededor de ella. La gema (raymarcher del
 // home) refleja y refracta las pantallas reales con sus videos. Arrastrar / rueda / flechas giran; hover trae al
 // frente; click en la pantalla del frente → la cámara vuela adentro y aparece la ficha.
@@ -39,7 +39,7 @@ const data = JSON.stringify(projects);
       /* foco visible en todo lo accionable (teclado) */
       :is(button,a):focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:2px}
       .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-      /* la señal: anillo que se expande desde la gema (sin texto), cada 2,6 s desde el segundo 1,1 */
+      /* lienzo de la gema */
       canvas.orb{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:1;touch-action:none}
       body.entered canvas.orb{cursor:grab}
       canvas.orb.drag{cursor:grabbing}
@@ -51,6 +51,28 @@ const data = JSON.stringify(projects);
       .enter:focus-visible::after{content:"";position:absolute;left:50%;top:50%;width:66vmin;aspect-ratio:1;border-radius:50%;
         transform:translate(-50%,-50%);outline:1px solid var(--ink);outline-offset:0}
       body.entered .enter{display:none}
+
+      /* leyenda de uso: dice cómo se usa el sitio en cada momento (home → explorar → abrir); se apaga dentro del case */
+      .hint{position:fixed;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + clamp(1rem,3vh,1.6rem));z-index:7;
+        display:flex;align-items:center;gap:.7rem;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--mid);pointer-events:none;opacity:0;transition:opacity .5s var(--ease)}
+      .hint.on{opacity:1}
+      .hint.swap .hint__t{opacity:0}
+      .hint__t{transition:opacity .22s var(--ease)}
+      body:not(.entered) .hint{justify-content:center;bottom:calc(env(safe-area-inset-bottom,0px) + clamp(2.4rem,9vh,5rem));color:var(--ink)}
+      body:not(.entered) .hint.on{transition-delay:1.2s}
+      /* el gesto, dibujado: un punto que late (tocá) o que se desliza por su riel (girá) */
+      .hint__g{position:relative;flex:none;width:14px;height:14px}
+      .hint__g::before{content:"";position:absolute;inset:0;border:1px solid currentColor;border-radius:50%;opacity:.45}
+      .hint__g::after{content:"";position:absolute;left:4px;top:4px;width:6px;height:6px;border-radius:50%;background:currentColor;animation:tap 1.6s var(--ease) infinite}
+      .hint[data-g="v"] .hint__g{width:8px;height:22px}
+      .hint[data-g="h"] .hint__g{width:22px;height:8px}
+      .hint[data-g="v"] .hint__g::before,.hint[data-g="h"] .hint__g::before{border-radius:999px}
+      .hint[data-g="v"] .hint__g::after{left:1px;top:1px;animation:railv 1.8s var(--ease) infinite}
+      .hint[data-g="h"] .hint__g::after{left:1px;top:1px;animation:railh 1.8s var(--ease) infinite}
+      @keyframes tap{0%,100%{transform:scale(.6);opacity:.5}45%{transform:scale(1);opacity:1}}
+      @keyframes railv{0%,100%{transform:translateY(14px)}50%{transform:translateY(0)}}
+      @keyframes railh{0%,100%{transform:translateX(0)}50%{transform:translateX(14px)}}
 
       .nav{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;justify-content:space-between;align-items:baseline;
         align-items:center;padding:calc(var(--gut) - 12px) var(--gut);font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);pointer-events:none;
@@ -135,7 +157,7 @@ const data = JSON.stringify(projects);
       body.drum .kase{padding-bottom:calc(5.5rem + env(safe-area-inset-bottom,0px))!important}
 
       @media(orientation:portrait){
-        .index{left:var(--gut);right:var(--gut);top:auto;bottom:clamp(2rem,6vh,3.5rem);justify-content:flex-end}
+        .index{left:var(--gut);right:var(--gut);top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + clamp(3.2rem,8.5vh,4.8rem));justify-content:flex-end}
         .index::before{top:auto;width:auto;right:0;height:46svh;background:linear-gradient(0deg,rgba(7,7,10,.96) 0%,rgba(7,7,10,.8) 55%,rgba(7,7,10,0) 100%)}
         .prow{font-size:clamp(1.9rem,9.6vw,3.6rem)}
         .kase{top:var(--kase-top,52svh);bottom:0;transform:translateY(16px);width:auto;right:var(--gut);overflow-y:auto;overscroll-behavior:contain;
@@ -157,12 +179,13 @@ const data = JSON.stringify(projects);
         .kase__txt{font-size:.88rem}
         .cred{margin-top:1rem}
         .kase__acts{margin-top:1rem}
-        .index{bottom:1.2rem}
+        .index{bottom:2.6rem}
+        .hint{bottom:.8rem}
         .prow{font-size:clamp(1.8rem,8.5vh,2.6rem)}
       }
 
       /* sin WebGL: lista HTML y ficha con la captura (todo legible, nada roto) */
-      body.no-gl canvas.orb,body.no-gl .enter{display:none}
+      body.no-gl canvas.orb,body.no-gl .enter,body.no-gl .hint{display:none}
       body.no-gl .index{position:static;opacity:1;transform:none;pointer-events:auto;padding:calc(var(--gut) + 4rem) var(--gut) 3rem}
       body.no-gl .index::before{display:none}
       body.no-gl .prow{color:var(--ink);flex-direction:column;gap:.2rem;padding:1rem 0;border-bottom:1px solid var(--hair);width:100%}
@@ -174,14 +197,15 @@ const data = JSON.stringify(projects);
       body.no-gl .kase__img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;border:1px solid var(--hair);border-radius:6px;margin-bottom:1.5rem}
       body.no-gl:not(.in-case) .kase{display:none}
 
-      @media (prefers-reduced-motion:reduce){*{transition:none!important} .cbar{animation:none;opacity:1}}
+      @media (prefers-reduced-motion:reduce){*{transition:none!important} .cbar{animation:none;opacity:1} .hint__g::after{animation:none}}
     </style>
   </head>
   <body>
     <h1 class="sr">blopa — sitios de Pablo Vela</h1>
     <canvas class="orb" data-canvas aria-hidden="true"></canvas>
-    <!-- señal sin texto: un pulso que sale de la gema invita a tocar antes de los 3 s -->
+    <!-- la gema es el disparador; la leyenda de abajo (.hint) dice cómo se usa -->
     <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
+    <p class="hint" data-hint aria-hidden="true"><span class="hint__g"></span><span class="hint__t" data-hint-t></span></p>
     <nav class="nav" aria-label="Navegación" data-nav>
       <button type="button" class="nav__home" data-home>blopa</button>
       <a class="nav__contact" href="mailto:blopave@pm.me"><span class="nav__who">Pablo Vela ·&nbsp;</span>blopave@pm.me ↗</a>
@@ -215,7 +239,7 @@ const data = JSON.stringify(projects);
     </div>
     </main>
     <noscript>
-      <style is:inline>.nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) 3rem;max-width:48rem}.nojs h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.4rem);line-height:1}.nojs li{list-style:none;padding:1rem 0;border-bottom:1px solid var(--hair)}.nojs p{color:var(--mid);font-size:.92rem;margin-top:.35rem}.nojs ul{padding:0}.nav{opacity:1!important;pointer-events:auto!important}canvas.orb,.enter,.index,.kase,.cbar{display:none!important}body{overflow:auto!important}</style>
+      <style is:inline>.nojs{position:relative;z-index:5;padding:calc(var(--gut) + 4rem) var(--gut) 3rem;max-width:48rem}.nojs h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.4rem);line-height:1}.nojs li{list-style:none;padding:1rem 0;border-bottom:1px solid var(--hair)}.nojs p{color:var(--mid);font-size:.92rem;margin-top:.35rem}.nojs ul{padding:0}.hint{display:none!important}.nav{opacity:1!important;pointer-events:auto!important}canvas.orb,.enter,.index,.kase,.cbar{display:none!important}body{overflow:auto!important}</style>
       <section class="nojs" aria-label="Proyectos"><ul>
         {projects.map((p) => (<li><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>))}
       </ul></section>
@@ -247,7 +271,7 @@ const data = JSON.stringify(projects);
       addEventListener('keydown', () => { kbd = true; }, true); addEventListener('pointerdown', () => { kbd = false; }, true);
       const focusEl = (el) => el && el.focus({ preventScroll: true, focusVisible: kbd });
       // el motor 3D se cuelga de estos ganchos (sin WebGL quedan vacíos)
-      const hooks = { enter() {}, home() {}, open() {}, close() {}, hover() {} };
+      const hooks = { enter() {}, home() {}, open() {}, close() {}, hover() {}, front: () => -1, drum: () => false };
 
       // historial coherente: niveles home(0) → #proyectos(1) → #slug(2). Bajar de nivel VUELVE en el historial
       // (Esc no apila #proyectos); embebido (/ver, dos marcos comparten la ventana) sólo se reemplaza.
@@ -451,8 +475,7 @@ const data = JSON.stringify(projects);
         //    Póster liviano siempre; video sólo en la del frente. En el tambor, el sitio MOBILE real (-m). ──
         const loader = new THREE.TextureLoader();
         const posterCache = {};
-        // BassLayer: el video abre con ~3 s de pantalla de carga negra → arranca después; su póster de escritorio es negro → la captura de la onda
-        const START = { basslayer: 3.2 }, POSTER = { basslayer: '/img/src/basslayer-2.jpg' };
+        const START = {}, POSTER = {};   // todos arrancan en su home (BassLayer incluido: su entrada es el vinilo, no una carga)
         const posterOf = (slug, m) => { const k = slug + m; if (!posterCache[k]) { const t = loader.load(m !== 'drum' && POSTER[slug] ? POSTER[slug] : '/img/poster/' + slug + (m === 'drum' ? '-m' : '') + '.jpg'); t.colorSpace = THREE.SRGBColorSpace;
             t.anisotropy = renderer.capabilities.getMaxAnisotropy(); posterCache[k] = t; } return posterCache[k]; };
         const pickers = [];
@@ -702,6 +725,7 @@ const data = JSON.stringify(projects);
           if (mode === 'drum') { media.replaceChildren(screens[i].v); play(screens[i], true); } };
         hooks.close = () => { target = null; setTimeout(() => { if (!inCase) media.replaceChildren(); }, 650); };
         hooks.hover = (i) => { target = shortest(rot, angleFor(i)); };
+        hooks.front = () => focusIndex(); hooks.drum = () => mode === 'drum';
 
         addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && inCase) { closeCase(); return; }
@@ -981,6 +1005,25 @@ const data = JSON.stringify(projects);
         ['pointermove', 'pointerdown', 'wheel', 'keydown', 'resize', 'popstate', 'hashchange', 'click'].forEach((ev) => addEventListener(ev, kick, { passive: true }));
         requestAnimationFrame(loop);
       };
+
+      // ════════════ leyenda de uso ════════════
+      // un solo renglón que acompaña cada paso: entrar → girar la gema → abrir el proyecto del frente
+      const hintEl = document.querySelector('[data-hint]'), hintT = document.querySelector('[data-hint-t]');
+      let hintKey = '', swapT = 0;
+      const hintFor = () => {
+        if (!GL || inCase) return null;
+        if (!entered) return { g: 'tap', t: coarse ? 'Tocá la gema para entrar' : 'Hacé clic en la gema para entrar' };
+        const g = hooks.drum() ? 'v' : 'h';
+        if (!engaged) return { g, t: coarse ? 'Deslizá la gema para ver los proyectos' : 'Arrastrá la gema o pasá por un nombre' };
+        const i = hoverI >= 0 ? hoverI : hooks.front(), p = projects[i];
+        return p ? { g: 'tap', t: (coarse ? 'Tocá para abrir ' : 'Clic para abrir ') + p.name } : { g, t: '' };
+      };
+      const syncHint = () => { const h = hintFor(), key = h ? h.g + '|' + h.t : '';
+        if (key === hintKey) return; const first = !hintKey; hintKey = key;
+        hintEl.classList.toggle('on', !!h); if (!h) return;
+        const put = () => { hintEl.dataset.g = h.g; hintT.textContent = h.t; hintEl.classList.remove('swap'); };
+        clearTimeout(swapT); if (first || reduce) put(); else { hintEl.classList.add('swap'); swapT = setTimeout(put, 220); } };
+      setInterval(syncHint, 150);
 
       // ════════════ arranque ════════════
       const glOK = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();

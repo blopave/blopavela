@@ -348,7 +348,7 @@ import { projects } from '../data/projects';
       const posterOf = (slug) => { let im = posters[slug];
         if (!im) { im = new Image(); im.decoding = 'async'; im.src = '/img/poster/' + slug + (PORT ? '-m' : '') + '.jpg';
           im.addEventListener('load', () => invalidate(), { once: true }); posters[slug] = im; } return im; };
-      const START = { basslayer: 3.2 };   // segundo en que cada tour ya muestra el sitio
+      const START = {};   // todos arrancan en su home (BassLayer incluido)
       const vidOf = (slug) => { let v = vids[slug];
         if (!v) { v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true;
           v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.preload = 'none';
