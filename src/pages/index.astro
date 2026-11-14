@@ -346,7 +346,9 @@ const data = JSON.stringify(projects);
 
       rows.forEach((row, i) => {
         row.addEventListener('pointerenter', (e) => { if (!inCase && e.pointerType === 'mouse') { hoverI = i; engage(); hooks.hover(i); } });
-        row.addEventListener('focus', () => { if (!inCase) { hoverI = i; engage(); hooks.hover(i); } });
+        // la lista es invisible: su foco sólo señala si se navega con teclado (al volver del case el foco vuelve acá
+        // por accesibilidad, y eso no tiene que frenar la órbita ni dejar un proyecto elegido)
+        row.addEventListener('focus', () => { if (!inCase && kbd) { hoverI = i; engage(); hooks.hover(i); } });
         row.addEventListener('pointerleave', () => { hoverI = -1; release(); });
         row.addEventListener('blur', () => { hoverI = -1; release(); });
         row.addEventListener('click', () => openCase(i));
