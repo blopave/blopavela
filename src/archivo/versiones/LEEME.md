@@ -14,3 +14,6 @@ y volver a agregarlo en `src/data/versiones.ts`.
 - facetas.astro, cine.astro, espectro.astro, cuarto-oscuro.astro, linea.astro, prisma-pre.astro — archivadas 2026-11-11:
   Pablo se quedó con Prisma (home) + Órbita para seguir refinando. Los assets de espectro y prisma-pre se movieron de
   `public/img/` a `assets/` (para no publicarlos); si se restauran, devolverlos a `public/img/<slug>/`.
+- orbita.astro, estallido.astro — archivadas 2026-11-13 al publicar Halo como home. Órbita fue el home 2026-11-11 → 11-13
+  (anillo de pantallas que sale de la gema de a una); Estallido fue el paso previo a Halo (gema → vitrina → abanico + lista).
+  Para restaurar: imports `../data/projects` → `../../data/projects` si se sirven desde acá (hoy no se sirven).

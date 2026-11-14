@@ -1,15 +1,5 @@
 ---
-// VERSIÓN halo (exploración 2026-11-13, sólo dev en /v/halo). SIMPLIFICADA (pedido de Pablo): gema → clic → los
-// proyectos salen y flotan alrededor (sin la vitrina intermedia). Clic en la gema / Esc → vuelve al home.
-// Lo visual de las proyecciones:
-//   sin lista (el nombre va con cada proyección; la lista queda invisible para teclado/lector) · proyecciones de LUZ
-//   sin marco: desenfocadas y separadas en RGB, ENFOCAN al señalarlas · un HAZ sale de la gema hacia la señalada ·
-//   HALO: orbitan lento alrededor de la gema (arriba = lejos); flechas/swipe traen la elegida al frente (abajo).
-// Base (de Estallido) — la visión de Pablo, en 3 momentos:
-//   1. carga: la gema sola con BLOPA adentro.
-//   2. clic → VITRINA: la gema crece y adentro se ven los sitios, uno a la vez, ciclando solos. Sin lista.
-//   3. clic en la gema → PROYECTA: los proyectos salen disparados y quedan en abanico alrededor; aparece la lista.
-//      Se recorren (hover / flechas / rueda / swipe) viendo su video; clic (mobile: 2º toque) → case. Clic en la gema → vitrina.
+// HOME — Órbita (publicada 2026-11-11; antes fue la versión en exploración /v/orbita).
 // HOME: la gema sola con BLOPA adentro (sólo una leyenda chica que dice cómo se usa). Click / rueda / swipe / Enter →
 // el anillo de pantallas se DESPLIEGA desde la gema y la órbita queda alrededor de ella. La gema (raymarcher del
 // home) refleja y refracta las pantallas reales con sus videos. Arrastrar / rueda / flechas giran; hover trae al
@@ -31,7 +21,6 @@ const data = JSON.stringify(projects);
     <meta property="og:image" content="https://www.blopavela.com/img/og.jpg" />
     <meta property="og:url" content="https://www.blopavela.com/" />
     <meta property="og:type" content="website" />
-    <meta name="robots" content="noindex" />
     <link rel="canonical" href="https://www.blopavela.com/" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -70,7 +59,7 @@ const data = JSON.stringify(projects);
       .hint.on{opacity:1}
       .hint.swap .hint__t{opacity:0}
       .hint__t{transition:opacity .22s var(--ease)}
-      body:not(.burst) .hint{justify-content:center;bottom:calc(env(safe-area-inset-bottom,0px) + clamp(2.4rem,9vh,5rem));color:var(--ink)}
+      body:not(.entered) .hint{justify-content:center;bottom:calc(env(safe-area-inset-bottom,0px) + clamp(2.4rem,9vh,5rem));color:var(--ink)}
       body:not(.entered) .hint.on{transition-delay:1.2s}
       /* el gesto, dibujado: un punto que late (tocá) o que se desliza por su riel (girá) */
       .hint__g{position:relative;flex:none;width:14px;height:14px}
@@ -99,27 +88,13 @@ const data = JSON.stringify(projects);
       .nav__contact:hover{color:var(--ink)}
       @media(max-width:640px){ .nav__who{display:none} }
 
-      /* halo: la lista existe sólo para teclado / lector (el nombre visible va con cada proyección) */
-      body:not(.no-gl) .index{position:fixed!important;top:auto!important;bottom:0!important;left:0!important;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);opacity:1!important}
-      body:not(.no-gl) .index::before{display:none}
-      /* rótulo de cada proyección: el nombre debajo; la señalada crece, toma su color y suma la categoría */
-      .plab{position:fixed;left:0;top:0;z-index:5;pointer-events:none;opacity:0;text-align:center;white-space:nowrap;transform-origin:50% 0;will-change:transform,opacity}
-      .plab b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(1.05rem,1.5vw,1.5rem);line-height:1;letter-spacing:.02em;color:rgba(242,243,245,.78);transition:color .35s var(--ease)}
-      .plab i{display:block;font-style:normal;font-family:var(--mono);font-size:.625rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);margin-top:.35rem;opacity:0;transition:opacity .35s var(--ease)}
-      .plab.on b{color:var(--acc)} .plab.on i{opacity:1}
-      body.burst:not(.in-case) .plab{pointer-events:auto;cursor:pointer}
-      /* mobile: en reposo sin nombres; sólo el elegido (el del frente) muestra el suyo, sin categoría (no choca con la leyenda) */
-      body.drum .plab b{opacity:0;transition:opacity .35s var(--ease),color .35s var(--ease)}
-      body.drum .plab.on b{opacity:1}
-      body.drum .plab i{display:none}
-      body.drum .plab:not(.on){pointer-events:none!important}
       /* índice: nombres sobre una veladura oscura (nunca se enciman con la pantalla de al lado) */
       .index{position:fixed;left:var(--gut);top:0;bottom:0;z-index:5;display:flex;flex-direction:column;justify-content:center;gap:.1rem;
         opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .7s var(--ease),transform .9s var(--ease)}
       .index::before{content:"";position:fixed;left:0;top:0;bottom:0;width:min(44vw,36rem);z-index:-1;pointer-events:none;
         background:linear-gradient(90deg,rgba(7,7,10,.94) 0%,rgba(7,7,10,.82) 45%,rgba(7,7,10,0) 100%)}
-      body.entered.burst .index{opacity:1;transform:none;pointer-events:none;transition-delay:.35s}
-      body.burst .index .prow{pointer-events:auto}
+      body.entered .index{opacity:1;transform:none;pointer-events:none;transition-delay:.7s}
+      body.entered .index .prow{pointer-events:auto}
       body.in-case .index{opacity:0;transform:translateX(-24px);pointer-events:none;transition-delay:0s}
       /* sin proyecto elegido todos se leen parejo; al posarse en uno, los demás se apagan (misma regla que el home) */
       .prow{position:relative;appearance:none;background:none;border:0;cursor:pointer;text-align:left;padding:.2rem 0;min-height:44px;display:flex;align-items:baseline;gap:.9rem;
@@ -230,7 +205,6 @@ const data = JSON.stringify(projects);
     <canvas class="orb" data-canvas aria-hidden="true"></canvas>
     <!-- la gema es el disparador; la leyenda de abajo (.hint) dice cómo se usa -->
     <button type="button" class="enter" data-enter aria-label="Entrar a los proyectos"></button>
-    <div aria-hidden="true">{projects.map((p) => <span class="plab" data-plab style={`--acc:${p.accent}`}><b>{p.name}</b><i>{p.category}</i></span>)}</div>
     <p class="hint" data-hint aria-hidden="true"><span class="hint__g"></span><span class="hint__t" data-hint-t></span></p>
     <nav class="nav" aria-label="Navegación" data-nav>
       <button type="button" class="nav__home" data-home>blopa</button>
@@ -290,20 +264,14 @@ const data = JSON.stringify(projects);
       // regla de Pablo (igual que el home): si el usuario no se posa sobre un proyecto, no se muestra ninguno.
       // engaged = hay un proyecto elegido (hover/foco en la lista o en la pantalla del frente, arrastre, rueda, flechas, toque)
       let engaged = false, overFront = false, stickyT = 0, relT = 0;
-      // estallido: todas las ventanas afuera, en abanico alrededor de la gema (sólo anillo / desktop)
-      let burst = false, burstAt = 0, fanHover = -1, fanSel = -1, enteredAt = 0;
-      const setBurst = (on, delay = 0) => { if (on === burst) return; burst = on; fanHover = -1; fanSel = -1; body.classList.toggle('burst', on);
-        if (on) { burstAt = performance.now() + delay; engaged = false; } else hoverI = -1; syncInert(); };
-      // recorrer las proyecciones (flechas / rueda / swipe): el elegido se enciende
-      const stepFan = (d) => { fanSel = fanSel < 0 ? (d > 0 ? 0 : N - 1) : (fanSel + d + N) % N; hooks.toFront(fanSel); };
-      const engage = (sticky) => { if (!burst && !inCase) return; clearTimeout(relT); engaged = true; if (sticky) stickyT = performance.now() + 1800; };
+      const engage = (sticky) => { clearTimeout(relT); engaged = true; if (sticky) stickyT = performance.now() + 1800; };
       const release = () => { clearTimeout(relT); relT = setTimeout(() => { if (hoverI < 0 && !inCase && !coarse && !overFront) engaged = false; }, 160); };
       // el anillo de foco se muestra sólo si se viene navegando con teclado (el foco se mueve igual para lectores)
       let kbd = false;
       addEventListener('keydown', () => { kbd = true; }, true); addEventListener('pointerdown', () => { kbd = false; }, true);
       const focusEl = (el) => el && el.focus({ preventScroll: true, focusVisible: kbd });
       // el motor 3D se cuelga de estos ganchos (sin WebGL quedan vacíos)
-      const hooks = { enter() {}, home() {}, open() {}, close() {}, hover() {}, front: () => -1, drum: () => false, toFront() {} };
+      const hooks = { enter() {}, home() {}, open() {}, close() {}, hover() {}, front: () => -1, drum: () => false };
 
       // historial coherente: niveles home(0) → #proyectos(1) → #slug(2). Bajar de nivel VUELVE en el historial
       // (Esc no apila #proyectos); embebido (/ver, dos marcos comparten la ventana) sólo se reemplaza.
@@ -321,16 +289,16 @@ const data = JSON.stringify(projects);
       };
       // lo invisible no se alcanza con teclado ni lector
       const cbarEl = document.querySelector('[data-cbar]');
-      const syncInert = () => { enterEl.inert = entered; navEl.inert = !entered; indexEl.inert = !entered || !burst || inCase; cbarEl.inert = !inCase;
+      const syncInert = () => { enterEl.inert = entered; navEl.inert = !entered; indexEl.inert = !entered || inCase; cbarEl.inert = !inCase;
         caseEl.inert = !inCase; caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
       const yearOf = (e) => (e ? e.split('-')[0] : 'En curso');
       // tipo de trabajo (lo que un cliente quiere saber primero)
       const KIND = { pulz: 'Producto propio', basslayer: 'Producto propio', valecasenave: 'Encargo', beokey: 'Encargo' };
 
-      const enter = ({ push = true, instant = false } = {}) => { if (entered) return; entered = true; enteredAt = performance.now();
-        body.classList.add('entered'); hooks.enter(instant); if (GL) setBurst(true, instant ? 0 : 380); syncInert(); if (push) nav('proyectos'); };
+      const enter = ({ push = true, instant = false } = {}) => { if (entered) return; entered = true;
+        body.classList.add('entered'); hooks.enter(instant); syncInert(); if (push) nav('proyectos'); };
       const openCase = (i, { push = true, instant = false, focus = true } = {}) => {
-        const p = projects[i]; caseI = i; inCase = true; setBurst(false);
+        const p = projects[i]; caseI = i; inCase = true;
         $('[data-eye]').textContent = p.category + ' · ' + yearOf(p.ended);
         $('[data-kind]').textContent = KIND[p.slug] || 'Encargo';
         const nx = projects[(i + 1) % N];
@@ -347,12 +315,12 @@ const data = JSON.stringify(projects);
         if (focus) setTimeout(() => { if (inCase) focusEl(backEl); }, instant || !GL ? 0 : 950);
       };
       const closeCase = ({ push = true, focus = true } = {}) => { if (!inCase) return; inCase = false;
-        body.classList.remove('in-case'); engaged = false; if (GL) setBurst(true); hooks.close(); syncInert(); document.title = 'blopa';
+        body.classList.remove('in-case'); engaged = coarse; hooks.close(); syncInert(); document.title = 'blopa';
         if (push) nav('proyectos');
         if (focus) focusEl(rows[caseI]); };
       const goHome = ({ push = true } = {}) => { closeCase({ push: false, focus: false });
         if (!GL) { if (push) nav(''); return; }   // sin gema no hay home: la lista ES la entrada
-        setBurst(false); entered = false; engaged = false; body.classList.remove('entered'); hooks.home(); syncInert(); if (push) nav(''); };
+        entered = false; engaged = false; body.classList.remove('entered'); hooks.home(); syncInert(); if (push) nav(''); };
 
       rows.forEach((row, i) => {
         row.addEventListener('pointerenter', (e) => { if (!inCase && e.pointerType === 'mouse') { hoverI = i; engage(); hooks.hover(i); } });
@@ -435,7 +403,7 @@ const data = JSON.stringify(projects);
         const UVMAP = `vec2 suv(){ return uDrum>0.5 ? vec2(1.0-vUv.y, 1.0-vUv.x) : vec2(1.0-vUv.x, vUv.y); }`;
         // pantalla: el sitio + el vidrio, que refleja SÓLO la luz clave (un barrido cuando gira) + filete finísimo.
         // uRead=1 leyendo el case: el trabajo queda limpio. uFade: aparece/desaparece, nunca un corte.
-        const SCREEN_FRAG = `uniform float uSplit; uniform float uSoft; uniform sampler2D map; uniform float uDim; uniform float uFocus; uniform float uRefl; uniform float uDrum;
+        const SCREEN_FRAG = `uniform sampler2D map; uniform float uDim; uniform float uFocus; uniform float uRefl; uniform float uDrum;
           uniform float uRead; uniform float uFade; uniform float uAsp; uniform float uCr; uniform float uNear; uniform float uVid;
           varying vec2 vUv; varying float vDist; varying vec3 vNw; varying vec3 vWp;
           ${UVMAP}
@@ -448,11 +416,9 @@ const data = JSON.stringify(projects);
             // fuera del case la pantalla es una FUENTE DE LUZ: el sitio desenfocado (la lectura pasa en la gema)
             // desenfoque por mipmaps (suave, sin copias fantasma del sitio); el video no tiene mips pero sólo corre en foco
             float bl=0.022*(1.0-uRead); vec2 o1=vec2(bl,0.), o2=vec2(0.,bl*uAsp);
-            // luz proyectada: cada canal llega corrido (dispersión) y converge al enfocar
-            vec2 sx=vec2(uSplit,0.);
-            vec3 c=vec3(texture2D(map,uv+sx).r,texture2D(map,uv).g,texture2D(map,uv-sx).b);
+            vec3 c=texture2D(map,uv).rgb;
             if(bl>0.0005){
-              vec3 blur=vec3(texture2D(map,uv+sx,4.5).r,texture2D(map,uv,4.5).g,texture2D(map,uv-sx,4.5).b)*0.4+(texture2D(map,uv+o1,4.5)+texture2D(map,uv-o1,4.5)+texture2D(map,uv+o2,4.5)+texture2D(map,uv-o2,4.5)).rgb*0.15;
+              vec3 blur=texture2D(map,uv,4.5).rgb*0.4+(texture2D(map,uv+o1,4.5)+texture2D(map,uv-o1,4.5)+texture2D(map,uv+o2,4.5)+texture2D(map,uv-o2,4.5)).rgb*0.15;
               c=mix(c,blur,1.0-uRead);
             }
             // three sube el VIDEO sin decodificar sRGB (las imágenes sí): se decodifica acá o el sitio sale lavado
@@ -462,8 +428,7 @@ const data = JSON.stringify(projects);
             float deco=1.0-uRead;
             float sh=smoothstep(0.86,0.99,dot(r,${KEYG}));
             c+=vec3(1.0,0.98,0.95)*sh*0.14*(0.4+0.6*uFocus)*deco;
-            float edge=smoothstep(0.006,0.0,abs(d+0.002))*(1.0-uSoft);
-            c*=mix(1.0,smoothstep(0.0,0.07,-d),uSoft);   // sin marco: el borde se abre en luz
+            float edge=smoothstep(0.006,0.0,abs(d+0.002));
             c+=edge*mix(vec3(0.75,0.82,0.92),mix(vec3(0.15,0.85,1.0),vec3(1.0,0.25,0.38),uv.x),0.5)*(0.12+0.3*uFocus)*deco;
             // niebla RELATIVA a la pantalla más cercana (con lente larga la cámara está lejos); la que se lee, sin velo
             c*=mix(exp(-max(vDist-uNear,0.0)*0.12),1.0,uRead)*uFade;
@@ -518,7 +483,7 @@ const data = JSON.stringify(projects);
           const phi = (i / N) * Math.PI * 2;
           const pivot = new THREE.Group(), rpivot = new THREE.Group(); ring.add(pivot); mirror.add(rpivot);
           const uni = { map: { value: null }, uDim: { value: 0.5 }, uFocus: { value: 0 }, uRefl: { value: 0 }, uDrum: { value: 0 },
-            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 }, uFlat: { value: 0 }, uNear: NEAR, uVid: { value: 0 }, uSplit: { value: 0 }, uSoft: { value: 0 } };
+            uRead: { value: 0 }, uFade: { value: 0 }, uAsp: { value: 1.6 }, uCr: { value: 0.03 }, uFlat: { value: 0 }, uNear: NEAR, uVid: { value: 0 } };
           const mesh = new THREE.Mesh(undefined, new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: SCREEN_FRAG, uniforms: uni, side: THREE.BackSide }));
           mesh.userData.i = i; pivot.add(mesh); pickers.push(mesh);
           const puni = { uDrum: uni.uDrum, uFocus: uni.uFocus, uFade: uni.uFade, uRead: uni.uRead, uCr: uni.uCr, uFlat: uni.uFlat, uNear: NEAR, uAcc: { value: new THREE.Color(p.accent) }, uK: { value: new THREE.Vector2(1.6, 1) } };
@@ -764,16 +729,10 @@ const data = JSON.stringify(projects);
 
         addEventListener('keydown', (e) => {
           if (e.key === 'Escape' && inCase) { closeCase(); return; }
-          if (e.key === 'Escape' && burst) { goHome(); return; }
-          const free = document.activeElement === document.body || document.activeElement === canvas;
-          if (!entered && (e.key === 'Enter' || e.key === ' ') && free) { e.preventDefault(); enter(); return; }
-          if (!entered || inCase) return;
-          const arrow = ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key);
-          // vitrina: Enter / espacio / flechas → proyecta
-          if (!burst && (arrow || ((e.key === 'Enter' || e.key === ' ') && free))) { e.preventDefault(); setBurst(true); return; }
-          if (burst && arrow) { e.preventDefault(); stepFan(e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1);
-            if (rows.includes(document.activeElement)) rows[fanSel].focus({ preventScroll: true }); return; }
-          if (burst && e.key === 'Enter' && free && fanSel >= 0) { e.preventDefault(); openCase(fanSel); }
+          if (!entered && (e.key === 'Enter' || e.key === ' ') && document.activeElement === document.body) { e.preventDefault(); enter(); return; }
+          if (entered && !inCase && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+            e.preventDefault(); const fw = e.key === 'ArrowRight' || e.key === 'ArrowDown'; const k = engaged ? (focusIndex() + (fw ? 1 : N - 1)) % N : focusIndex(); engage(true);
+            target = shortest(rot, angleFor(k)); if (rows.includes(document.activeElement)) rows[k].focus({ preventScroll: true }); }
         });
 
         // ── arrastre / swipe con inercia; un tap sólo abre la pantalla del frente (o la gema), nunca si fue para frenar ──
@@ -787,10 +746,7 @@ const data = JSON.stringify(projects);
           return Math.hypot(x - cx, y - cy) < rpx; };
         const axisOf = (e) => (mode === 'drum' ? e.clientY : e.clientX);
         const spanOf = () => (mode === 'drum' ? innerHeight * 0.55 : innerWidth * 0.55);
-        let bDown = null;
-        // vitrina y proyección: no se arrastra el anillo; un toque decide, un deslizamiento recorre
         canvas.addEventListener('pointerdown', (e) => { if (inCase || !entered) return;
-          bDown = { x: e.clientX, y: e.clientY, t: e.pointerType }; return;
           wasSpinning = Math.abs(vel) > 0.6 || (target !== null && Math.abs(target - rot) > 0.06);
           dragging = true; moved = 0; lastP = axisOf(e); lastT = downT = performance.now();
           downX = e.clientX; downY = e.clientY; target = null; vel = 0; canvas.setPointerCapture(e.pointerId); canvas.classList.add('drag'); });
@@ -799,25 +755,10 @@ const data = JSON.stringify(projects);
             lastP = p; lastT = now; moved += Math.abs(dp);
             const k = (TAU / N) / spanOf();
             rot += dp * k; vel = vel * 0.6 + (dp * k / (dtt / 1000)) * 0.4; }
-          else if (entered && !inCase && burst) { fanHover = pick(e.clientX, e.clientY);
-            canvas.style.cursor = fanHover >= 0 || onGem(e.clientX, e.clientY) ? 'pointer' : ''; }
-          else if (entered && !inCase) canvas.style.cursor = 'pointer';   // vitrina: cualquier clic proyecta
+          else if (entered && !inCase && !coarse) { const i = pick(e.clientX, e.clientY);
+            overFront = onGem(e.clientX, e.clientY) || (i >= 0 && i === focusIndex()); canvas.style.cursor = overFront ? 'pointer' : '';
+            if (overFront) engage(); else if (hoverI < 0 && performance.now() > stickyT) engaged = false; }
         });
-        const upBurst = (e) => { if (!bDown) return; const dx = e.clientX - bDown.x, dy = e.clientY - bDown.y, mouse = bDown.t === 'mouse'; bDown = null;
-          if (inCase || !entered) return;
-          if (!burst) { if (Math.hypot(dx, dy) < 12 || !mouse) setBurst(true); return; }      // vitrina: toque (o swipe) → proyecta
-          if (Math.hypot(dx, dy) > 30) { stepFan(Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 1 : -1) : (dy < 0 ? 1 : -1)); return; }
-          if (Math.hypot(dx, dy) >= 12) return;
-          if (onGem(e.clientX, e.clientY)) { goHome(); return; }                             // la gema los guarda: vuelta al home
-          const i = pick(e.clientX, e.clientY); if (i < 0) return;
-          // mouse: clic abre · táctil: el 1er toque la enciende, el 2º la abre
-          if (mouse || i === fanSel) openCase(i); else { fanSel = i; hooks.toFront(i); } };
-        // los rótulos también se tocan / señalan
-        document.querySelectorAll('[data-plab]').forEach((el, i) => {
-          el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse' && burst) fanHover = i; });
-          el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && fanHover === i) fanHover = -1; });
-          el.addEventListener('click', () => { if (!burst || inCase) return; if (!coarse || i === fanSel) openCase(i); else { fanSel = i; hooks.toFront(i); } }); });
-        canvas.addEventListener('pointerup', upBurst); canvas.addEventListener('pointercancel', () => { bDown = null; });
         const up = (e) => { if (!dragging) return; dragging = false; canvas.classList.remove('drag');
           if (performance.now() - lastT > 90) vel = 0;
           vel = Math.max(-9, Math.min(9, vel));
@@ -825,15 +766,12 @@ const data = JSON.stringify(projects);
           if (moved >= 10) engage(true);
           if (tap && !wasSpinning) {
             // táctil: el primer toque muestra el proyecto del frente, el segundo lo abre (como el home)
-            if (onGem(e.clientX, e.clientY)) { if (mode === 'ring') { setBurst(true); return; } if (engaged) openCase(focusIndex()); else engage(true); return; }
+            if (onGem(e.clientX, e.clientY)) { if (engaged) openCase(focusIndex()); else engage(true); return; }
             const i = pick(e.clientX, e.clientY);
             if (i >= 0 && i === focusIndex()) { if (engaged) openCase(i); else engage(true); }
             else if (i >= 0) { target = shortest(rot, angleFor(i)); engage(true); } } };
         canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-        let wheelT = 0;
-        addEventListener('wheel', (e) => { const now = performance.now(), d = e.deltaY + e.deltaX;
-          if (inCase || !entered || now - enteredAt < 900 || Math.abs(d) < 6 || now - wheelT < 380) return; wheelT = now;
-          if (!burst) setBurst(true); else stepFan(d > 0 ? 1 : -1); }, { passive: true });
+        addEventListener('wheel', (e) => { if (inCase || !entered || unfold < 0.6) return; target = null; vel += -(e.deltaY + e.deltaX) * 0.0035; engage(true); }, { passive: true });
 
         // ── tamaño ──
         let W = 0, H = 0, portrait = false, baseFov = 34;
@@ -866,7 +804,7 @@ const data = JSON.stringify(projects);
             const pxG = 2 * camZ * t / H; GR = 0.095 * k * H * pxG;
             GEMP.set(0, camY - (72 + 0.52 * k * H - 0.5 * H) * pxG, 0);
             const bot = (indexEl.offsetTop || H * 0.6) - 14, yi = (72 + bot) / 2;   // reposo: centrada en el hueco sobre los nombres
-            void yi; GRI = Math.min(0.4 * W, 0.21 * H) * pxG; GEMI.set(0, camY - (0.47 * H - 0.5 * H) * pxG, 0);   // vitrina: grande, centrada
+            GRI = Math.min(0.15 * H, (bot - 72) * 0.3) * pxG; GEMI.set(0, camY - (yi - 0.5 * H) * pxG, 0);
             poseIndex.set(0, camY, camZ); lookIndex.set(0, camY, -10);
             poseHome.set(0, GEMI.y, GRI / (0.62 * t * camera.aspect)); lookHome.copy(GEMI);
           } else {
@@ -874,7 +812,7 @@ const data = JSON.stringify(projects);
             const camY = RING_Y + (0.34 * H - 0.5 * H) * pxS;
             const pxG = 2 * camZ * t / H; GR = 0.17 * H * pxG;
             GEMP.set(0, camY - (0.74 * H - 0.5 * H) * pxG, 0);
-            GRI = 0.28 * H * pxG; GEMI.set(0, camY, 0);                              // vitrina: centro de la vista, diámetro 56%
+            GRI = 0.22 * H * pxG; GEMI.set(0, camY, 0);                              // reposo: centro de la vista, diámetro 44%
             poseIndex.set(0, camY, camZ); lookIndex.set(0, camY, -R);
             poseHome.set(0, GEMI.y, GRI / (0.6 * t)); lookHome.copy(GEMI);
           }
@@ -912,62 +850,6 @@ const data = JSON.stringify(projects);
         const eio = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
         const bez = (out, a, c, b, t) => { const u = 1 - t; return out.set(0, 0, 0).addScaledVector(a, u * u).addScaledVector(c, 2 * u * t).addScaledVector(b, t * t); };
 
-        // ── abanico del estallido: 4 ventanas en arco sobre la gema, que se corre a la derecha (la lista vive a la izquierda).
-        //    Posiciones en fracciones de la vista del índice → mundo (plano apenas detrás de la gema), mirando a la cámara. ──
-        // desktop: arco sobre la gema corrida a la derecha · mobile: arco de teléfonos sobre la gema, la lista abajo
-        // halo: elipse alrededor de la gema; arriba = lejos (más chica, detrás), abajo = cerca (el frente)
-        const FAN = { ring: { c: { x: 0.5, y: 0.47 }, r: { x: 0.31, y: 0.28 }, w: 0.17, g: 0.12, z: 0.9 }, drum: { c: { x: 0.5, y: 0.46 }, r: { px: 0.35, oy: 1.25 }, w: 0.16, g: 0.072, z: 0.3 } };   // mobile: órbita en px (35% del ancho), apenas más alta que ancha: los teléfonos son altos y así nunca rozan la gema
-        let orb = Math.PI * 0.75, orbT = null;
-        const wrapPI = (x) => Math.atan2(Math.sin(x), Math.cos(x));
-        hooks.toFront = (i) => { orbT = orb + wrapPI(-Math.PI / 2 - (orb - i * TAU / N)); };
-        const FAN_Z = -0.6, flipZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
-        const fanC = projects.map(() => new THREE.Vector3()), fanQ = projects.map(() => new THREE.Quaternion());
-        const GEMB = new THREE.Vector3(); let GRB = 1, gb = 0, fanK = 0.3;
-        const dummy = new THREE.Object3D(), fanW = new THREE.Vector3(), fanD = new THREE.Vector3();
-        const toWorld = (out, fx, fy, z) => { const D = poseIndex.z - z, vh = 2 * D * tanH(), vw = vh * camera.aspect;
-          return out.set((fx - 0.5) * vw, poseIndex.y + (0.5 - fy) * vh, z); };
-        const fanLayout = () => {
-          const F = FAN[mode], drumM = mode === 'drum';
-          const D = poseIndex.z - FAN_Z, vw = 2 * D * tanH() * camera.aspect;
-          fanK = (F.w * vw) / (drumM ? PW : SW);
-          const rx = F.r.px ? F.r.px : F.r.x, ry = F.r.px ? F.r.px * (F.r.oy || 1) * W / H : F.r.y, tt = performance.now() / 1000;
-          projects.forEach((p, i) => { const th = orb - i * TAU / N, out = 1 + (drumM ? 0.14 : 0.06) * (screens[i].hb || 0);   // la señalada se abre hacia afuera
-            // flotan: cada una respira a su ritmo (sube/baja y se mece apenas)
-            const fl = reduce ? 0 : Math.sin(tt * 0.9 + i * 1.7) * 0.009, sw = reduce ? 0 : Math.sin(tt * 0.6 + i * 2.3) * 0.035;
-            const fx = F.c.x + Math.cos(th) * rx * out, fy = F.c.y - Math.sin(th) * ry * out + fl, z = FAN_Z - F.z * Math.sin(th);
-            const Dz = poseIndex.z - z, vh = 2 * Dz * tanH(), vw2 = vh * camera.aspect;
-            fanW.set((fx - 0.5) * vw2, poseIndex.y + (0.5 - fy) * vh, z);
-            fanD.copy(fanW).sub(poseIndex).normalize();
-            dummy.position.copy(fanW); dummy.lookAt(fanW.clone().add(fanD)); fanQ[i].copy(dummy.quaternion);
-            if (drumM) fanQ[i].multiply(flipZ);
-            fanQ[i].multiply(qR.setFromAxisAngle(AX.set(0, 0, 1), sw));   // el mecido           // el tambor tiene el "arriba" local invertido (rotX(π) = rotY(π)·rotZ(π))
-            fanC[i].copy(fanW).sub(ring.position); });   // anillo sin rotación: local = mundo − posición (la escala se aplica al usar)
-          toWorld(GEMB, F.c.x, F.c.y, 0); GRB = (drumM ? 0.11 * W : F.g * H) * (2 * poseIndex.z * tanH() / H);   // mobile: la gema se mide por el ancho (igual en celus altos y bajos)
-        };
-        const qRing = new THREE.Quaternion(), dirV = new THREE.Vector3(), cT = new THREE.Vector3();
-
-        // ── haz: un tronco de pirámide de luz aditiva de la gema a las 4 esquinas de cada proyección (el proyector real) ──
-        const BEAM_V = `attribute float aT; attribute float aU; varying float vT; varying float vU;
-          void main(){ vT=aT; vU=aU; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
-        const BEAM_F = `uniform vec3 uCol; uniform float uAmt; varying float vT; varying float vU;
-          void main(){ float e=smoothstep(0.,0.5,vU)*smoothstep(1.,0.5,vU);
-            vec3 disp=mix(vec3(0.15,0.85,1.0),vec3(1.0,0.22,0.38),vU);                 // los cantos se abren en cian / rojo
-            vec3 c=mix(disp,uCol,smoothstep(0.05,0.45,e));
-            float a=uAmt*pow(e,0.7)*(0.3+0.7*(1.0-vT))*smoothstep(0.0,0.12,vT);
-            gl_FragColor=vec4(c*a,1.0); }`;
-        const beams = screens.map((s) => {
-          const pos = new Float32Array(24 * 3), aT = new Float32Array(24), aU = new Float32Array(24);
-          for (let k = 0; k < 4; k++) { const o = k * 6; [0, 1, 1, 0, 1, 0].forEach((t, j) => { aT[o + j] = t; }); [0, 0, 1, 0, 1, 1].forEach((u, j) => { aU[o + j] = u; }); }
-          const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aT', new THREE.BufferAttribute(aT, 1)); g.setAttribute('aU', new THREE.BufferAttribute(aU, 1));
-          const u = { uCol: { value: new THREE.Color(s.p.accent).lerp(new THREE.Color(1, 1, 1), 0.45) }, uAmt: { value: 0 } };
-          const m = new THREE.Mesh(g, new THREE.ShaderMaterial({ vertexShader: BEAM_V, fragmentShader: BEAM_F, uniforms: u, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
-          m.frustumCulled = false; m.renderOrder = 4; scene.add(m);
-          return { m, pos, u, amt: 0 };
-        });
-        const bC = new THREE.Vector3(), bR = new THREE.Vector3(), bU = new THREE.Vector3(), cor = [0, 1, 2, 3].map(() => new THREE.Vector3()), apx = [0, 1, 2, 3].map(() => new THREE.Vector3());
-        const SGN = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-        const plabs = Array.from(document.querySelectorAll('[data-plab]')), lp3 = new THREE.Vector3();
-
         // ── loop ──
         let last = performance.now(), mx = 0, my = 0, pmx = 0, pmy = 0;
         addEventListener('pointermove', (e) => { if (e.pointerType !== 'mouse') return; mx = e.clientX / innerWidth - 0.5; my = e.clientY / innerHeight - 0.5; });
@@ -976,7 +858,7 @@ const data = JSON.stringify(projects);
         const slotC = new THREE.Vector3(), gemL = new THREE.Vector3(), midC = new THREE.Vector3();
         const tint = new THREE.Color(0.86, 0.93, 1.0), base = new THREE.Color(0.86, 0.93, 1.0), tmpC = new THREE.Color();
         let shot = 0, flash = 0;
-        let spinA = 0, prevF = 0, homeT = 0, homeI = 0, siteI = -1, bi_prev = -1;
+        let spinA = 0, prevF = 0, homeT = 0, homeI = 0, siteI = -1;
         const loop = (now) => {
           const dt = Math.min(0.05, (now - last) / 1000); last = now;
           const lp = (r) => 1 - Math.exp(-r * dt);
@@ -1013,14 +895,7 @@ const data = JSON.stringify(projects);
 
           // pantallas con física: cada una persigue al anillo con su propio resorte (se atrasa al girar) y se inclina
           // según esa demora; flotan con un balanceo lento y desfasado. Fundido, nunca cortes. Un solo video.
-          const fi = inCase ? caseI : focusIndex(), sel = inCase || (engaged && !burst); shot = 0;
-          if (burst && !inCase) {
-            if (orbT !== null) { orb += (orbT - orb) * lp(reduce ? 60 : 4); if (Math.abs(orbT - orb) < 0.002) { orb = orbT; orbT = null; } }
-            else if (!reduce && bi_prev < 0) orb -= dt * 0.09;                 // gira solo (≈70 s la vuelta); se detiene al señalar
-          }
-          fanLayout();
-          const bi = burst ? (hoverI >= 0 ? hoverI : fanHover >= 0 ? fanHover : fanSel) : -1;   // proyectando: el que señalás (lista, ventana, flechas, toque)
-          const vit = entered && !burst && !inCase; bi_prev = bi;   // vitrina: los sitios ciclan dentro de la gema
+          const fi = inCase ? caseI : focusIndex(), sel = inCase || engaged; shot = 0;
           const calm = Math.abs(vel) < 1.2 && !dragging;
           screens.forEach((s, i) => {
             const k = 26 + i * 5, c = 2 * Math.sqrt(k) * 0.72;          // resorte sub-amortiguado: un rebote leve
@@ -1037,71 +912,40 @@ const data = JSON.stringify(projects);
             qR.setFromAxisAngle(radial, (-lag * 0.9 + bob * 0.012) * (1 - still));
             s.pivot.quaternion.copy(qA).multiply(qR); s.rpivot.quaternion.copy(s.pivot.quaternion);
             const by = reduce ? 0 : Math.sin(now * 0.0008 + i * 2.3) * 0.06 * (1 - still);
-            const pick1 = sel && i === (inCase ? caseI : hoverI >= 0 ? hoverI : fi) ? 1 : 0;   // sólo la elegida, no las que pasan girando
-            // estallido: salen todas, escalonadas (de izquierda a derecha), con 70 ms entre una y otra
-            const on = burst ? (now - burstAt > i * 70 ? 1 : 0) : pick1, lit = burst ? (bi === i ? 1 : 0) : vit ? (i === homeI ? 1 : 0) : on;
-            // abanico: afuera del estallido cada ventana vuelve a la gema DESDE el abanico; la que se abre viaja a su lugar del anillo
-            if (burst) { if (s.out < 0.05) s.fan = 1; else s.fan += (1 - s.fan) * lp(4); } else if (pick1) s.fan += (0 - s.fan) * lp(3); else if (s.out < 0.02) s.fan = 0;
-            s.hb = (s.hb || 0) + ((burst && bi === i ? 1 : 0) - (s.hb || 0)) * lp(6);
+            const on = sel && i === (inCase ? caseI : hoverI >= 0 ? hoverI : fi) ? 1 : 0;   // sólo la elegida, no las que pasan girando
             // NACE DE LA GEMA: la ventana elegida sale de la piedra creciendo hasta su lugar; al soltarla, vuelve a entrar
             const prevOut = s.out;
             s.out += (on - s.out) * lp(reduce ? 60 : on ? 3.2 : 4.5);
             if (s.out > prevOut + 1e-4 && !inCase && !reduce) shot = Math.max(shot, Math.sin(Math.PI * Math.min(1, s.out * 1.8)));
-            const e = eio(Math.min(1, Math.max(0, s.out))), Rr = drum ? RD : R, fz = s.fan;
-            const ks = (0.03 + 0.97 * e) * THREE.MathUtils.lerp(1, fanK * (1 + (drum ? 0.16 : 0.32) * s.hb), fz);
+            const e = eio(Math.min(1, Math.max(0, s.out))), ks = 0.03 + 0.97 * e, Rr = drum ? RD : R;
             slotC.set(0, 0, Rr).applyQuaternion(s.pivot.quaternion);              // centro de la pantalla en su lugar
-            if (fz > 0.001) { qRing.copy(s.pivot.quaternion).slerp(fanQ[i], fz); s.pivot.quaternion.copy(qRing); s.rpivot.quaternion.copy(qRing);
-              cT.copy(fanC[i]).divideScalar(Math.max(0.001, ring.scale.x)); cT.z += (drum ? 0.15 : 0.35) * s.hb; slotC.lerp(cT, fz); }   // la señalada se adelanta: nunca queda tapada
-            dirV.set(0, 0, Rr).applyQuaternion(s.pivot.quaternion);
             gemL.copy(gem.position).sub(ring.position).divideScalar(Math.max(0.001, ring.scale.x));   // la gema, en el anillo
             midC.lerpVectors(gemL, slotC, e);
-            if (!drum) midC.y += Math.sin(Math.PI * e) * Rr * 0.08 * (1 - fz);    // sube en arco, no en línea recta
-            s.pivot.position.copy(midC).addScaledVector(dirV, -ks);
-            if (drum) s.pivot.position.x += by * (1 - fz); else s.pivot.position.y += by * (1 - fz);   // en el halo flotan con su propio ritmo
+            if (!drum) midC.y += Math.sin(Math.PI * e) * Rr * 0.08;               // sube en arco, no en línea recta
+            s.pivot.position.copy(midC).addScaledVector(slotC, -ks);
+            if (drum) s.pivot.position.x += by; else s.pivot.position.y += by;
             s.pivot.scale.setScalar(ks); s.pivot.visible = s.out > 0.006;
             s.rpivot.position.copy(s.pivot.position); s.rpivot.scale.setScalar(ks); s.rpivot.visible = s.pivot.visible;
-            s.focus += (lit - s.focus) * lp(4);
+            s.focus += (on - s.focus) * lp(4);
             // sólo se muestra el proyecto elegido (hover / toque / click); las demás son paneles de vidrio apagados
-            const dimT = burst ? (bi < 0 ? 0.8 : bi === i ? 1.0 : 0.3) : on ? 1.0 : 0.02;
+            const dimT = on ? 1.0 : 0.02;
             s.dim += (dimT - s.dim) * lp(4);
             // mobile: al llegar, el teléfono 3D se funde y queda el video del DOM (mismo cuadro, scrolleable)
             let away = 1;
             if (drum) { let da = wrap(a - (Math.PI - DOFF)); if (da > Math.PI) da -= TAU; away = 1 - THREE.MathUtils.smoothstep(Math.abs(da), 0.75, 1.25); }
-            away = THREE.MathUtils.lerp(away, 1, fz);
             const fadeT = ue * away * (inCase && !on ? 0 : 1) * (drum && inCase && on && f > 0.9 ? 0 : 1) * THREE.MathUtils.smoothstep(s.out, 0.0, 0.35);
             s.fade += (fadeT - s.fade) * lp(inCase && !on ? 9 : inCase ? 3 : 5);   // en el case las otras se van YA
             s.uni.uDim.value = s.dim; s.uni.uFocus.value = s.focus; s.uni.uFade.value = s.fade; s.uni.uVid.value = s.uni.map.value === s.vtex ? 1 : 0;
-            // luz: en reposo se reconoce pero no está en foco; la señalada enfoca y sus canales convergen
-            const rest = bi < 0 ? 0.62 : 0.4;
-            s.uni.uRead.value = burst ? rest + (1 - rest) * s.focus : on ? Math.max(f, s.focus) : 0;
-            s.uni.uSplit.value = burst || fz > 0.01 ? (1 - s.focus) * 0.011 * fz : 0;
-            s.uni.uSoft.value = fz;
-            s.plate.visible = s.pivot.visible && fz < 0.5;                        // foco: sin desenfoque ni brillos
+            s.uni.uRead.value = on ? Math.max(f, s.focus) : 0;                        // foco: sin desenfoque ni brillos
             s.uni.uFlat.value = on ? f : 0;
             if (!s.uni.map.value) s.uni.map.value = s.runi.map.value = posterOf(s.p.slug, mode);
-            if (lit && calm) { s.onT += dt; s.offT = 0; } else { s.onT = 0; s.offT += dt; }
-            play(s, entered && lit === 1 && (inCase || s.onT > (vit ? 0 : 0.45)));                // debounce: pasar de largo no baja videos
+            if (on && calm) { s.onT += dt; s.offT = 0; } else { s.onT = 0; s.offT += dt; }
+            play(s, entered && on === 1 && (inCase || s.onT > 0.45));                // debounce: pasar de largo no baja videos
             if (s.avgT) s.avg.lerp(s.avgT, lp(4));
             floorU.uSP.value[i].set(Math.sin(a) * R * 0.86 * ue, Math.cos(a) * R * 0.86 * ue);
             floorU.uSC.value[i].copy(s.avg).multiplyScalar(s.dim * (0.45 + 0.9 * s.focus) * s.fade);
-            // haz y rótulo
-            const B = beams[i], sw = (drum ? PW : SW) * ks * ring.scale.x, sh2 = (drum ? PH : SH) * ks * ring.scale.x;
-            bC.copy(s.pivot.position).addScaledVector(dirV, ks).multiplyScalar(ring.scale.x).add(ring.position);
-            bR.set(1, 0, 0).applyQuaternion(s.pivot.quaternion); bU.set(0, 1, 0).applyQuaternion(s.pivot.quaternion);
-            const bt = burst && !inCase && s.out > 0.5 ? (bi === i ? 1 : bi < 0 ? 0.16 : 0.05) : 0;
-            B.amt += (bt - B.amt) * lp(bt > B.amt ? 5 : 8); B.u.uAmt.value = B.amt * 0.32 * s.fade; B.m.visible = B.amt > 0.004;
-            if (B.m.visible) { const ga = gem.scale.x * 0.14;
-              SGN.forEach(([x, y], k) => { cor[k].copy(bC).addScaledVector(bR, x * sw / 2).addScaledVector(bU, y * sh2 / 2); apx[k].copy(gem.position).addScaledVector(bR, x * ga).addScaledVector(bU, y * ga); });
-              for (let k = 0; k < 4; k++) { const k2 = (k + 1) % 4, o = k * 18;
-                [apx[k], cor[k], cor[k2], apx[k], cor[k2], apx[k2]].forEach((v, j) => { B.pos[o + j * 3] = v.x; B.pos[o + j * 3 + 1] = v.y; B.pos[o + j * 3 + 2] = v.z; }); }
-              B.m.geometry.attributes.position.needsUpdate = true; }
-            const L = plabs[i], lo = burst && !inCase ? s.fade * fz : 0;
-            if (lo > 0.01) { lp3.copy(bC).add(AX.set(0, -(sh2 / 2) * (1 + 0.04), 0)).project(camera);
-              const px = (lp3.x + 1) / 2 * W, py = (1 - lp3.y) / 2 * H + 8;
-              L.style.transform = 'translate(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px) translateX(-50%) scale(' + (1 + 0.3 * s.hb).toFixed(3) + ')'; }
-            L.style.opacity = lo.toFixed(3); L.classList.toggle('on', bi === i);
           });
-          const ri = burst ? bi : hoverI >= 0 ? hoverI : sel ? fi : -1;
+          const ri = hoverI >= 0 ? hoverI : sel ? fi : -1;
           rows.forEach((r, i) => r.classList.toggle('on', i === ri)); indexEl.classList.toggle('has-on', ri >= 0);
 
           // gema: centro de la órbita. En el case se hunde y se achica con un destello de dispersión
@@ -1109,22 +953,18 @@ const data = JSON.stringify(projects);
           const gk = 1 + f * 1.5;
           // al elegir, la gema baja y se achica (retroceso del disparo) mientras la ventana sube; al soltar vuelve al centro
           gsel += ((entered && sel ? 1 : 0) - gsel) * lp(reduce ? 60 : sel ? 3.2 : 3.6);
-          const ge2 = eio(Math.min(1, Math.max(0, gsel))), gR = THREE.MathUtils.lerp(THREE.MathUtils.lerp(GRI, GR, ge2), GRB, eio(Math.min(1, Math.max(0, gb))));
+          const ge2 = eio(Math.min(1, Math.max(0, gsel))), gR = THREE.MathUtils.lerp(GRI, GR, ge2);
           tmpV.lerpVectors(GEMI, GEMP, ge2);
-          // estallido: la gema se corre al centro del abanico y se achica (las ventanas son las protagonistas)
-          gb += ((burst ? 1 : 0) - gb) * lp(reduce ? 60 : 3.4); const gbe = eio(Math.min(1, Math.max(0, gb)));
-          tmpV.lerp(GEMB, gbe);
           gem.position.set(tmpV.x, tmpV.y + (reduce ? 0 : Math.sin(now * 0.0009) * gR * 0.03), tmpV.z); gem.scale.setScalar((gR / 1.26) * gk);
           gemU.uAlpha.value = 1 - THREE.MathUtils.smoothstep(f, 0.25, 0.7);
           if (!reduce) { gem.rotation.y += dt * 0.13; gem.rotation.x = 0.3 + Math.sin(now * 0.00035) * 0.12; gem.rotation.z = Math.sin(now * 0.00027) * 0.08; }
-          const gi = bi >= 0 ? bi : vit ? homeI : fi;
-          tmpC.set(projects[gi].accent).lerp(base, 0.55); tint.lerp(tmpC, lp(3));
+          tmpC.set(projects[fi].accent).lerp(base, 0.55); tint.lerp(tmpC, lp(3));
           gem.updateMatrixWorld(); gemU.uInvM.value.copy(gem.matrixWorld).invert();
           gemU.uRot.value.setFromMatrix4(rotM4.makeRotationFromQuaternion(gem.quaternion));
           qInv.copy(gem.quaternion).invert();
           gemU.uCamR.value.set(1, 0, 0).applyQuaternion(camera.quaternion).applyQuaternion(qInv);
           gemU.uCamU.value.set(0, 1, 0).applyQuaternion(camera.quaternion).applyQuaternion(qInv);
-          gemU.uTint.value.set(projects[gi].accent); gemU.uTintAmt.value += (((sel || bi >= 0 || vit) && entered ? 1 : 0) - gemU.uTintAmt.value) * lp(5);
+          gemU.uTint.value.set(projects[fi].accent); gemU.uTintAmt.value += ((sel && entered ? 1 : 0) - gemU.uTintAmt.value) * lp(5);
           screens.forEach((s, i) => { gemU['uS' + i].value = s.uni.map.value; });
           gemU.uVid4.value.set(...screens.map((s) => s.uni.uVid.value));
           const ph = screens.map((s) => s.phi + s.cur), br = screens.map((s) => 0.72 * s.dim * (0.75 + 0.55 * s.focus));
@@ -1133,15 +973,15 @@ const data = JSON.stringify(projects);
           gemU.uAx.value = drum ? PW : SH; gemU.uYc.value = drum ? 0 : RING_Y - gem.position.y;
           gemU.uRingAmt.value = 0.45 + 0.55 * ue;
           // ── el sitio que se ve EN la gema: el del foco. En el home, los sitios ciclan bajo BLOPA (la gema nunca está quieta)
-          if (!entered || vit) { homeT += dt; if (homeT > (vit ? 4.2 : 2.8)) { homeT = 0; homeI = (homeI + 1) % N; } }
-          const si = entered ? gi : homeI, tex = screens[si].uni.map.value;
+          if (!entered) { homeT += dt; if (homeT > 2.8) { homeT = 0; homeI = (homeI + 1) % N; } }
+          const si = entered ? fi : homeI, tex = screens[si].uni.map.value;
           if (si !== siteI) { gemU.uSiteB.value = gemU.uSiteA.value || tex; gemU.uSiteA.value = tex; gemU.uSiteMix.value = 0; siteI = si; }
           else if (tex !== gemU.uSiteA.value) gemU.uSiteA.value = tex;   // póster → video sin cascada
           if (!gemU.uSiteB.value) gemU.uSiteB.value = tex;
           gemU.uSiteMix.value = Math.min(1, gemU.uSiteMix.value + dt / (reduce ? 0.01 : 0.9));
           gemU.uVidAB.value.set(gemU.uSiteA.value && gemU.uSiteA.value.isVideoTexture ? 1 : 0, gemU.uSiteB.value && gemU.uSiteB.value.isVideoTexture ? 1 : 0);
           gemU.uSiteAsp.value = drum ? PW / PH : 1.6;
-          gemU.uMirror.value += ((entered && (sel || bi >= 0 || vit) ? (vit ? 0.86 : 0.72) : 0) - gemU.uMirror.value) * lp(2.5);
+          gemU.uMirror.value += ((entered && sel ? 0.72 : 0) - gemU.uMirror.value) * lp(2.5);
           gemU.uWordAmt.value = wordReady ? Math.max(0, 1 - ue * 2.2) : 0;
           flash += (shot - flash) * lp(shot > flash ? 30 : 6); gemU.uFlash.value = flash;
           gemU.uBurst.value = Math.sin(Math.PI * Math.min(1, f * 1.3)) * (f > prevF ? 1 : 0.4) + flash * 0.9; prevF = f;
@@ -1172,10 +1012,11 @@ const data = JSON.stringify(projects);
       let hintKey = '', swapT = 0;
       const hintFor = () => {
         if (!GL || inCase) return null;
-        if (!entered || !burst) return { g: 'tap', t: coarse ? 'Tocá la gema para ver los proyectos' : 'Hacé clic en la gema para ver los proyectos' };
-        const p = projects[hoverI >= 0 ? hoverI : fanHover >= 0 ? fanHover : fanSel];
-        if (p) return { g: 'tap', t: coarse ? 'Tocá de nuevo para abrirlo' : 'Clic para abrir ' + p.name };   // mobile: el nombre ya está bajo la proyección
-        return coarse ? { g: 'h', t: 'Deslizá para girar · tocá uno' } : { g: 'tap', t: 'Pasá por un proyecto para verlo · clic en la gema para volver' };
+        if (!entered) return { g: 'tap', t: coarse ? 'Tocá la gema para entrar' : 'Hacé clic en la gema para entrar' };
+        const g = hooks.drum() ? 'v' : 'h';
+        if (!engaged) return { g, t: coarse ? 'Deslizá la gema para ver los proyectos' : 'Arrastrá la gema o pasá por un nombre' };
+        const i = hoverI >= 0 ? hoverI : hooks.front(), p = projects[i];
+        return p ? { g: 'tap', t: (coarse ? 'Tocá para abrir ' : 'Clic para abrir ') + p.name } : { g, t: '' };
       };
       const syncHint = () => { const h = hintFor(), key = h ? h.g + '|' + h.t : '';
         if (key === hintKey) return; const first = !hintKey; hintKey = key;
