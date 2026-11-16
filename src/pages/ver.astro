@@ -7,8 +7,6 @@ import { versiones as todas } from '../data/versiones';
 const versiones = import.meta.env.DEV ? todas : todas.filter((v) => !v.href.startsWith('/v/'));
 const targets = [
   { href: '/', label: 'Sitio' },
-  { href: '/tipos', label: 'Selector' },
-  { href: '/lab', label: 'Lab efectos' },
 ];
 ---
 <!doctype html>

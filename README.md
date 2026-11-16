@@ -12,8 +12,8 @@ cinematográfico y **aberración cromática cyan/rojo** como único evento de co
 
 - **[Astro 5](https://astro.build)** — sitio estático, una sola página (SPA por estado).
 - **CSS vanilla** + `<script>` (TypeScript) inline. Sin frameworks de UI, sin Tailwind.
-- **Tipografías self-hosted** (foundry, nunca Google Fonts): **Clash Display** (display) + **Satoshi** (texto).
-- **Canvas 2D** para el objeto cristalino (icosaedro wireframe con bordes cromáticos).
+- **Tipografías self-hosted** (foundry, nunca Google Fonts): **Bebas Neue** (display) + **Satoshi** (texto) + **Fragment Mono**.
+- **three.js** (WebGL) para la gema y los proyectos que flotan alrededor (home «Halo»).
 
 ## Arranque
 
