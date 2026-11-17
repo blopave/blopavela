@@ -1,0 +1,677 @@
+---
+// VERSIÓN «REFRACCIÓN» — el espectro a pantalla completa (Cruz-Diez, Eliasson).
+// El color ES la estructura: una banda vertical por proyecto, de su color de acento, ordenadas por tono, de borde a borde.
+// BLOPA (gigante) cruza todas las bandas y se refracta en cada una: corrimiento vertical propio, tinta teñida del color
+// de la banda y separación cian/rojo en los filos. Entrada: la palabra blanca sobre negro; las bandas suben y la «mojan».
+// Desktop: hover → la banda se ensancha (las otras se comprimen), la palabra se enfoca en ella y aparece el video; clic →
+// la banda se expande hasta ser el case. Mobile: las mismas bandas; swipe con frenos elige (poster + video), toque abre.
+// Teclado: flechas, Tab, Enter, Esc. Historial ?p=<slug>. Sin JS: lista legible. DOM + Canvas mínimo (grano). Sin three.js.
+import { projects } from '../data/projects';
+
+const hue = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  return h > 330 ? h - 360 : h;
+};
+const orden = [...projects].sort((a, b) => hue(a.accent) - hue(b.accent));
+const year = (e: string) => (e ? e.split('-')[0] : 'En curso');
+const data = JSON.stringify(orden);
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa — Pablo Vela</title>
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="blopa — Pablo Vela" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/FragmentMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <script is:inline>(function(){var d=document.documentElement;d.classList.add('js');if(innerHeight>innerWidth||innerWidth<640)d.classList.add('port');})();</script>
+    <style is:global>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:block; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#07070a; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --hair:#22222a; --cy:#24e2e8; --rd:#ff3a54;
+        --display:'Bebas Neue',Impact,'Arial Narrow',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1rem,3vw,3rem);
+        --tb:56px; --fs:min(40vw,calc((100vh - 108px)*.54)); }
+      html.port{--tb:calc(env(safe-area-inset-top,0px) + 52px); --fs:calc((100vw - 32px)/2.1)}
+      *{box-sizing:border-box;margin:0}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5}
+      html.port body{touch-action:none}
+      a{color:inherit;text-decoration:none}
+      :is(button,a):focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:2px}
+
+      .grain{position:fixed;inset:-60px;z-index:30;pointer-events:none;opacity:.06;mix-blend-mode:overlay;background-size:160px 160px;
+        animation:grain .8s steps(4) infinite}
+      @keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-23px,17px)}50%{transform:translate(31px,-9px)}75%{transform:translate(-11px,-29px)}100%{transform:translate(0,0)}}
+
+      /* ── la palabra: tipografía común a la blanca (debajo) y a sus refracciones (dentro de cada banda) ── */
+      .wd{font-family:var(--display);font-weight:400;font-size:var(--fs);line-height:.8;letter-spacing:.01em;padding-top:.08em;white-space:nowrap}
+      .hero{position:fixed;z-index:2;left:50%;top:calc(var(--tb) + 2vh);transform:translateX(-50%);color:var(--ink);pointer-events:none;
+        text-shadow:-2px 0 rgba(255,58,84,.6),2px 0 rgba(36,226,232,.6);animation:conv 1s var(--ease) both}
+      @keyframes conv{from{text-shadow:-24px 0 rgba(255,58,84,.8),24px 0 rgba(36,226,232,.8)}to{text-shadow:-2px 0 rgba(255,58,84,.6),2px 0 rgba(36,226,232,.6)}}
+      body.ready .hero{visibility:hidden}
+
+      /* ── barra superior: nombre + mail; en el case, «volver» ── */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:12;height:var(--tb);display:flex;align-items:center;gap:1rem;
+        padding:env(safe-area-inset-top,0px) var(--gut) 0;background:var(--bg);font-family:var(--mono);font-size:.75rem;letter-spacing:.06em;color:var(--mid)}
+      .nav__who{color:var(--ink);white-space:nowrap;animation:up .6s var(--ease) .2s both}
+      body.in-case .nav__who{display:none}
+      .nav__mail{display:inline-flex;align-items:center;min-height:44px;margin-left:auto;white-space:nowrap;transition:color .25s;animation:up .6s var(--ease) .3s both}
+      .nav__mail:hover{color:var(--ink)}
+      .nav__back{appearance:none;background:none;border:1px solid var(--hair);border-radius:999px;color:var(--mid);cursor:pointer;font:inherit;
+        font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;padding:0 1.1rem;min-height:44px;display:none;transition:color .25s,border-color .25s}
+      .nav__back:hover{color:var(--ink);border-color:var(--soft)}
+      .nav__back:focus-visible{border-radius:999px}
+      body.in-case .nav__back{display:inline-flex;align-items:center}
+      @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+      /* ── las bandas (posición, ancho, refracción: JS cuadro a cuadro) ── */
+      .band{position:fixed;left:0;right:0;top:var(--tb);bottom:var(--bb,52px);z-index:4;pointer-events:none}
+      .bd{position:absolute;left:0;top:0;height:100%;appearance:none;border:0;padding:0;margin:0;font:inherit;text-align:left;cursor:pointer;
+        pointer-events:auto;overflow:hidden;background:var(--c);color:var(--ink2);will-change:transform,clip-path;--c:#fff;--ink2:#07070a;--o:0;--lo:1;
+        clip-path:inset(50% 0 50% 0)}
+      .bd:focus-visible{outline:none}
+      .bd:focus-visible .bd__name{text-decoration:underline;text-underline-offset:.15em}
+      .bd .wd{position:absolute;left:0;top:0;color:var(--ink2);will-change:transform;
+        text-shadow:-2px 0 rgba(255,58,84,.7),2px 0 rgba(36,226,232,.7)}
+      /* filos: la palabra se abre en cian/rojo al cruzar el borde de cada banda */
+      .bd__e{position:absolute;top:0;bottom:0;width:var(--ew,14px);overflow:hidden;background:var(--c)}
+      .bd__e--l{left:0} .bd__e--r{right:0}
+      .bd__e--l .wd{text-shadow:-6px 0 rgba(255,58,84,.95),3px 0 rgba(36,226,232,.5)}
+      .bd__e--r .wd{text-shadow:6px 0 rgba(36,226,232,.95),-3px 0 rgba(255,58,84,.5)}
+      /* textura: listones finos (Physichromie) sobre todo, palabra incluida */
+      .bd__tx{position:absolute;inset:0;pointer-events:none;
+        background:repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 1px,transparent 1px 7px,rgba(0,0,0,.07) 7px 8px);
+        box-shadow:inset 1px 0 0 rgba(255,58,84,.55),inset -1px 0 0 rgba(36,226,232,.55)}
+      /* la obra dentro de la banda abierta */
+      .bd__win{position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;background:var(--bg);opacity:min(1,calc(var(--o)*1.8));
+        box-shadow:-3px 0 0 rgba(255,58,84,calc(var(--o)*.9)),3px 0 0 rgba(36,226,232,calc(var(--o)*.9))}
+      .bd__img,.bd__vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0;display:block}
+      .bd__vid{opacity:0;transition:opacity .4s}
+      .bd__vid.on{opacity:1}
+      .bd__lab{position:absolute;left:0;right:0;bottom:0;padding:0 1.1rem 1rem;opacity:var(--lo);pointer-events:none}
+      .bd__name{display:block;font-family:var(--display);font-size:clamp(2rem,2.6vw,2.8rem);line-height:.9;color:var(--ink2)}
+      .bd__cat{display:block;font-family:var(--mono);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);opacity:.78;margin-top:.45rem;white-space:nowrap}
+      html.port .bd__lab{display:none}
+
+      /* mobile: lo elegido, debajo de las bandas */
+      .tuned{display:none;position:fixed;left:var(--gut);right:var(--gut);top:0;z-index:4;text-align:center;pointer-events:none}
+      html.port .tuned{display:block}
+      .tuned b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(2.3rem,10.5vw,3.4rem);line-height:.95;color:var(--acc,var(--ink));
+        text-shadow:-1.5px 0 rgba(255,58,84,.6),1.5px 0 rgba(36,226,232,.6);transition:opacity .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .tuned i{display:block;font-style:normal;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);margin-top:.3rem}
+
+      /* ── leyenda de uso ── */
+      .hint{position:fixed;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:6;display:flex;align-items:center;gap:.7rem;
+        font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);pointer-events:none;opacity:0;transition:opacity .5s var(--ease);
+        min-height:24px}
+      html.port .hint{justify-content:center;bottom:calc(env(safe-area-inset-bottom,0px) + 30px);font-size:.6875rem}
+      body.ready .hint.on{opacity:1}
+      body.in-case .hint{opacity:0!important}
+      .hint.swap .hint__t{opacity:0}
+      .hint__t{transition:opacity .2s var(--ease)}
+      .hint__g{position:relative;flex:none;width:14px;height:14px}
+      .hint__g::before{content:"";position:absolute;inset:0;border:1px solid currentColor;border-radius:50%;opacity:.45}
+      .hint__g::after{content:"";position:absolute;left:4px;top:4px;width:6px;height:6px;border-radius:50%;background:currentColor;animation:tap 1.6s var(--ease) infinite}
+      .hint[data-g="h"] .hint__g{width:22px;height:8px}
+      .hint[data-g="h"] .hint__g::before{border-radius:999px}
+      .hint[data-g="h"] .hint__g::after{left:1px;top:1px;animation:railh 1.8s var(--ease) infinite}
+      @keyframes tap{0%,100%{transform:scale(.6);opacity:.5}45%{transform:scale(1);opacity:1}}
+      @keyframes railh{0%,100%{transform:translateX(0)}50%{transform:translateX(14px)}}
+
+      /* ── el case: la banda se expande hasta ocupar todo (clip-path animado por JS) ── */
+      .wipe{position:fixed;inset:0;z-index:9;pointer-events:none;visibility:hidden}
+      .wipe--r{background:var(--rd)} .wipe--c{background:var(--cy)}
+      .kase{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;visibility:hidden;touch-action:pan-y;--acc:#fff}
+      body.in-case .kase{visibility:visible}
+      .kase__flash{position:absolute;left:0;top:0;width:100%;height:100vh;z-index:3;background:var(--acc);pointer-events:none;opacity:1;transition:opacity .6s var(--ease) .12s}
+      body.case-in .kase__flash{opacity:0}
+      .kase__in{min-height:100%;display:grid;grid-template-columns:minmax(18rem,25rem) minmax(0,1fr);gap:clamp(2rem,5vw,5rem);
+        padding:var(--tb) 0 0 var(--gut);transition:opacity .18s}
+      .kase.swap .kase__in{opacity:0}
+      .kase__txt{align-self:center;padding:2.5rem 0}
+      .kase__txt>*{opacity:0;transform:translateY(10px);transition:opacity .5s var(--ease),transform .7s var(--ease)}
+      body.case-in .kase__txt>*{opacity:1;transform:none}
+      body.case-in .kase__txt>:nth-child(2){transition-delay:.05s} body.case-in .kase__txt>:nth-child(3){transition-delay:.1s}
+      body.case-in .kase__txt>:nth-child(4){transition-delay:.15s} body.case-in .kase__txt>:nth-child(5){transition-delay:.2s} body.case-in .kase__txt>:nth-child(6){transition-delay:.25s}
+      /* el espectro en miniatura: una banda por proyecto, la abierta es la ancha */
+      .huella{display:flex;align-items:stretch;margin:0 0 1.3rem;height:44px}
+      .huella button{appearance:none;border:0;cursor:pointer;width:20px;padding:0;background:var(--c);opacity:.5;transition:width .35s var(--ease),opacity .35s}
+      .huella button[aria-current="true"]{width:56px;opacity:1;box-shadow:-2px 0 0 rgba(255,58,84,.85),2px 0 0 rgba(36,226,232,.85);position:relative;z-index:1}
+      .huella button:hover{opacity:1}
+      .kase__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+      .kase__eye b{font-weight:400;color:var(--ink)}
+      .kase__name{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,5.6rem);line-height:.88;margin:.4rem 0 1.1rem;color:var(--ink);
+        text-shadow:-2px 0 rgba(255,58,84,.55),2px 0 rgba(36,226,232,.55)}
+      .kase__app{color:#c9cbd2;font-size:.98rem;line-height:1.58;max-width:36ch}
+      .cred{display:grid;grid-template-columns:5.5rem 1fr;margin-top:1.6rem;border-top:1px solid var(--hair)}
+      .cred dt,.cred dd{margin:0;padding:.6rem 0;border-bottom:1px solid var(--hair)}
+      .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.72rem}
+      .cred dd{font-size:.88rem} .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.6rem}
+      .kase__live{display:inline-flex;align-items:center;min-height:44px;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+        border-bottom:1px solid rgba(242,243,245,.35);transition:border-color .25s}
+      .kase__live:hover{border-color:var(--ink)}
+      .kase__next{appearance:none;background:none;border:0;cursor:pointer;color:var(--mid);font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;
+        text-transform:uppercase;min-height:44px;padding:0;transition:color .25s}
+      .kase__next b{font-weight:400;color:var(--ink)} .kase__next:hover{color:var(--ink)}
+      /* la banda del proyecto sigue ahí: el escenario de color donde se proyecta la obra */
+      .kase__stage{position:relative;display:flex;align-items:center;justify-content:center;padding:clamp(1.5rem,3.5vw,3.5rem);background:var(--acc);min-height:calc(100vh - var(--tb));overflow:hidden}
+      .kase__stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+        background:repeating-linear-gradient(90deg,rgba(255,255,255,.08) 0 1px,transparent 1px 7px,rgba(0,0,0,.08) 7px 8px);
+        box-shadow:inset 2px 0 0 rgba(255,58,84,.7)}
+      .kase__media{position:relative;margin:0;width:100%;aspect-ratio:16/10;max-height:calc(100vh - var(--tb) - 7rem);background:#000;
+        box-shadow:-4px 0 0 rgba(255,58,84,.85),4px 0 0 rgba(36,226,232,.85),0 30px 80px -20px rgba(0,0,0,.6);
+        opacity:0;transform:scale(.97);transition:opacity .6s var(--ease) .25s,transform .9s var(--ease) .25s}
+      body.case-in .kase__media{opacity:1;transform:none}
+      .kase__media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0;display:block;background:#000}
+      .cbar{display:none}
+
+      /* case en vertical: una columna; el escenario de color a lo ancho con el video MOBILE; acciones fijas abajo */
+      html.port .kase__in{grid-template-columns:1fr;gap:0;padding:var(--tb) 0 calc(56px + env(safe-area-inset-bottom,0px))}
+      html.port .kase__txt{padding:1.6rem var(--gut) 2rem}
+      html.port .kase__name{font-size:clamp(3.2rem,15vw,4.8rem)}
+      html.port .kase__app{font-size:.94rem;max-width:none}
+      html.port .kase__stage{min-height:0;padding:2rem var(--gut)}
+      html.port .kase__media{aspect-ratio:720/1558;width:min(100%,21rem);max-height:none}
+      html.port .kase__acts{display:none}
+      html.port body.in-case .cbar{display:flex}
+      .cbar{position:fixed;left:0;right:0;bottom:0;z-index:13;gap:1px;background:var(--hair);padding-bottom:env(safe-area-inset-bottom,0px);
+        opacity:0;animation:fade .4s var(--ease) .5s forwards}
+      @keyframes fade{to{opacity:1}}
+      .cbar>*{flex:1;display:flex;align-items:center;justify-content:center;min-height:56px;background:rgba(7,7,10,.97);font-family:var(--mono);font-size:.75rem;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--ink);border:0;appearance:none;cursor:pointer}
+      .cbar__next{color:var(--mid)} .cbar__next b{font-weight:400;color:var(--ink);margin:0 .4em}
+
+      /* ── sin JS o si algo falla: lista legible con links ── */
+      .plain{display:none}
+      html:not(.js) body,html.fail body{overflow:auto;touch-action:auto}
+      html:not(.js) .plain,html.fail .plain{display:block;position:relative;z-index:5;padding:2rem var(--gut) 4rem;max-width:48rem}
+      html:not(.js) :is(.band,.hint,.kase,.wipe,.tuned,.cbar),html.fail :is(.band,.hint,.kase,.wipe,.tuned,.cbar){display:none!important}
+      html:not(.js) .hero,html.fail .hero{position:relative;left:auto;top:auto;transform:none;padding:calc(var(--tb) + 2rem) var(--gut) 0;visibility:visible;font-size:min(30vw,12rem)}
+      html:not(.js) .nav,html.fail .nav{position:absolute}
+      .plain li{list-style:none;padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .plain ul{padding:0}
+      .plain h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.2rem);line-height:1;color:var(--acc)}
+      .plain p{color:var(--mid);font-size:.92rem;margin-top:.35rem}
+      .plain span{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+
+      @media (prefers-reduced-motion:reduce){
+        *,*::before,*::after{transition:none!important;animation:none!important}
+        .cbar{opacity:1}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grain" data-grain aria-hidden="true"></div>
+
+    <h1 class="hero wd" data-word aria-label="blopa">BLOPA</h1>
+
+    <nav class="nav" aria-label="Contacto">
+      <span class="nav__who">Pablo Vela</span>
+      <button type="button" class="nav__back" data-back>‹ Proyectos</button>
+      <a class="nav__mail" href="mailto:blopave@pm.me">blopave@pm.me ↗</a>
+    </nav>
+
+    <main>
+      <nav class="band" data-band aria-label="Proyectos">
+        {orden.map((p) => (
+          <button type="button" class="bd" data-slot style={`--c:${p.accent}`} aria-label={`${p.name} — ${p.category}, ${year(p.ended)}. Abrir proyecto`}>
+            <span class="wd" data-w aria-hidden="true">BLOPA</span>
+            <span class="bd__e bd__e--l" aria-hidden="true"><span class="wd" data-wl>BLOPA</span></span>
+            <span class="bd__e bd__e--r" aria-hidden="true"><span class="wd" data-wr>BLOPA</span></span>
+            <span class="bd__tx" aria-hidden="true"></span>
+            <span class="bd__win" data-media aria-hidden="true"><img class="bd__img" data-img alt="" decoding="async" /></span>
+            <span class="bd__lab" aria-hidden="true"><span class="bd__name">{p.name}</span><span class="bd__cat">{p.category} · {year(p.ended)}</span></span>
+          </button>
+        ))}
+      </nav>
+      <p class="tuned" data-tuned aria-hidden="true"><b data-tuned-name></b><i data-tuned-cat></i></p>
+
+      <div class="wipe wipe--r" data-wr aria-hidden="true"></div>
+      <div class="wipe wipe--c" data-wc aria-hidden="true"></div>
+      <section class="kase" data-case role="dialog" aria-modal="true" aria-labelledby="kase-name" inert>
+        <div class="kase__flash" aria-hidden="true"></div>
+        <div class="kase__in">
+          <div class="kase__txt">
+            <div class="huella" data-huella role="group" aria-label="Proyectos">
+              {orden.map((p) => (<button type="button" style={`--c:${p.accent}`} aria-label={p.name}></button>))}
+            </div>
+            <p class="kase__eye" data-eye></p>
+            <h2 class="kase__name" id="kase-name" data-name></h2>
+            <p class="kase__app" data-app></p>
+            <dl class="cred">
+              <dt>Servicios</dt><dd data-services></dd>
+              <dt>Stack</dt><dd class="soft" data-stack></dd>
+            </dl>
+            <div class="kase__acts">
+              <a class="kase__live" data-live target="_blank" rel="noopener">Ver en vivo ↗</a>
+              <button type="button" class="kase__next" data-next>Siguiente <b data-next-name></b> →</button>
+            </div>
+          </div>
+          <div class="kase__stage">
+            <figure class="kase__media"><video data-kvid muted loop playsinline preload="none" aria-label="Video del sitio"></video></figure>
+          </div>
+        </div>
+      </section>
+      <div class="cbar" data-cbar inert>
+        <a class="cbar__live" data-live2 target="_blank" rel="noopener">Ver en vivo ↗</a>
+        <button type="button" class="cbar__next" data-next2>Siguiente <b data-next-name2></b> →</button>
+      </div>
+
+      <section class="plain" aria-label="Proyectos (lista)">
+        <ul>
+          {orden.map((p) => (
+            <li style={`--acc:${p.accent}`}><span>{p.category} · {year(p.ended)}</span><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>
+          ))}
+        </ul>
+      </section>
+    </main>
+
+    <p class="hint" data-hint aria-hidden="true"><span class="hint__g"></span><span class="hint__t" data-hint-t></span></p>
+    <script type="application/json" id="ref-data" set:html={data}></script>
+
+    <script>
+      const root = document.documentElement, body = document.body;
+      try {
+        const P = JSON.parse(document.getElementById('ref-data').textContent);
+        const N = P.length;
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const coarse = matchMedia('(pointer: coarse)').matches;
+        const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+        const q = (s) => document.querySelector(s);
+        const wordEl = q('[data-word]'), bandEl = q('[data-band]'), navEl = q('.nav');
+        const slots = Array.from(document.querySelectorAll('[data-slot]'));
+        const wM = slots.map((s) => s.querySelector('[data-w]'));
+        const wL = slots.map((s) => s.querySelector('[data-wl]'));
+        const wRt = slots.map((s) => s.querySelector('[data-wr]'));
+        const medias = slots.map((s) => s.querySelector('[data-media]'));
+        const imgs = slots.map((s) => s.querySelector('[data-img]'));
+        const caseEl = q('[data-case]'), wR = q('[data-wr]'), wC = q('[data-wc]'), cbar = q('[data-cbar]'), backEl = q('[data-back]');
+        const tunedEl = q('[data-tuned]'), tunedName = q('[data-tuned-name]'), tunedCat = q('[data-tuned-cat]');
+        const huella = Array.from(document.querySelectorAll('[data-huella] button'));
+        const kvid = q('[data-kvid]');
+        const year = (e) => (e ? e.split('-')[0] : 'En curso');
+        const KIND = { pulz: 'Producto propio', basslayer: 'Producto propio' };
+
+        // ── color ──
+        const rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+        const BG = rgb('#07070a');
+        const ACC = P.map((p) => rgb(p.accent));
+        const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        const css = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+        const ease = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+        const INK = ACC.map((c) => css(mix(c, BG, 0.9)));   // la tinta de la palabra: el color de la banda, casi negro
+
+        // ── grano ──
+        (() => { const g = document.createElement('canvas'); g.width = g.height = 160; const gx = g.getContext('2d'); if (!gx) return;
+          const im = gx.createImageData(160, 160); for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+          gx.putImageData(im, 0, 0); q('[data-grain]').style.backgroundImage = `url(${g.toDataURL()})`; })();
+
+        // ════════════ geometría ════════════
+        // las bandas van de borde a borde (eje x); su alto es la franja entre la barra de arriba y la de abajo
+        let W = 0, H = 0, port = false, TB = 56, BB = 52, BH = 600;
+        let fs = 300, wx = 0, wy = 0, capBot = 0, YC = 30, EW = 14, S = 100, E = 400, SC = 80, PAD = 24, LH = 80;
+        const measure = () => {
+          W = innerWidth; H = innerHeight; port = H > W || W < 640; root.classList.toggle('port', port);
+          TB = navEl.getBoundingClientRect().height || 56;
+          BB = port ? clamp(H * 0.19, 140, 176) : 52;
+          root.style.setProperty('--bb', BB + 'px');
+          BH = H - TB - BB;
+          // tamaño de la palabra: lo más grande que entre a lo ancho y deje lugar a la obra debajo
+          wordEl.style.fontSize = '100px';
+          const r = wordEl.getBoundingClientRect().width / 100 || 2.05;
+          fs = port ? Math.min((W - 28) / r, BH * 0.32 / 0.72) : Math.min(W * 0.86 / r, BH * 0.4 / 0.72);
+          root.style.setProperty('--fs', fs.toFixed(1) + 'px'); wordEl.style.fontSize = '';
+          const h = fs * 0.88, capTopOff = h * 0.12;
+          const top = TB + (port ? clamp(BH * 0.04, 18, 30) : clamp(BH * 0.05, 22, 48)) - capTopOff;
+          wordEl.style.top = top + 'px';
+          const wr = wordEl.getBoundingClientRect();
+          wx = wr.left; wy = wr.top - TB; capBot = wr.bottom - wr.height * 0.02 - TB;
+          EW = clamp(fs * 0.035, 8, 16);
+          // la entrada abre el espectro desde una línea que corta la palabra por la mitad
+          YC = clamp((wy + capBot) / 2 / Math.max(1, BH), 0.08, 0.9) * 100;
+          S = W / N;
+          if (!port) {
+            PAD = clamp(W * 0.016, 16, 28); LH = 86;
+            const winH = BH - capBot - 30 - LH;
+            E = clamp(winH * 1.6 + 2 * PAD, S * 1.4, W * 0.62);
+          } else {
+            PAD = 10;
+            const winH = BH - capBot - 14 - 14;
+            E = Math.min(winH * 720 / 1558 + 2 * PAD, W * 0.66);
+            tunedEl.style.top = (TB + BH + 16) + 'px';
+          }
+          SC = (W - E) / Math.max(1, N - 1);
+        };
+
+        // ════════════ estado ════════════
+        const o = new Float32Array(N), e = new Float32Array(N), st = new Float32Array(N);
+        let hov = -1, kSel = -1, pos = 0, posT = 0, dragging = false, inCase = false, caseI = -1;
+        const t0 = performance.now(), ENTRY = 1400;
+        const sel = () => (hov >= 0 ? hov : kSel);
+        const tuned = () => clamp(Math.round(posT), 0, N - 1);
+        let kbd = false;
+        addEventListener('keydown', () => { kbd = true; }, true); addEventListener('pointerdown', () => { kbd = false; }, true);
+
+        const posterURL = (i) => '/img/poster/' + P[i].slug + (port ? '-m' : '') + '.jpg';
+        const loadPosters = (first) => imgs.forEach((im, i) => { if (first != null && i !== first) return; const u = posterURL(i); if (im.dataset.u !== u) { im.dataset.u = u; im.src = u; } });
+
+        // ── anchos: la abierta crece hasta E y las demás se reparten el resto ──
+        const layout = () => {
+          let O = 0; for (let i = 0; i < N; i++) O += o[i]; O = Math.min(1, O);
+          let T = 0;
+          for (let i = 0; i < N; i++) { e[i] = (1 - O) * S + O * SC + o[i] * (E - SC); T += e[i]; }
+          const k = W / T; let cum = 0;
+          for (let i = 0; i < N; i++) { e[i] *= k; st[i] = cum; cum += e[i]; }
+        };
+
+        let focusI = -1, focusO = 0;
+        const REF = [-1, 0.6, -0.35, 0.9, -0.7, 0.4, -0.95, 0.2];   // cuánto corre cada banda la palabra (arriba/abajo)
+        const prev = slots.map(() => ({}));
+        const setS = (el, c, k, v) => { if (c[k] !== v) { c[k] = v; el.style.setProperty(k, v); } };
+        const apply = (now, eT) => {
+          focusI = -1; focusO = 0; for (let i = 0; i < N; i++) if (o[i] > focusO) { focusO = o[i]; focusI = i; }
+          const fk = clamp(focusO * 1.3, 0, 1);
+          const settle = reduce ? 1 : ease((eT - 250) / 1100);          // la refracción se asienta durante la entrada
+          const A = fs * (port ? 0.03 : 0.02) * (1 + 3 * (1 - settle));
+          const tt = (now - t0) / 1000;
+          for (let i = 0; i < N; i++) {
+            const el = slots[i], c = prev[i], x = st[i], w = e[i], oi = o[i];
+            el.style.transform = `translate3d(${x.toFixed(2)}px,0,0)`; el.style.width = (w + 0.6).toFixed(2) + 'px';
+            // entrada: desde el primer cuadro, una línea de espectro de borde a borde cruza BLOPA y se abre en bandas
+            const kin = reduce ? 1 : ease((eT - 40 - i * Math.min(22, 120 / N)) / 760);
+            const ln = kin >= 1 ? 0 : 1.5;
+            setS(el, c, 'clip-path', kin >= 1 ? 'inset(0px 0px 0px 0px)' :
+              `inset(calc(${(YC * (1 - kin)).toFixed(2)}% - ${ln}px) 0px calc(${((100 - YC) * (1 - kin)).toFixed(2)}% - ${ln}px) 0px)`);
+            // refracción: cada banda corre la palabra; la abierta la enfoca (vuelve a su lugar)
+            const breathe = reduce ? 0 : Math.sin(tt * 0.7 + i * 1.7) * fs * 0.004;
+            const dy = REF[i % REF.length] * A * (1 - oi) + breathe * (1 - oi);
+            const dx = (i % 2 ? 1 : -1) * fs * 0.012 * (1 - settle);
+            const bx = wx - x + dx, by = wy + dy;
+            wM[i].style.transform = `translate3d(${bx.toFixed(1)}px,${by.toFixed(1)}px,0)`;
+            const ed = fs * 0.006, ew = Math.min(EW, w * 0.1);
+            wL[i].style.transform = `translate3d(${(bx - ed).toFixed(1)}px,${by.toFixed(1)}px,0)`;
+            wRt[i].style.transform = `translate3d(${(bx - (w - ew) + ed).toFixed(1)}px,${by.toFixed(1)}px,0)`;
+            setS(el, c, '--ew', ew.toFixed(1) + 'px');
+            // color: las comprimidas bajan un poco la voz
+            const dim = focusI >= 0 && i !== focusI ? 0.16 * fk : 0;
+            setS(el, c, '--c', css(mix(ACC[i], BG, dim)));
+            setS(el, c, '--ink2', INK[i]);
+            setS(el, c, '--o', oi.toFixed(3));
+            // ventana con la obra
+            const m = medias[i];
+            if (!port) {
+              const top = capBot + 30, hh = BH - top - LH;
+              const ww = Math.max(0, w - 2 * PAD), hv = hh * (0.4 + 0.6 * ease(oi));
+              m.style.left = PAD + 'px'; m.style.width = ww + 'px'; m.style.top = (top + (hh - hv) / 2) + 'px'; m.style.height = hv + 'px';
+              setS(el, c, '--lo', clamp((w - 120) / 60, 0, 1).toFixed(2));
+            } else {
+              const top = capBot + 14, hh = BH - top - 14;
+              const ww = Math.max(0, w - 2 * PAD), hv = hh * (0.4 + 0.6 * ease(oi));
+              m.style.left = PAD + 'px'; m.style.width = ww + 'px'; m.style.top = (top + (hh - hv) / 2) + 'px'; m.style.height = hv + 'px';
+            }
+          }
+          if (port) {
+            const i = tuned(), p = P[i];
+            if (tunedEl.dataset.i !== String(i)) { tunedEl.dataset.i = String(i); tunedName.textContent = p.name; tunedEl.style.setProperty('--acc', p.accent);
+              tunedCat.textContent = p.category + ' · ' + year(p.ended); }
+            tunedEl.style.opacity = String(clamp(focusO * 1.6 - 0.4, 0, 1));
+          }
+        };
+
+        // ════════════ video (sólo el del proyecto activo) ════════════
+        const hv = document.createElement('video');
+        hv.className = 'bd__vid'; hv.muted = true; hv.loop = true; hv.playsInline = true; hv.preload = 'none';
+        hv.setAttribute('muted', ''); hv.setAttribute('playsinline', ''); hv.setAttribute('aria-hidden', 'true');
+        hv.addEventListener('playing', () => hv.classList.add('on'));
+        const vidURL = (i) => '/video/' + P[i].slug + (port ? '-m' : coarse ? '-640' : '') + '.mp4';
+        let vWant = -1, vT = 0;
+        const syncVideo = (eT) => {
+          const want = reduce || inCase || eT < ENTRY || focusO < 0.8 ? -1 : focusI;
+          if (want === vWant) return; vWant = want; clearTimeout(vT);
+          if (want < 0) { hv.pause(); hv.classList.remove('on'); return; }
+          vT = setTimeout(() => { const u = vidURL(want); hv.classList.remove('on');
+            if (hv.parentNode !== medias[want]) medias[want].appendChild(hv);
+            if (hv.dataset.u !== u) { hv.dataset.u = u; hv.src = u; } hv.currentTime = 0; hv.play().catch(() => {}); }, 180);
+        };
+
+        // ════════════ bucle ════════════
+        let last = performance.now(), ready = false;
+        const frame = (now) => {
+          const dt = Math.min(0.05, (now - last) / 1000); last = now;
+          const eT = reduce ? 1e9 : now - t0;
+          const kk = reduce ? 1 : 1 - Math.exp(-dt * 9);
+          if (!port) {
+            const s = sel(), gate = reduce ? 1 : ease((eT - 900) / 400);
+            for (let i = 0; i < N; i++) o[i] += ((i === s ? gate : 0) - o[i]) * kk;
+          } else {
+            if (!dragging) pos += (posT - pos) * (reduce ? 1 : 1 - Math.exp(-dt * 9));
+            const gate = reduce ? 1 : ease((eT - 800) / 550);
+            for (let i = 0; i < N; i++) o[i] = Math.max(0, 1 - Math.abs(pos - i)) * gate;
+          }
+          layout(); apply(now, eT); syncVideo(eT);
+          if (!ready && eT > ENTRY) { ready = true; body.classList.add('ready'); loadPosters(); }
+          requestAnimationFrame(frame);
+        };
+
+        // ════════════ case ════════════
+        const $ = (s) => caseEl.querySelector(s);
+        const fill = (i) => {
+          const p = P[i], nx = P[(i + 1) % N];
+          caseEl.style.setProperty('--acc', p.accent);
+          $('[data-eye]').innerHTML = '';
+          $('[data-eye]').append(p.category + ' · ' + year(p.ended) + ' · ', Object.assign(document.createElement('b'), { textContent: KIND[p.slug] || 'Encargo' }));
+          $('[data-name]').textContent = p.name; $('[data-app]').textContent = p.approach || '';
+          $('[data-services]').textContent = (p.services || []).join(', '); $('[data-stack]').textContent = (p.stack || []).join(', ');
+          for (const a of [$('[data-live]'), q('[data-live2]')]) { if (p.url) { a.href = p.url; a.style.display = ''; } else a.style.display = 'none'; }
+          q('[data-next-name]').textContent = nx.name; q('[data-next-name2]').textContent = nx.name;
+          huella.forEach((b, k) => b.setAttribute('aria-current', k === i ? 'true' : 'false'));
+          kvid.poster = '/img/poster/' + p.slug + (port ? '-m' : '') + '.jpg';
+          kvid.setAttribute('aria-label', 'Video del sitio de ' + p.name);
+          const u = '/video/' + p.slug + (port ? '-m' : coarse ? '-640' : '') + '.mp4';
+          if (reduce) { kvid.removeAttribute('src'); kvid.load(); }
+          else if (kvid.dataset.u !== u) { kvid.dataset.u = u; kvid.src = u; kvid.play().catch(() => {}); }
+          else kvid.play().catch(() => {});
+          document.title = 'blopa — ' + p.name;
+        };
+        const syncInert = () => { bandEl.inert = inCase; caseEl.inert = !inCase; cbar.inert = !inCase; caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+        const slotRect = (i) => { const r = slots[i].getBoundingClientRect(); return { t: r.top, l: r.left, r: r.right, b: r.bottom }; };
+        const ins = (r, dx = 0, dy = 0) => `inset(${(r.t + dy).toFixed(1)}px ${(W - r.r - dx).toFixed(1)}px ${(H - r.b - dy).toFixed(1)}px ${(r.l + dx).toFixed(1)}px)`;
+        const FRINGE = [[wR, -6, 0], [wC, 6, 0], [caseEl, 0, 0]];
+        const FULL = 'inset(0px 0px 0px 0px)';
+        let anims = [];
+        const stopAnims = () => { anims.forEach((a) => a.cancel()); anims = []; };
+        let pushed = false, caseInT = 0;
+        const setURL = (slug, push) => { const url = location.pathname + (slug ? '?p=' + slug : '');
+          if (push && !FRAMED) { history.pushState({ ref: 1 }, '', url); pushed = true; } else history.replaceState(history.state, '', url); };
+
+        const openCase = (i, { instant = false, push = true } = {}) => {
+          if (inCase) { swapCase(i); return; }
+          caseI = i; inCase = true;
+          if (!port) { hov = -1; kSel = i; } else posT = i;
+          fill(i);
+          const r = slotRect(i);
+          body.classList.add('in-case'); syncInert();
+          stopAnims(); clearTimeout(caseInT);
+          if (instant || reduce) { body.classList.add('case-in'); }
+          else {
+            const fl = { t: 0, l: 0, r: W, b: H };
+            // la banda se estira: primero a todo el alto, después a todo el ancho (con filo cian/rojo)
+            const tall = { t: 0, b: H, l: r.l, r: r.r };
+            FRINGE.forEach(([el, dx, dy]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: ins(r, dx, dy) }, { clipPath: ins(tall, dx, dy), offset: 0.3 }, { clipPath: el === caseEl ? FULL : ins(fl, dx, dy) }];
+              anims.push(el.animate(kf, { duration: 700, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'forwards' })); });
+            anims[2].onfinish = () => { wR.style.visibility = wC.style.visibility = ''; };
+            caseInT = setTimeout(() => body.classList.add('case-in'), 520);
+          }
+          caseEl.scrollTop = 0;
+          if (push) setURL(P[i].slug, true);
+          setTimeout(() => { if (inCase) backEl.focus({ preventScroll: true, focusVisible: kbd }); }, instant || reduce ? 0 : 760);
+        };
+        const swapCase = (i) => {
+          if (i === caseI) return; caseI = i; if (!port) kSel = i; else { posT = pos = i; }
+          setURL(P[i].slug, false);
+          if (reduce) { fill(i); return; }
+          caseEl.classList.add('swap');
+          stopAnims();
+          [[wR, 0], [wC, 45]].forEach(([el, dl]) => { el.style.visibility = 'visible'; el.style.zIndex = '11';
+            anims.push(el.animate([{ clipPath: `inset(0px ${W}px 0px -3px)` }, { clipPath: `inset(0px -3px 0px ${W}px)` }],
+              { duration: 460, delay: dl, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'backwards' })); });
+          setTimeout(() => { fill(i); caseEl.scrollTop = 0; caseEl.classList.remove('swap'); }, 200);
+          setTimeout(() => { wR.style.zIndex = wC.style.zIndex = ''; wR.style.visibility = wC.style.visibility = ''; stopAnims(); }, 540);
+        };
+        const doClose = () => {
+          if (!inCase) return; inCase = false; clearTimeout(caseInT);
+          document.title = 'blopa — Pablo Vela';
+          kvid.pause();
+          const fin = () => { body.classList.remove('in-case', 'case-in'); stopAnims(); wR.style.visibility = wC.style.visibility = ''; syncInert(); };
+          if (reduce) { fin(); }
+          else {
+            body.classList.remove('case-in');
+            caseEl.scrollTop = 0;
+            const r = slotRect(caseI), fl = { t: 0, l: 0, r: W, b: H }, tall = { t: 0, b: H, l: r.l, r: r.r };
+            stopAnims();
+            FRINGE.forEach(([el, dx, dy]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: el === caseEl ? FULL : ins(fl, dx, dy) }, { clipPath: ins(tall, dx, dy), offset: 0.7 }, { clipPath: ins(r, dx, dy) }];
+              anims.push(el.animate(kf, { duration: 620, delay: 120, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'both' })); });
+            anims[2].onfinish = fin;
+          }
+          bandEl.inert = false;
+          setTimeout(() => { const el = slots[caseI]; if (el && !inCase) el.focus({ preventScroll: true, focusVisible: kbd }); }, reduce ? 0 : 760);
+        };
+        const closeCase = () => {
+          if (!inCase) return;
+          if (pushed && history.state && history.state.ref) { pushed = false; history.back(); return; }
+          setURL('', false); doClose();
+        };
+        const urlSlug = () => new URLSearchParams(location.search).get('p');
+        addEventListener('popstate', () => { const i = P.findIndex((p) => p.slug === urlSlug());
+          if (i >= 0) { if (!inCase) openCase(i, { push: false }); else swapCase(i); } else { pushed = false; doClose(); } });
+
+        backEl.addEventListener('click', () => closeCase());
+        const next = (d) => { if (inCase) swapCase((caseI + d + N) % N); };
+        q('[data-next]').addEventListener('click', () => next(1)); q('[data-next2]').addEventListener('click', () => next(1));
+        huella.forEach((b, k) => b.addEventListener('click', () => swapCase(k)));
+
+        // ════════════ interacción en la home ════════════
+        let hovT = 0;
+        slots.forEach((el, i) => {
+          el.addEventListener('pointerenter', (ev) => { if (ev.pointerType !== 'mouse' || port || inCase) return; clearTimeout(hovT); hovT = setTimeout(() => { hov = i; }, 60); });
+          el.addEventListener('pointerleave', (ev) => { if (ev.pointerType !== 'mouse') return; clearTimeout(hovT); hovT = setTimeout(() => { if (!inCase) hov = -1; }, 160); });
+          el.addEventListener('focus', () => { if (inCase) return; if (port) posT = i; else if (kbd) kSel = i; });
+          el.addEventListener('blur', () => { if (!port && !inCase) setTimeout(() => { if (!slots.includes(document.activeElement) && !inCase) kSel = -1; }, 0); });
+          el.addEventListener('click', (ev) => {
+            if (inCase) return;
+            if (port && ev.detail !== 0) return;
+            if (!port && coarse && ev.detail !== 0 && sel() !== i) { kSel = i; return; }
+            openCase(i);
+          });
+        });
+        bandEl.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse' && !inCase) { clearTimeout(hovT); hov = -1; } });
+
+        // vertical: el sintonizador (arrastre en cualquier dirección, con frenos en cada proyecto)
+        let down = null;
+        const STEP = () => Math.max(56, W / (N + 1));
+        addEventListener('pointerdown', (ev) => {
+          if (!port || inCase || ev.button > 0) return;
+          if (ev.target.closest && ev.target.closest('a,.nav button')) return;
+          down = { x: ev.clientX, y: ev.clientY, p: pos, ax: 0, lx: ev.clientX, ly: ev.clientY, lt: performance.now(), v: 0 };
+        });
+        addEventListener('pointermove', (ev) => {
+          if (!down) return;
+          const dx = ev.clientX - down.x, dy = ev.clientY - down.y;
+          if (!down.ax && Math.hypot(dx, dy) > 8) { down.ax = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'; dragging = true; }
+          if (!down.ax) return;
+          const d = down.ax === 'x' ? dx : dy;
+          let p = down.p - d / STEP();
+          if (p < 0) p *= 0.35; if (p > N - 1) p = N - 1 + (p - (N - 1)) * 0.35;
+          const now = performance.now(), dtm = Math.max(1, now - down.lt);
+          const dd = down.ax === 'x' ? ev.clientX - down.lx : ev.clientY - down.ly;
+          down.v = 0.7 * down.v + 0.3 * (-dd / STEP() / (dtm / 1000)); down.lx = ev.clientX; down.ly = ev.clientY; down.lt = now;
+          pos = p; posT = clamp(Math.round(p), 0, N - 1);
+        });
+        const up = (ev) => {
+          if (!down) return; const d = down; down = null;
+          if (d.ax) { dragging = false; posT = clamp(Math.round(pos + clamp(d.v, -12, 12) * 0.12), 0, N - 1); return; }
+          const x = ev.clientX, y = ev.clientY, cur = tuned();
+          const nameR = tunedEl.getBoundingClientRect();
+          if (y >= nameR.top - 8 && y <= nameR.bottom + 8 && o[cur] > 0.6) { openCase(cur); return; }
+          if (y < TB || y > TB + BH) return;
+          let hit = -1; for (let i = 0; i < N; i++) if (x >= st[i] && x < st[i] + e[i]) hit = i;
+          if (hit < 0) hit = x < st[0] ? 0 : N - 1;
+          if (hit === cur && o[cur] > 0.6) openCase(cur); else posT = hit;
+        };
+        addEventListener('pointerup', up);
+        addEventListener('pointercancel', () => { if (down && down.ax) { dragging = false; posT = clamp(Math.round(pos), 0, N - 1); } down = null; });
+
+        let wAcc = 0, wT = 0;
+        addEventListener('wheel', (ev) => {
+          if (inCase) return;
+          wAcc += Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+          const now = performance.now(); if (Math.abs(wAcc) < 40 || now - wT < 220) return;
+          const d = Math.sign(wAcc); wAcc = 0; wT = now;
+          if (port) posT = clamp(posT + d, 0, N - 1);
+          else { const s = sel(); hov = -1; kSel = s < 0 ? (d > 0 ? 0 : N - 1) : clamp(s + d, 0, N - 1); }
+        }, { passive: true });
+
+        addEventListener('keydown', (ev) => {
+          const k = ev.key;
+          if (inCase) {
+            if (k === 'Escape') { ev.preventDefault(); closeCase(); }
+            else if (k === 'ArrowRight') { ev.preventDefault(); next(1); }
+            else if (k === 'ArrowLeft') { ev.preventDefault(); next(-1); }
+            return;
+          }
+          const fwd = k === 'ArrowDown' || k === 'ArrowRight', back = k === 'ArrowUp' || k === 'ArrowLeft';
+          if (fwd || back) {
+            ev.preventDefault();
+            const cur = port ? tuned() : sel();
+            const n = cur < 0 ? (fwd ? 0 : N - 1) : clamp(cur + (fwd ? 1 : -1), 0, N - 1);
+            hov = -1; if (port) posT = n; else kSel = n;
+            slots[n].focus({ preventScroll: true, focusVisible: true });
+          } else if (k === 'Escape' && !port) { hov = -1; kSel = -1; if (slots.includes(document.activeElement)) document.activeElement.blur(); }
+          else if (k === 'Enter' && port && !slots.includes(document.activeElement) && document.activeElement === body) openCase(tuned());
+        });
+
+        // ════════════ leyenda de uso ════════════
+        const hintEl = q('[data-hint]'), hintT = q('[data-hint-t]');
+        let hintKey = '', swapT = 0;
+        const hintFor = () => {
+          if (inCase) return null;
+          if (port) return { g: 'h', t: 'Deslizá para elegir · tocá para abrir' };
+          const s = sel();
+          if (s >= 0) return { g: 'tap', t: (coarse ? 'Tocá de nuevo para abrir ' : 'Clic para abrir ') + P[s].name };
+          return { g: 'h', t: coarse ? 'Tocá una banda para ver la obra' : 'Pasá por una banda para ver la obra · clic abre' };
+        };
+        const syncHint = () => { const h = hintFor(), key = h ? h.g + '|' + h.t : '';
+          if (key === hintKey) return; const first = !hintKey; hintKey = key;
+          hintEl.classList.toggle('on', !!h); if (!h) return;
+          const put = () => { hintEl.dataset.g = h.g; hintT.textContent = h.t; hintEl.classList.remove('swap'); };
+          clearTimeout(swapT); if (first || reduce) put(); else { hintEl.classList.add('swap'); swapT = setTimeout(put, 200); } };
+        setInterval(syncHint, 150);
+
+        // ════════════ arranque ════════════
+        measure(); loadPosters(port ? 0 : null);
+        addEventListener('resize', () => { const wasPort = port; measure(); if (wasPort !== port) { loadPosters(); hv.removeAttribute('data-u'); vWant = -2; } });
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+        syncInert(); syncHint();
+        const i0 = P.findIndex((p) => p.slug === urlSlug());
+        if (i0 >= 0) { if (port) pos = posT = i0; openCase(i0, { instant: true, push: false }); }
+        requestAnimationFrame(frame);
+      } catch (err) {
+        console.error(err);
+        root.classList.add('fail');
+      }
+    </script>
+  </body>
+</html>

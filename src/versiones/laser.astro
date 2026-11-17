@@ -1,0 +1,1018 @@
+---
+// VERSIÓN «LÁSER» — Ryoji Ikeda (instalaciones de luz precisas, mínimas) + escenarios de gira a lo Willo Perron:
+// haces de láser cortando el humo. Una fuente al pie del escenario abre un abanico de haces hacia arriba; dos cabezales
+// laterales cruzan los suyos (y sólo en los cruces aparece un filo cian/rojo). BLOPA y el nombre del proyecto están
+// DIBUJADOS por láser sobre el telón del fondo (contornos reales de la tipografía, con el titileo y el barrido de un
+// proyector); la captura del sitio aparece tenue en el telón, encendida por líneas de barrido.
+// Entrada: los haces se encienden, el proyector dibuja BLOPA trazo a trazo, después el primer proyecto.
+// Deslizar = un «cue» de concierto: el abanico barre rápido, un cuadro blanco cortísimo, los contornos se redibujan en el
+// color nuevo. El dedo es un obstáculo: los haces que lo tocan se cortan ahí y estallan. Tocar el telón abre el case.
+// Técnica: WebGL crudo, sin post-proceso: fondo (humo + captura) en un pase y los haces como cuadriláteros con brillo
+// analítico (distancia al segmento) en mezcla aditiva; los contornos en mezcla MAX. DPR ≤ 1.5 táctil / 2 escritorio.
+import { projects } from '../data/projects';
+
+const hue = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  return h > 330 ? h - 360 : h;
+};
+const orden = [...projects].sort((a, b) => hue(a.accent) - hue(b.accent));
+const year = (e: string) => (e ? e.split('-')[0] : 'En curso');
+const data = JSON.stringify(orden.map((p) => ({ slug: p.slug, name: p.name, category: p.category, ended: p.ended, accent: p.accent, url: p.url,
+  approach: p.approach, services: p.services, stack: p.stack })));
+---
+<!doctype html>
+<html lang="es" style={`--acc:${orden[0].accent}`}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa — Pablo Vela</title>
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="blopa — Pablo Vela" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/FragmentMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <script is:inline>(function(){var d=document.documentElement;d.classList.add('js');if(innerHeight>innerWidth||innerWidth<640)d.classList.add('port');})();</script>
+    <style is:global>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:block; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#07070a; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --hair:#22222a; --cy:#24e2e8; --rd:#ff3a54;
+        --display:'Bebas Neue',Impact,'Arial Narrow',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1rem,3vw,3rem);
+        --tb:56px; --acc:#fff }
+      html.port{--tb:calc(env(safe-area-inset-top,0px) + 52px)}
+      *{box-sizing:border-box;margin:0}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5;
+        overscroll-behavior:none}
+      html.js body{touch-action:none;-webkit-user-select:none;user-select:none}
+      a{color:inherit;text-decoration:none}
+      :is(button,a):focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:2px}
+
+      .grain{position:fixed;inset:-60px;z-index:30;pointer-events:none;opacity:.06;mix-blend-mode:overlay;background-size:160px 160px;
+        animation:grain .8s steps(4) infinite}
+      @keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-23px,17px)}50%{transform:translate(31px,-9px)}75%{transform:translate(-11px,-29px)}100%{transform:translate(0,0)}}
+      .sab{position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden}
+
+      /* el nombre real (lectores de pantalla / sin JS); con JS lo dibuja el láser */
+      .hero{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+      .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+      /* ── barra superior ── */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:12;height:var(--tb);display:flex;align-items:center;gap:1rem;
+        padding:env(safe-area-inset-top,0px) var(--gut) 0;font-family:var(--mono);font-size:.75rem;letter-spacing:.06em;color:var(--mid)}
+      body.in-case .nav{background:var(--bg)}
+      .nav__who{color:var(--ink);white-space:nowrap;animation:up .6s var(--ease) .2s both}
+      body.in-case .nav__who{display:none}
+      .nav__mail{display:inline-flex;align-items:center;min-height:44px;margin-left:auto;white-space:nowrap;transition:color .25s;animation:up .6s var(--ease) .3s both}
+      .nav__mail:hover{color:var(--ink)}
+      .nav__back{appearance:none;background:none;border:1px solid var(--hair);border-radius:999px;color:var(--mid);cursor:pointer;font:inherit;
+        font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;padding:0 1.1rem;min-height:44px;display:none;transition:color .25s,border-color .25s}
+      .nav__back:hover{color:var(--ink);border-color:var(--soft)}
+      .nav__back:focus-visible{border-radius:999px}
+      body.in-case .nav__back{display:inline-flex;align-items:center}
+      @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+      /* ── el escenario (WebGL) ── */
+      /* el nombre como letra real, presente desde el primer cuadro: el láser lo repasa encima y queda como relleno de humo encendido */
+      .hb{position:fixed;left:0;top:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible}
+      .hb text{font-family:var(--display);font-weight:400;fill:color-mix(in srgb,var(--acc) 13%,transparent);
+        stroke:color-mix(in srgb,#fff 50%,var(--acc));stroke-width:1.4px;stroke-linejoin:round;
+        filter:drop-shadow(0 0 2px var(--acc)) drop-shadow(0 0 10px color-mix(in srgb,var(--acc) 55%,transparent));
+        transition:fill .5s var(--ease),stroke .5s var(--ease),stroke-opacity .5s var(--ease),opacity .22s var(--ease)}
+      .hb.lit text{stroke-opacity:.3}
+      .hb .hb__n{opacity:0}
+      .hb .hb__n.on{opacity:1}
+      .hb .hb__b{animation:hbon .42s steps(1) both}
+      @keyframes hbon{0%{opacity:.55}18%{opacity:1}30%{opacity:.6}44%{opacity:1}100%{opacity:1}}
+      body.in-case .hb{visibility:hidden}
+      html:not(.js) .hb,html.fail .hb{display:none}
+      @media (pointer:coarse){ .grain{display:none} }
+
+      .stage{position:fixed;inset:0;z-index:3;width:100%;height:100%;display:block;-webkit-tap-highlight-color:transparent}
+      .stage.over{cursor:pointer}
+      .stage.drag{cursor:grabbing}
+
+      /* el telón: blanco táctil (y foco de teclado) sobre la captura + el nombre */
+      .scrim{position:fixed;left:0;top:0;z-index:4;appearance:none;background:none;border:0;padding:0;margin:0;cursor:pointer;
+        -webkit-tap-highlight-color:transparent;pointer-events:none}
+      .scrim:focus-visible{outline:1px solid var(--ink);outline-offset:6px}
+
+      /* categoría · año, debajo del nombre dibujado */
+      .lab{position:fixed;left:var(--gut);right:var(--gut);top:0;z-index:5;text-align:center;pointer-events:none;opacity:0;transition:opacity .6s var(--ease)}
+      .lab.on{opacity:1}
+      body.in-case .lab{opacity:0}
+      .lab i{display:block;font-style:normal;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);opacity:.8;transition:opacity .18s}
+      .lab.swap i{opacity:0}
+
+      /* proyectos para teclado / lector (el escenario no es enfocable) */
+      .dots{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+
+      /* ── leyenda de uso ── */
+      .hint{position:fixed;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:6;display:flex;align-items:center;gap:.7rem;
+        justify-content:center;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid);pointer-events:none;opacity:0;
+        transition:opacity .5s var(--ease);min-height:24px;text-shadow:0 0 6px var(--bg),0 0 14px var(--bg),0 0 22px var(--bg)}
+      body.ready .hint.on{opacity:1}
+      body.in-case .hint{opacity:0!important}
+      .hint.swap .hint__t{opacity:0}
+      .hint__t{transition:opacity .2s var(--ease)}
+      .hint__g{position:relative;flex:none;width:14px;height:14px}
+      .hint__g::before{content:"";position:absolute;inset:0;border:1px solid currentColor;border-radius:50%;opacity:.45}
+      .hint__g::after{content:"";position:absolute;left:4px;top:4px;width:6px;height:6px;border-radius:50%;background:currentColor;animation:tap 1.6s var(--ease) infinite}
+      .hint[data-g="h"] .hint__g{width:22px;height:8px}
+      .hint[data-g="h"] .hint__g::before{border-radius:999px}
+      .hint[data-g="h"] .hint__g::after{left:1px;top:1px;animation:railh 1.8s var(--ease) infinite}
+      @keyframes tap{0%,100%{transform:scale(.6);opacity:.5}45%{transform:scale(1);opacity:1}}
+      @keyframes railh{0%,100%{transform:translateX(0)}50%{transform:translateX(14px)}}
+
+      /* ── el case ── */
+      .wipe{position:fixed;inset:0;z-index:9;pointer-events:none;visibility:hidden}
+      .wipe--r{background:var(--rd)} .wipe--c{background:var(--cy)}
+      .kase{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;visibility:hidden;touch-action:pan-y;--acc:#fff;
+        -webkit-user-select:text;user-select:text}
+      body.in-case .kase{visibility:visible}
+      .kase__flash{position:absolute;left:0;top:0;width:100%;height:100vh;z-index:3;background:var(--acc);pointer-events:none;opacity:1;transition:opacity .6s var(--ease) .12s}
+      body.case-in .kase__flash{opacity:0}
+      .kase__in{min-height:100%;display:grid;grid-template-columns:minmax(18rem,25rem) minmax(0,1fr);gap:clamp(2rem,5vw,5rem);
+        padding:var(--tb) 0 0 var(--gut);transition:opacity .18s}
+      .kase.swap .kase__in{opacity:0}
+      .kase__txt{align-self:center;padding:2.5rem 0}
+      .kase__txt>*{opacity:0;transform:translateY(10px);transition:opacity .5s var(--ease),transform .7s var(--ease)}
+      body.case-in .kase__txt>*{opacity:1;transform:none}
+      body.case-in .kase__txt>:nth-child(2){transition-delay:.05s} body.case-in .kase__txt>:nth-child(3){transition-delay:.1s}
+      body.case-in .kase__txt>:nth-child(4){transition-delay:.15s} body.case-in .kase__txt>:nth-child(5){transition-delay:.2s} body.case-in .kase__txt>:nth-child(6){transition-delay:.25s}
+      /* los haces en miniatura: uno por proyecto, el abierto encendido */
+      .huella{display:flex;align-items:stretch;gap:6px;margin:0 0 1.3rem;height:44px}
+      .huella button{appearance:none;border:0;background:none;cursor:pointer;width:36px;padding:0;position:relative}
+      .huella button::before{content:"";position:absolute;left:4px;right:4px;top:50%;height:2px;margin-top:-1px;border-radius:1px;background:var(--c);opacity:.3;transition:opacity .3s,box-shadow .3s}
+      .huella button[aria-current="true"]::before{opacity:1;background:#fff;box-shadow:0 0 2px 1px var(--c),0 0 12px 2px var(--c),-2px 0 6px rgba(255,58,84,.4),2px 0 6px rgba(36,226,232,.4)}
+      .huella button:hover::before{opacity:.7}
+      .kase__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+      .kase__eye b{font-weight:400;color:var(--ink)}
+      .kase__name{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,5.6rem);line-height:.88;margin:.4rem 0 1.1rem;color:#fff;
+        text-shadow:0 0 2px var(--acc),0 0 14px var(--acc),-2px 0 18px rgba(255,58,84,.35),2px 0 18px rgba(36,226,232,.35)}
+      .kase__app{color:#c9cbd2;font-size:.98rem;line-height:1.58;max-width:36ch}
+      .cred{display:grid;grid-template-columns:5.5rem 1fr;margin-top:1.6rem;border-top:1px solid var(--hair)}
+      .cred dt,.cred dd{margin:0;padding:.6rem 0;border-bottom:1px solid var(--hair)}
+      .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.72rem}
+      .cred dd{font-size:.88rem} .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.6rem}
+      .kase__live{display:inline-flex;align-items:center;min-height:44px;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+        border-bottom:1px solid rgba(242,243,245,.35);transition:border-color .25s}
+      .kase__live:hover{border-color:var(--ink)}
+      .kase__next{appearance:none;background:none;border:0;cursor:pointer;color:var(--mid);font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;
+        text-transform:uppercase;min-height:44px;padding:0;transition:color .25s}
+      .kase__next b{font-weight:400;color:var(--ink)} .kase__next:hover{color:var(--ink)}
+      /* el escenario del case: la obra en el telón, con la luz del proyecto subiendo desde el pie */
+      .kase__stage{position:relative;display:flex;align-items:center;justify-content:center;padding:clamp(1.5rem,3.5vw,3.5rem);min-height:calc(100vh - var(--tb));overflow:hidden;
+        background:radial-gradient(70% 60% at 50% 100%,color-mix(in srgb,var(--acc) 24%,transparent),transparent 100%),#0a0a0e}
+      .kase__media{position:relative;margin:0;width:100%;aspect-ratio:16/10;max-height:calc(100vh - var(--tb) - 7rem);background:#000;border-radius:2px;
+        box-shadow:0 0 0 1px rgba(255,255,255,.55),0 0 2px 1px var(--acc),0 0 30px 4px color-mix(in srgb,var(--acc) 45%,transparent),0 0 120px 20px color-mix(in srgb,var(--acc) 20%,transparent),
+          -3px 0 14px rgba(255,58,84,.25),3px 0 14px rgba(36,226,232,.25);
+        opacity:0;transform:scale(.97);transition:opacity .6s var(--ease) .25s,transform .9s var(--ease) .25s}
+      body.case-in .kase__media{opacity:1;transform:none}
+      .kase__media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0;display:block;background:#000;border-radius:2px}
+      .cbar{display:none}
+
+      html.port .kase__in{grid-template-columns:1fr;gap:0;padding:var(--tb) 0 calc(56px + env(safe-area-inset-bottom,0px))}
+      html.port .kase__txt{padding:1.6rem var(--gut) 2rem}
+      html.port .kase__name{font-size:clamp(3.2rem,15vw,4.8rem)}
+      html.port .kase__app{font-size:.94rem;max-width:none}
+      html.port .kase__stage{min-height:0;padding:2.4rem var(--gut)}
+      html.port .kase__media{aspect-ratio:720/1558;width:min(100%,21rem);max-height:none}
+      html.port .kase__acts{display:none}
+      html.port body.in-case .cbar{display:flex}
+      .cbar{position:fixed;left:0;right:0;bottom:0;z-index:13;gap:1px;background:var(--hair);padding-bottom:env(safe-area-inset-bottom,0px);
+        opacity:0;animation:fade .4s var(--ease) .5s forwards}
+      @keyframes fade{to{opacity:1}}
+      .cbar>*{flex:1;display:flex;align-items:center;justify-content:center;min-height:56px;background:rgba(7,7,10,.97);font-family:var(--mono);font-size:.75rem;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--ink);border:0;appearance:none;cursor:pointer}
+      .cbar__next{color:var(--mid)} .cbar__next b{font-weight:400;color:var(--ink);margin:0 .4em}
+
+      /* ── sin JS o si algo falla: lista legible con links ── */
+      .plain{display:none}
+      html:not(.js) body,html.fail body{overflow:auto;touch-action:auto;-webkit-user-select:auto;user-select:auto}
+      html:not(.js) .plain,html.fail .plain{display:block;position:relative;z-index:5;padding:2rem var(--gut) 4rem;max-width:48rem}
+      html:not(.js) :is(.stage,.scrim,.lab,.hint,.kase,.wipe,.cbar),html.fail :is(.stage,.scrim,.lab,.hint,.kase,.wipe,.cbar){display:none!important}
+      html:not(.js) .hero,html.fail .hero{position:relative;width:auto;height:auto;overflow:visible;clip-path:none;padding:calc(var(--tb) + 2rem) var(--gut) 0;
+        font-family:var(--display);font-weight:400;line-height:.8;font-size:min(30vw,12rem);color:transparent;-webkit-text-stroke:1.5px #fff;
+        text-shadow:0 0 8px var(--cy),0 0 26px var(--cy)}
+      html:not(.js) .nav,html.fail .nav{position:absolute}
+      .plain li{list-style:none;padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .plain ul{padding:0}
+      .plain h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.2rem);line-height:1;color:var(--acc)}
+      .plain p{color:var(--mid);font-size:.92rem;margin-top:.35rem}
+      .plain span{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+
+      @media (prefers-reduced-motion:reduce){
+        *,*::before,*::after{transition:none!important;animation:none!important}
+        .cbar{opacity:1}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grain" data-grain aria-hidden="true"></div>
+    <div class="sab" data-sab aria-hidden="true"></div>
+
+    <h1 class="hero">BLOPA</h1>
+
+    <nav class="nav" aria-label="Contacto">
+      <span class="nav__who">Pablo Vela</span>
+      <button type="button" class="nav__back" data-back>‹ Proyectos</button>
+      <a class="nav__mail" href="mailto:blopave@pm.me">blopave@pm.me ↗</a>
+    </nav>
+
+    <main>
+      <canvas class="stage" data-stage aria-hidden="true"></canvas>
+      <svg class="hb" data-hb aria-hidden="true" focusable="false"><text class="hb__b" data-hb-b text-anchor="middle">BLOPA</text><text class="hb__n" data-hb-n text-anchor="start"></text></svg>
+      <script is:inline>(function(){try{var W=innerWidth,H=innerHeight,port=H>W||W<640,n=document.querySelector('.nav'),TB=(n&&n.getBoundingClientRect().height)||56,
+        rB=2.7086,capB=port?Math.min((W-48)/rB,H*.125):Math.min(W*.3/rB,H*.13),bTop=TB+(port?Math.max(10,H*.018):Math.max(14,H*.02)),
+        t=document.querySelector('[data-hb-b]');t.setAttribute('x',W/2);t.setAttribute('y',bTop+capB);t.setAttribute('font-size',capB/.7);}catch(e){}})();</script>
+
+      <button type="button" class="scrim" data-scrim aria-label=""></button>
+      <p class="lab" data-lab aria-hidden="true"><i data-lab-cat></i></p>
+      <nav class="dots" aria-label="Proyectos" data-band>
+        {orden.map((p) => (
+          <button type="button" data-slot aria-label={`${p.name} — ${p.category}, ${year(p.ended)}. Abrir proyecto`}></button>
+        ))}
+      </nav>
+
+      <div class="wipe wipe--r" data-wr aria-hidden="true"></div>
+      <div class="wipe wipe--c" data-wc aria-hidden="true"></div>
+      <section class="kase" data-case role="dialog" aria-modal="true" aria-labelledby="kase-name" inert>
+        <div class="kase__flash" aria-hidden="true"></div>
+        <div class="kase__in">
+          <div class="kase__txt">
+            <div class="huella" data-huella role="group" aria-label="Proyectos">
+              {orden.map((p) => (<button type="button" style={`--c:${p.accent}`} aria-label={p.name}></button>))}
+            </div>
+            <p class="kase__eye" data-eye></p>
+            <h2 class="kase__name" id="kase-name" data-name></h2>
+            <p class="kase__app" data-app></p>
+            <dl class="cred">
+              <dt>Servicios</dt><dd data-services></dd>
+              <dt>Stack</dt><dd class="soft" data-stack></dd>
+            </dl>
+            <div class="kase__acts">
+              <a class="kase__live" data-live target="_blank" rel="noopener">Ver en vivo ↗</a>
+              <button type="button" class="kase__next" data-next>Siguiente <b data-next-name></b> →</button>
+            </div>
+          </div>
+          <div class="kase__stage">
+            <figure class="kase__media"><video data-kvid muted loop playsinline preload="none" aria-label="Video del sitio"></video></figure>
+          </div>
+        </div>
+      </section>
+      <div class="cbar" data-cbar inert>
+        <a class="cbar__live" data-live2 target="_blank" rel="noopener">Ver en vivo ↗</a>
+        <button type="button" class="cbar__next" data-next2>Siguiente <b data-next-name2></b> →</button>
+      </div>
+
+      <section class="plain" aria-label="Proyectos (lista)">
+        <ul>
+          {orden.map((p) => (
+            <li style={`--acc:${p.accent}`}><span>{p.category} · {year(p.ended)}</span><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>
+          ))}
+        </ul>
+      </section>
+    </main>
+
+    <p class="hint" data-hint aria-hidden="true"><span class="hint__g"></span><span class="hint__t" data-hint-t></span></p>
+    <script type="application/json" id="laser-data" set:html={data}></script>
+
+    <script>
+      const root = document.documentElement, body = document.body;
+      try {
+        const P = JSON.parse(document.getElementById('laser-data').textContent);
+        const N = P.length;
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const coarse = matchMedia('(pointer: coarse)').matches;
+        const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+        const q = (s) => document.querySelector(s);
+        const navEl = q('.nav'), bandEl = q('[data-band]'), cv = q('[data-stage]'), scrimEl = q('[data-scrim]');
+        const labEl = q('[data-lab]'), labCat = q('[data-lab-cat]');
+        const slots = Array.from(document.querySelectorAll('[data-slot]'));
+        const caseEl = q('[data-case]'), wR = q('[data-wr]'), wC = q('[data-wc]'), cbar = q('[data-cbar]'), backEl = q('[data-back]');
+        const huella = Array.from(document.querySelectorAll('[data-huella] button'));
+        const kvid = q('[data-kvid]');
+        const hbEl = q('[data-hb]'), hbB = q('[data-hb-b]'), hbN = q('[data-hb-n]');
+        const year = (e) => (e ? e.split('-')[0] : 'En curso');
+        const KIND = { pulz: 'Producto propio', basslayer: 'Producto propio' };
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+        const rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255]; };
+        const ACC = P.map((p) => rgb(p.accent));
+        const RED = [1, 0.23, 0.33], CYN = [0.14, 0.89, 0.91];
+        const DEG = Math.PI / 180;
+        const easeO = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+        const easeI = (t) => Math.pow(clamp(t, 0, 1), 2.2);
+        const hash = (n) => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+
+        // ── grano ──
+        (() => { const g = document.createElement('canvas'); g.width = g.height = 160; const gx = g.getContext('2d'); if (!gx) return;
+          const im = gx.createImageData(160, 160); for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+          gx.putImageData(im, 0, 0); q('[data-grain]').style.backgroundImage = `url(${g.toDataURL()})`; })();
+
+        // ════════════ WebGL ════════════
+        const gl = cv.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
+        if (!gl) throw new Error('sin WebGL');
+        const XMAX = gl.getExtension('EXT_blend_minmax');
+        const PREC = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+`;
+        const HAZE = `uniform sampler2D Hz; uniform vec2 Dr;
+float haze(vec2 p){ return texture2D(Hz, p / 230. + Dr).r * .62 + texture2D(Hz, p / 95. - Dr * 1.7 + .37).r * .38; }
+`;
+        // fondo: el humo, la luz de la fuente en el piso y la captura en el telón (encendida por líneas de barrido)
+        const BG_VS = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+        const BG_FS = PREC + HAZE + `
+uniform vec2 R; uniform float S, T, PicA, Scan, Strobe, Pow, Port, Fl;
+uniform sampler2D Pic; uniform vec4 Box, Fit; uniform vec3 C; uniform vec2 Src;
+void main(){
+  vec2 p = vec2(gl_FragCoord.x, R.y - gl_FragCoord.y) / S;
+  vec2 V = R / S;
+  float h = haze(p);
+  vec3 col = vec3(.027, .027, .039) + vec3(.012, .014, .021) * h;
+  // la fuente ilumina el humo del pie del escenario
+  vec2 d = (p - Src) / vec2(V.x * mix(.55, .9, Port), V.y * .5);
+  float fl = exp(-dot(d, d) * 2.4);
+  col += C * fl * (.035 + .16 * h * h) * Pow;
+  vec2 vq = (p / V - .5) * vec2(1., 1.15);
+  col *= 1. - .5 * dot(vq, vq);
+  // el telón: la captura proyectada, con su color real; el láser sólo la barre (líneas finas y una franja que rueda)
+  vec2 q = (p - Box.xy) / (Box.zw - Box.xy);
+  if (q.x > 0. && q.x < 1. && q.y > 0. && q.y < 1.) {
+    vec3 img = texture2D(Pic, q * Fit.xy + Fit.zw).rgb;
+    float l = dot(img, vec3(.299, .587, .114));
+    vec3 lit = mix(img, C * l * 1.05 + img * .25, .08);
+    float lines = .965 + .035 * sin(p.y * 2.0944);
+    float roll = .97 + .09 * exp(-pow((q.y - fract(T * .085) * 1.4 + .2) / .07, 2.));
+    float by = mix(Box.y - 6., Box.w + 6., Scan);
+    float rev = smoothstep(by + 1.5, by - 1.5, p.y);
+    float band = exp(-pow((p.y - by) / 2.2, 2.)) * step(Scan, .999) * step(.001, Scan);
+    vec2 bs = Box.zw - Box.xy;
+    float edge = smoothstep(0., 3. / bs.x, q.x) * smoothstep(1., 1. - 3. / bs.x, q.x) * smoothstep(0., 3. / bs.y, q.y) * smoothstep(1., 1. - 3. / bs.y, q.y);
+    col = mix(col, lit * PicA * lines * roll, rev * edge) + (C * .7 + .5) * band * .55 * edge;
+  }
+  col += vec3(Strobe);
+  col = mix(col, vec3(.027, .027, .039), smoothstep(Fl - 4., Fl + 18., p.y));
+  gl_FragColor = vec4(col, 1.);
+}`;
+        // un haz (o un trazo del contorno, o un destello): cuadrilátero con brillo analítico alrededor del segmento A–B
+        const SG_VS = `attribute vec2 aPos; attribute vec4 aAB; attribute vec3 aCol; attribute vec4 aP; attribute vec2 aQ;
+uniform vec2 V;
+varying vec2 vPos; varying vec4 vAB; varying vec3 vCol; varying vec4 vP; varying vec2 vQ;
+void main(){ vPos = aPos; vAB = aAB; vCol = aCol; vP = aP; vQ = aQ;
+  gl_Position = vec4(aPos.x / V.x * 2. - 1., 1. - aPos.y / V.y * 2., 0., 1.); }`;
+        const SG_FS = PREC + HAZE + `
+uniform float T, Fl; uniform vec4 Q1, Q2, Q3;
+float qr(vec2 p, vec4 r){ vec2 c = .5 * (r.xy + r.zw), h = .5 * (r.zw - r.xy); vec2 d = max(abs(p - c) - h, 0.); return exp(-dot(d, d) / 260.); }
+float quiet(vec2 p){ return 1. - max(.6 * max(qr(p, Q1), qr(p, Q2)), .92 * qr(p, Q3)); }
+varying vec2 vPos; varying vec4 vAB; varying vec3 vCol; varying vec4 vP; varying vec2 vQ;
+void main(){
+  vec2 a = vAB.xy, ba = vAB.zw - a; float L2 = dot(ba, ba);
+  float t = L2 > 1e-4 ? clamp(dot(vPos - a, ba) / L2, 0., 1.) : 0.;
+  float d = length(vPos - a - ba * t);
+  float w = vP.x, g = vP.y, I = vP.z, hm = vP.w;
+  float h = hm > 0. ? haze(vPos) : .5;
+  float hz = mix(1., smoothstep(.18, .85, h) * 2.3, hm);
+  float core = exp(-d * d / (w * w)) * mix(1., .7 + .6 * h, hm);
+  float glow = exp(-d / g) * .32 + exp(-d / (g * 3.)) * .075 * hz;
+  float m = vQ.y;
+  float f = m < .5 ? 1. : m < 1.5 ? mix(1., .22, t) * quiet(vPos) : m < 2.5 ? sin(3.14159 * t) * quiet(vPos) : .94 + .06 * sin(vPos.y * 1.7 - T * 31.);
+  vec3 col = vCol * (core * .85 + glow * hz) + vec3(1.) * core * vQ.x;
+  gl_FragColor = vec4(col * I * f * (1. - smoothstep(Fl - 4., Fl + 18., vPos.y)), 1.);
+}`;
+        const mk = (vs, fs) => { const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+          const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+          if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; };
+        const bgP = mk(BG_VS, BG_FS), sgP = mk(SG_VS, SG_FS);
+        const uni = (p, names) => { const o = {}; names.forEach((n) => (o[n] = gl.getUniformLocation(p, n))); return o; };
+        const UB = uni(bgP, ['R', 'S', 'T', 'PicA', 'Scan', 'Strobe', 'Pow', 'Port', 'Fl', 'Pic', 'Box', 'Fit', 'C', 'Src', 'Hz', 'Dr']);
+        const US = uni(sgP, ['V', 'T', 'Fl', 'Hz', 'Dr', 'Q1', 'Q2', 'Q3']);
+        const triBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, triBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        const bgA = gl.getAttribLocation(bgP, 'a');
+        const SA = ['aPos', 'aAB', 'aCol', 'aP', 'aQ'].map((n) => gl.getAttribLocation(sgP, n)), SZ = [2, 4, 3, 4, 2], STRIDE = 15;
+
+        // la textura del humo: ruido de valor fbm, repetible (128²)
+        const hzTex = gl.createTexture();
+        (() => { const S = 128, d = new Uint8Array(S * S);
+          const oct = [[8, .5], [16, .27], [32, .15], [64, .08]];
+          const lat = oct.map(([n]) => { const a = new Float32Array(n * n); for (let i = 0; i < a.length; i++) a[i] = Math.random(); return a; });
+          for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { let v = 0;
+            oct.forEach(([n, amp], k) => { const fx = x / S * n, fy = y / S * n, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+              const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty), L = lat[k], g = (i, j) => L[((j % n) * n) + (i % n)];
+              v += amp * ((g(ix, iy) * (1 - sx) + g(ix + 1, iy) * sx) * (1 - sy) + (g(ix, iy + 1) * (1 - sx) + g(ix + 1, iy + 1) * sx) * sy); });
+            d[y * S + x] = clamp(Math.round((v - .1) / .9 * 255), 0, 255); }
+          gl.bindTexture(gl.TEXTURE_2D, hzTex); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, S, S, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, d);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); })();
+
+        // capturas (una textura por proyecto)
+        const blank = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, blank);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0]));
+        const picTex = P.map(() => null), picU = P.map(() => ''), picWH = P.map(() => [1, 1]);
+        let port = false;
+        const posterURL = (i) => '/img/poster/' + P[i].slug + (port ? '-m' : '') + '.jpg';
+        const loadPoster = (i) => { const u = posterURL(i); if (picU[i] === u) return; picU[i] = u;
+          const im = new Image(); im.decoding = 'async';
+          im.onload = () => { if (picU[i] !== u) return; const t = picTex[i] || gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            picTex[i] = t; picWH[i] = [im.naturalWidth, im.naturalHeight]; kick(); };
+          im.onerror = () => {}; im.src = u; };
+
+        // lotes de segmentos (6 vértices × 15 floats)
+        class Batch { constructor(max) { this.max = max; this.a = new Float32Array(max * 6 * STRIDE); this.n = 0; this.buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.buf); gl.bufferData(gl.ARRAY_BUFFER, this.a.byteLength, gl.DYNAMIC_DRAW); } }
+        const bA = new Batch(1600), bM = new Batch(4000), bB = new Batch(200);
+        // seg(lote, A, B, color, ancho del núcleo, radio del brillo, intensidad, humo 0–1, blancura del núcleo, modo)
+        // modo: 0 parejo · 1 se apaga lejos de la fuente · 2 se apaga en las puntas · 3 contorno proyectado (barrido)
+        const seg = (B, ax, ay, bx, by, c, w, g, I, hm, wh, mode) => {
+          if (B.n >= B.max || I <= 0.003) return;
+          const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+          const ux = L > 1e-3 ? dx / L : 1, uy = L > 1e-3 ? dy / L : 0;
+          const m = Math.max(w * 3, g * (hm > 0 ? 5.5 : 4.5)), nx = -uy * m, ny = ux * m, ex = ux * m, ey = uy * m;
+          const x0 = ax - ex, y0 = ay - ey, x1 = bx + ex, y1 = by + ey;
+          const v = [x0 + nx, y0 + ny, x0 - nx, y0 - ny, x1 - nx, y1 - ny, x0 + nx, y0 + ny, x1 - nx, y1 - ny, x1 + nx, y1 + ny];
+          const a = B.a; let o = B.n * 6 * STRIDE;
+          for (let k = 0; k < 12; k += 2) { a[o] = v[k]; a[o + 1] = v[k + 1]; a[o + 2] = ax; a[o + 3] = ay; a[o + 4] = bx; a[o + 5] = by;
+            a[o + 6] = c[0]; a[o + 7] = c[1]; a[o + 8] = c[2]; a[o + 9] = w; a[o + 10] = g; a[o + 11] = I; a[o + 12] = hm; a[o + 13] = wh; a[o + 14] = mode; o += STRIDE; }
+          B.n++;
+        };
+        const flush = (B) => { if (!B.n) return; gl.bindBuffer(gl.ARRAY_BUFFER, B.buf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, B.a.subarray(0, B.n * 6 * STRIDE));
+          let off = 0; SA.forEach((loc, k) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, SZ[k], gl.FLOAT, false, STRIDE * 4, off * 4); off += SZ[k]; });
+          gl.drawArrays(gl.TRIANGLES, 0, B.n * 6); };
+
+        // ════════════ contornos de la tipografía (marching squares sobre el texto rasterizado) ════════════
+        const FONT = (fs) => `400 ${fs}px "Bebas Neue", Impact, sans-serif`;
+        const RF = 200;
+        const rdp = (pts, eps) => { // Ramer–Douglas–Peucker sobre [x,y,x,y…]
+          const n = pts.length / 2; if (n < 3) return pts;
+          const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1; const st = [[0, n - 1]];
+          while (st.length) { const [i0, i1] = st.pop(); const ax = pts[i0 * 2], ay = pts[i0 * 2 + 1], bx = pts[i1 * 2], by = pts[i1 * 2 + 1];
+            const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1e-6; let md = 0, mi = -1;
+            for (let i = i0 + 1; i < i1; i++) { const d = Math.abs((pts[i * 2] - ax) * dy - (pts[i * 2 + 1] - ay) * dx) / L; if (d > md) { md = d; mi = i; } }
+            if (md > eps && mi > 0) { keep[mi] = 1; st.push([i0, mi], [mi, i1]); } }
+          const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i * 2], pts[i * 2 + 1]); return out; };
+        const outline = (txt, cap, maxW) => {
+          const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+          g.font = FONT(RF); const tw = g.measureText(txt).width, capR = g.measureText('B').actualBoundingBoxAscent || RF * .7;
+          const pad = 6, w = Math.ceil(tw + pad * 2), h = Math.ceil(capR + pad * 2 + 2);
+          c.width = w; c.height = h; g.font = FONT(RF); g.fillStyle = '#fff'; g.textBaseline = 'alphabetic'; g.fillText(txt, pad, pad + capR);
+          const px = g.getImageData(0, 0, w, h).data, A = new Float32Array(w * h);
+          for (let i = 0; i < w * h; i++) A[i] = px[i * 4 + 3] / 255;
+          const th = .5, pt = new Map(), nb = new Map();
+          const hid = (x, y) => (y * w + x) * 2, vid = (x, y) => (y * w + x) * 2 + 1;
+          const ep = (id, x0, y0, x1, y1, a, b) => { if (!pt.has(id)) { const t = (th - a) / ((b - a) || 1e-6); pt.set(id, [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]); } return id; };
+          const link = (e1, e2) => { (nb.get(e1) || nb.set(e1, []).get(e1)).push(e2); (nb.get(e2) || nb.set(e2, []).get(e2)).push(e1); };
+          for (let y = 0; y < h - 1; y++) for (let x = 0; x < w - 1; x++) {
+            const a = A[y * w + x], b = A[y * w + x + 1], cc = A[(y + 1) * w + x + 1], d = A[(y + 1) * w + x];
+            const k = (a >= th ? 8 : 0) | (b >= th ? 4 : 0) | (cc >= th ? 2 : 0) | (d >= th ? 1 : 0);
+            if (k === 0 || k === 15) continue;
+            const T_ = () => ep(hid(x, y), x, y, x + 1, y, a, b), R_ = () => ep(vid(x + 1, y), x + 1, y, x + 1, y + 1, b, cc),
+              B_ = () => ep(hid(x, y + 1), x, y + 1, x + 1, y + 1, d, cc), L_ = () => ep(vid(x, y), x, y, x, y + 1, a, d);
+            const ctr = (a + b + cc + d) / 4 >= th;
+            switch (k) {
+              case 1: case 14: link(L_(), B_()); break;
+              case 2: case 13: link(B_(), R_()); break;
+              case 3: case 12: link(L_(), R_()); break;
+              case 4: case 11: link(T_(), R_()); break;
+              case 6: case 9: link(T_(), B_()); break;
+              case 7: case 8: link(L_(), T_()); break;
+              case 5: if (ctr) { link(L_(), T_()); link(B_(), R_()); } else { link(T_(), R_()); link(L_(), B_()); } break;
+              case 10: if (ctr) { link(T_(), R_()); link(L_(), B_()); } else { link(L_(), T_()); link(B_(), R_()); } break;
+            }
+          }
+          let k = cap / capR; if (tw * k > maxW) k = maxW / tw;
+          const seen = new Set(), cs = [];
+          for (const s of nb.keys()) { if (seen.has(s)) continue;
+            const raw = []; let prev = -1, cur = s;
+            while (cur !== undefined && !seen.has(cur)) { seen.add(cur); const p = pt.get(cur); raw.push((p[0] - pad) * k, (p[1] - pad - capR) * k);
+              const n = nb.get(cur) || []; const nx = n[0] !== prev && !seen.has(n[0]) ? n[0] : n[1] !== prev && !seen.has(n[1]) ? n[1] : undefined; prev = cur; cur = nx; }
+            if (raw.length < 8) continue;
+            const pts = rdp(raw, .3); pts.push(pts[0], pts[1]);
+            const cum = new Float32Array(pts.length / 2); let L = 0, mnx = 1e9;
+            for (let i = 1; i < pts.length / 2; i++) { L += Math.hypot(pts[i * 2] - pts[i * 2 - 2], pts[i * 2 + 1] - pts[i * 2 - 1]); cum[i] = L; }
+            for (let i = 0; i < pts.length; i += 2) mnx = Math.min(mnx, pts[i]);
+            if (L < 4 * k) continue;
+            cs.push({ pts: new Float32Array(pts), cum, len: L, mnx }); }
+          cs.sort((a, b) => a.mnx - b.mnx);
+          let total = 0; cs.forEach((c) => (total += c.len));
+          return { cs, total, w: tw * k, cap: capR * k, fs: RF * k };
+        };
+
+        // ════════════ geometría ════════════
+        let W = 0, H = 0, TB = 56, SAB = 0, CS = 1;
+        const G = { bx: 0, bb: 0, nb: 0, box: [0, 0, 1, 1], nameCap: 40, sx: 0, sy: 0 };
+        let OB = null, ON = P.map(() => null);   // contornos: BLOPA y cada nombre (los nombres, a demanda)
+        let nameMax = 100;
+        const onm = (i) => ON[i] || (ON[i] = outline(P[i].name, G.nameCap, nameMax));
+        const setNameText = (i) => { const o = onm(i); hbN.textContent = P[i].name;
+          hbN.setAttribute('x', (W / 2 - o.w / 2).toFixed(2)); hbN.setAttribute('y', G.nb.toFixed(2)); hbN.setAttribute('font-size', o.fs.toFixed(3)); };
+        const layout = () => {
+          W = innerWidth; H = innerHeight; port = H > W || W < 640; root.classList.toggle('port', port);
+          TB = navEl.getBoundingClientRect().height || 56;
+          SAB = q('[data-sab]').getBoundingClientRect().height || 0;
+          const m = document.createElement('canvas').getContext('2d'); m.font = FONT(100);
+          const rB = m.measureText('BLOPA').width / (m.measureText('B').actualBoundingBoxAscent || 70);
+          const foot = H - SAB - (port ? 54 : 62);
+          let capB, bTop, nameCap, fan, sw, sh, gap;
+          if (port) {
+            capB = Math.min((W - 48) / rB, H * .125); bTop = TB + Math.max(10, H * .018);
+            nameCap = Math.min(W * .12, 48); fan = H * .2; gap = 18;
+          } else {
+            capB = Math.min(W * .3 / rB, H * .13); bTop = TB + Math.max(14, H * .02);
+            nameCap = Math.min(H * .067, 64); fan = H * .17; gap = 22;
+          }
+          const scrTop = bTop + capB + (port ? 24 : 30);
+          const scrBot = foot - fan - (nameCap + 32) - gap;
+          sh = Math.max(80, scrBot - scrTop);
+          sw = port ? Math.min(W * .64, sh * .82) : Math.min(W * .5, sh * 1.6);
+          G.box = [W / 2 - sw / 2, scrTop, W / 2 + sw / 2, scrTop + sh];
+          G.bb = bTop + capB;
+          G.nb = scrTop + sh + gap + nameCap; G.nameCap = nameCap;
+          // la fuente queda sobre el piso: debajo, la leyenda de uso en limpio
+          G.sx = W / 2; G.sy = H - SAB - (port ? 50 : 46);
+          OB = outline('BLOPA', capB, W - 40);
+          nameMax = port ? W - 40 : Math.max(sw, W * .5);
+          ON = P.map(() => null); onm(cur);
+          // el nombre real (SVG), calzado sobre el contorno del láser
+          hbEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+          hbB.setAttribute('x', (W / 2).toFixed(2)); hbB.setAttribute('y', G.bb.toFixed(2)); hbB.setAttribute('font-size', OB.fs.toFixed(3));
+          setNameText(cur);
+          labEl.style.top = (G.nb + 12).toFixed(1) + 'px';
+          // el blanco táctil: telón + nombre + categoría
+          const capM = m.measureText('B').actualBoundingBoxAscent || 70;
+          const nw = Math.max(...P.map((p) => Math.min(nameMax, m.measureText(p.name).width * nameCap / capM)));
+          const tw = Math.max(sw, nw) + 16, tl = W / 2 - tw / 2, tt = scrTop - 8, th = G.nb + 34 - tt;
+          scrimEl.style.cssText = `left:${tl.toFixed(1)}px;top:${tt.toFixed(1)}px;width:${tw.toFixed(1)}px;height:${th.toFixed(1)}px`;
+          const dpr = Math.min(coarse ? 1.5 : 2, devicePixelRatio || 1); CS = dpr;
+          cv.width = Math.max(1, Math.round(W * CS)); cv.height = Math.max(1, Math.round(H * CS));
+          gl.viewport(0, 0, cv.width, cv.height);
+          P.forEach((_, i) => loadPoster(i));
+          kick();
+        };
+
+        // ════════════ estado ════════════
+        let cur = 0, inCase = false, caseI = -1, ready = false;
+        const acc = ACC[0].slice();
+        let t0 = performance.now(), intro = !reduce, introDone = false;
+        // capas de contorno: { o: contorno, c: color, t0, dur, fade0 (ms, o 0), fadeDur, I, kind }
+        let layers = [];
+        let scanT0 = -1e9, scanDur = 650, picI = 0, strobeT = -1e9;
+        let cue = null;            // { t0, d, from }
+        let dragA = 0, dragAT = 0; // el abanico sigue al dedo
+        const obs = { x: -999, y: -999, r: 24, on: 0, onT: 0 };
+        let labShown = false;
+
+        const addLayers = (now, i, bDelay, bDur, nDelay, nDur) => {
+          const c = ACC[i].slice();
+          layers.forEach((L) => { if (!L.fade0) L.fade0 = now + (L.kind === 'n' ? 0 : bDelay + bDur * .4); L.fadeDur = L.kind === 'n' ? 170 : 420; });
+          layers.push({ o: () => OB, c, t0: now + bDelay, dur: bDur, fade0: 0, kind: 'b' });
+          layers.push({ o: () => onm(i), c, t0: now + nDelay, dur: nDur, fade0: 0, kind: 'n' });
+        };
+        let nameT = 0;
+        const nameSwap = (i, delay) => { clearTimeout(nameT);
+          if (!delay) { setNameText(i); hbN.classList.add('on'); return; }
+          hbN.classList.remove('on'); nameT = setTimeout(() => { setNameText(i); hbN.classList.add('on'); }, delay); };
+        const setLabel = (i, quiet) => {
+          const put = () => { labCat.textContent = P[i].category + ' · ' + year(P[i].ended); labEl.classList.remove('swap'); };
+          scrimEl.setAttribute('aria-label', `${P[i].name} — ${P[i].category}, ${year(P[i].ended)}. Abrir proyecto`);
+          if (quiet || reduce) put(); else { labEl.classList.add('swap'); setTimeout(put, 200); }
+        };
+        const switchTo = (i, now, quiet) => {
+          cur = i; picI = i;
+          for (let j = 0; j < 3; j++) acc[j] = ACC[i][j];
+          root.style.setProperty('--acc', P[i].accent);
+          slots.forEach((s, k) => s.setAttribute('aria-current', k === i ? 'true' : 'false'));
+          if (quiet || reduce) { layers = []; layers.push({ o: () => OB, c: ACC[i].slice(), t0: -1e9, dur: 1, fade0: 0, kind: 'b' }, { o: () => onm(i), c: ACC[i].slice(), t0: -1e9, dur: 1, fade0: 0, kind: 'n' }); scanT0 = -1e9; nameSwap(i, 0); }
+          else { addLayers(now, i, 30, 560, 90, 620); scanT0 = now + 60; scanDur = 560; nameSwap(i, 320); }
+          setLabel(i, quiet); syncHint();
+        };
+        // el cue: el abanico barre hacia afuera, cuadro blanco, entra por el otro lado; los contornos se redibujan
+        const CUE_OUT = 170, CUE_IN = 430;
+        const change = (d) => {
+          if (inCase) return;
+          endIntro();
+          const n = (cur + d + N) % N, now = performance.now();
+          if (reduce) { switchTo(n, now, true); kick(); return; }
+          cue = { t0: now, d, from: dragA, n, swapped: false };
+          dragA = dragAT = 0; kick();
+        };
+        const go = (i) => { if (i === cur) return; let d = (i - cur + N) % N; if (d > N / 2) d -= N; change(d); };
+
+        // la entrada: los haces se encienden, el proyector dibuja BLOPA, después el primer proyecto
+        const startIntro = (now) => {
+          t0 = now;
+          if (reduce) { switchTo(0, now, true); markReady(); return; }
+          cur = 0; picI = 0; for (let j = 0; j < 3; j++) acc[j] = ACC[0][j]; root.style.setProperty('--acc', P[0].accent);
+          slots.forEach((s, k) => s.setAttribute('aria-current', k === 0 ? 'true' : 'false'));
+          // BLOPA ya está en pantalla (letra real); el láser lo repasa enseguida y en < 1,4 s está todo
+          layers = [{ o: () => OB, c: ACC[0].slice(), t0: now + 40, dur: 560, fade0: 0, kind: 'b' },
+                    { o: () => onm(0), c: ACC[0].slice(), t0: now + 420, dur: 480, fade0: 0, kind: 'n' }];
+          scanT0 = now + 520; scanDur = 520;
+          setTimeout(() => hbEl.classList.add('lit'), 600);
+          setTimeout(() => { setNameText(0); hbN.classList.add('on'); }, 820);
+          setTimeout(() => setLabel(0, true), 0);
+          setTimeout(() => { labEl.classList.add('on'); }, 900);
+          setTimeout(() => { introDone = true; markReady(); }, 1150);
+        };
+        const endIntro = () => { if (introDone) return; introDone = true; intro = false; t0 = performance.now() - 4000;
+          layers.forEach((L) => { L.t0 = -1e9; }); scanT0 = -1e9; labEl.classList.add('on'); hbEl.classList.add('lit'); setNameText(cur); hbN.classList.add('on'); markReady(); };
+        const markReady = () => { if (ready) return; ready = true; hbEl.classList.add('lit'); body.classList.add('ready'); labEl.classList.add('on'); syncHint(); };
+
+        // ════════════ cuadro ════════════
+        const beams = [];
+        const exitLen = (sx, sy, dx, dy) => { let t = 1e9;
+          if (dy < 0) t = Math.min(t, (-60 - sy) / dy); if (dy > 0) t = Math.min(t, (H + 60 - sy) / dy);
+          if (dx > 0) t = Math.min(t, (W + 60 - sx) / dx); if (dx < 0) t = Math.min(t, (-60 - sx) / dx); return t; };
+        const hit = (sx, sy, dx, dy, len) => { // el dedo: ¿dónde corta al haz?
+          if (obs.on < .02) return -1; const vx = obs.x - sx, vy = obs.y - sy, tc = vx * dx + vy * dy; if (tc < 0) return -1;
+          const d2 = vx * vx + vy * vy - tc * tc, r2 = obs.r * obs.r; if (d2 > r2) return -1;
+          const s = tc - Math.sqrt(r2 - d2); return s > 0 && s < len ? s : -1; };
+        const flares = [];
+        const addBeam = (sx, sy, a, I, src) => {
+          const dx = Math.sin(a), dy = -Math.cos(a); let len = exitLen(sx, sy, dx, dy); const full = len;
+          const s = hit(sx, sy, dx, dy, len); if (s > 0) { len = s; flares.push([sx + dx * s, sy + dy * s, I]); }
+          beams.push({ sx, sy, dx, dy, len, full, I, src });
+        };
+        const ptAt = (o, p, ox, oy, out) => { // punto del contorno al avance p (0–1)
+          let rem = p * o.total;
+          for (const c of o.cs) { if (rem > c.len) { rem -= c.len; continue; }
+            let j = 1; while (j < c.cum.length - 1 && c.cum[j] < rem) j++;
+            const t = (rem - c.cum[j - 1]) / Math.max(1e-4, c.cum[j] - c.cum[j - 1]);
+            out[0] = ox + c.pts[j * 2 - 2] + (c.pts[j * 2] - c.pts[j * 2 - 2]) * t; out[1] = oy + c.pts[j * 2 - 1] + (c.pts[j * 2 + 1] - c.pts[j * 2 - 1]) * t; return true; }
+          return false; };
+        const drawOutline = (o, p, ox, oy, c, I, head) => {
+          const lim = p * o.total; let acc0 = 0;
+          const w = port ? 1.15 : .95, g = port ? 3 : 3.2;
+          for (const cc of o.cs) {
+            if (acc0 >= lim) break;
+            const rem = lim - acc0, pts = cc.pts, n = pts.length / 2;
+            for (let j = 1; j < n; j++) {
+              if (cc.cum[j - 1] >= rem) break;
+              let bx = pts[j * 2], by = pts[j * 2 + 1];
+              if (cc.cum[j] > rem) { const t = (rem - cc.cum[j - 1]) / Math.max(1e-4, cc.cum[j] - cc.cum[j - 1]); bx = pts[j * 2 - 2] + (bx - pts[j * 2 - 2]) * t; by = pts[j * 2 - 1] + (by - pts[j * 2 - 1]) * t;
+                if (head) { head[0] = ox + bx; head[1] = oy + by; head[2] = 1; } }
+              seg(XMAX ? bM : bA, ox + pts[j * 2 - 2], oy + pts[j * 2 - 1], ox + bx, oy + by, c, w, g, I, 0, .55, 3);
+            }
+            acc0 += cc.len;
+          }
+        };
+
+        let raf = 0, last = performance.now();
+        const frame = (now) => {
+          raf = 0;
+          const dt = Math.min(.05, (now - last) / 1000); last = now;
+          const eT = now - t0, T = reduce ? 20 : now / 1000;
+          bA.n = bM.n = bB.n = 0; beams.length = 0; flares.length = 0;
+          // el dedo
+          obs.on += ((obs.onT ? 1 : 0) - obs.on) * (1 - Math.exp(-dt * (obs.onT ? 30 : 9)));
+          // cue
+          let off = 0, cueK = 0, sideDip = 0;
+          if (cue) {
+            const u = now - cue.t0;
+            if (u < CUE_OUT) { off = cue.from + (-cue.d * 78 * DEG - cue.from) * easeI(u / CUE_OUT); cueK = u / CUE_OUT; }
+            else { if (!cue.swapped) { cue.swapped = true; strobeT = now; switchTo(cue.n, now, false); }
+              const v = (u - CUE_OUT) / CUE_IN; off = cue.d * 78 * DEG * (1 - easeO(v)); cueK = 1 - v; if (v >= 1) cue = null; }
+            sideDip = clamp(cueK, 0, 1);
+          }
+          dragA += (dragAT - dragA) * (1 - Math.exp(-dt * (down && down.ax === 'x' ? 22 : 9)));
+          if (!cue) off = dragA;
+          const strobe = reduce ? 0 : (now - strobeT < 50 ? .3 : 0);
+          // ── el abanico principal ──
+          const K = port ? 9 : 11, half = (port ? 30 : 44) * DEG * (1 + (reduce ? 0 : .07 * Math.sin(T * .37)));
+          const sway = reduce ? 0 : Math.sin(T * .29) * 5 * DEG;
+          const pow = intro ? clamp(eT / 300, 0, 1) : 1;
+          for (let i = 0; i < K; i++) {
+            const order = Math.abs(i - (K - 1) / 2);
+            let on = 1;
+            if (intro) { const tOn = 30 + order * 32; on = eT < tOn ? 0 : eT - tOn < 110 ? (hash(i * 7.1 + Math.floor(eT / 33)) > .45 ? 1 : .12) : 1; }
+            const chase = reduce ? 1 : .78 + .22 * Math.sin(T * 2.1 - i * .55);
+            const a = off + sway + half * (2 * i / (K - 1) - 1);
+            addBeam(G.sx, G.sy, a, on * chase * (strobe ? 1.6 : 1), 0);
+          }
+          // ── cabezales laterales (cruzan el abanico) ──
+          const K2 = 3;
+          for (let s = 0; s < 2; s++) {
+            const sgn = s ? -1 : 1, sx = s ? W + 8 : -8, sy = G.sy + 14;
+            const sideOn = intro ? clamp((eT - 450) / 300, 0, 1) : 1;
+            for (let j = 0; j < K2; j++) {
+              const base = port ? 10 + 16 * j / (K2 - 1) : 26 + 24 * j / (K2 - 1);
+              const a = sgn * (base + (reduce ? 0 : Math.sin(T * .43 + s * Math.PI + j * .3) * (port ? 6 : 9))) * DEG;
+              addBeam(sx, sy, a, .42 * sideOn * (1 - sideDip * .9), 1 + s);
+            }
+          }
+          // ── contornos (BLOPA arriba, el nombre bajo el telón) ──
+          const flick = reduce ? 1 : .9 + .1 * hash(Math.floor(now / 41));
+          const heads = [];
+          layers = layers.filter((L) => !(L.fade0 && now > L.fade0 + L.fadeDur));
+          for (const L of layers) {
+            const o = L.o(); if (!o) continue;
+            const p = clamp((now - L.t0) / L.dur, 0, 1); if (p <= 0) continue;
+            const fo = L.fade0 && now > L.fade0 ? 1 - (now - L.fade0) / L.fadeDur : 1;
+            const ox = W / 2 - o.w / 2, oy = L.kind === 'b' ? G.bb : G.nb;
+            const head = p < 1 ? [0, 0, 0] : null;
+            drawOutline(o, p, ox, oy, L.c, flick * fo * (strobe ? 1.5 : 1), head);
+            if (head && head[2]) heads.push([head[0], head[1], L.c]);
+          }
+          // el marco del telón, trazado por el láser (acompaña al barrido de la captura)
+          { const [l, t, r_, b] = G.box, pk = clamp((now - scanT0) / scanDur, 0, 1), fI = .5 * flick * (pk > 0 ? 1 : 0) * (strobe ? 1.5 : 1);
+            if (fI > 0) { const yb = t + (b - t) * pk, fw = port ? .8 : .7;
+              seg(bM, l, t, r_, t, acc, fw, 2.4, fI, 0, .4, 3); seg(bM, l, t, l, yb, acc, fw, 2.4, fI, 0, .4, 3); seg(bM, r_, t, r_, yb, acc, fw, 2.4, fI, 0, .4, 3);
+              if (pk >= 1) seg(bM, l, b, r_, b, acc, fw, 2.4, fI, 0, .4, 3); } }
+          // la cabeza del proyector: un haz fino desde la fuente hasta el punto que se está dibujando
+          for (const [hx, hy, c] of heads) {
+            const dx = hx - G.sx, dy = hy - G.sy, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+            const s = hit(G.sx, G.sy, ux, uy, L);
+            if (s > 0) flares.push([G.sx + ux * s, G.sy + uy * s, .8]);
+            else { seg(bB, hx, hy, hx, hy, c, 1.6, 4, 1.5, 0, 1, 0); }
+            seg(bA, G.sx, G.sy, s > 0 ? G.sx + ux * s : hx, s > 0 ? G.sy + uy * s : hy, c, .7, 3.5, .7, 1, .6, 0);
+          }
+          // el proyector, en reposo: un temblor de barrido (dos haces finísimos que saltan por el contorno)
+          if (!reduce && !intro && !heads.length && OB) {
+            const tmp = [0, 0];
+            for (let k = 0; k < 2; k++) {
+              const o = k ? onm(cur) : OB; if (!o) continue;
+              if (ptAt(o, hash(Math.floor(now / 70) * 3.3 + k * 9.1), W / 2 - o.w / 2, k ? G.nb : G.bb, tmp)) {
+                const dx = tmp[0] - G.sx, dy = tmp[1] - G.sy, L = Math.hypot(dx, dy);
+                if (hit(G.sx, G.sy, dx / L, dy / L, L) < 0) seg(bA, G.sx, G.sy, tmp[0], tmp[1], acc, .6, 3, .16, 1, .3, 0);
+              }
+            }
+          }
+          // ── los haces ──
+          const bw = port ? .95 : .85, bg = port ? 5 : 6;
+          for (const b of beams) {
+            const c = strobe ? [1, 1, 1] : acc;
+            seg(bA, b.sx, b.sy, b.sx + b.dx * b.len, b.sy + b.dy * b.len, c, b.src ? bw * .85 : bw, b.src ? bg * .8 : bg, b.I * .9,
+              1, .6, 1);
+          }
+          // ── los cruces: sólo ahí, el filo rojo/cian ──
+          if (!strobe) for (const a of beams) { if (a.src) continue;
+            for (const b of beams) { if (!b.src) continue;
+              const den = a.dx * b.dy - a.dy * b.dx; if (Math.abs(den) < 1e-3) continue;
+              const ex = b.sx - a.sx, ey = b.sy - a.sy, s = (ex * b.dy - ey * b.dx) / den, t = (ex * a.dy - ey * a.dx) / den;
+              if (s <= 0 || s >= a.len || t <= 0 || t >= b.len) continue;
+              const x = a.sx + a.dx * s, y = a.sy + a.dy * s; if (y < -20 || y > H + 20 || x < -20 || x > W + 20) continue;
+              const I = Math.min(a.I, b.I) * .8, R = port ? 10 : 12;
+              for (const r of [a, b]) { const nx = -r.dy, ny = r.dx, o = 1.25;
+                seg(bA, x - r.dx * R - nx * o, y - r.dy * R - ny * o, x + r.dx * R - nx * o, y + r.dy * R - ny * o, RED, .55, 1.3, I, 0, 0, 2);
+                seg(bA, x - r.dx * R + nx * o, y - r.dy * R + ny * o, x + r.dx * R + nx * o, y + r.dy * R + ny * o, CYN, .55, 1.3, I, 0, 0, 2); }
+            } }
+          // ── el dedo en el haz: cada haz cortado estalla donde lo toca ──
+          let fl = 0;
+          for (const [x, y, I] of flares) { const k = I * obs.on * (.85 + .3 * hash(x + Math.floor(now / 30)));
+            seg(bB, x, y, x, y, acc, 2.6, 4, 1.8 * k, 0, 1.2, 0); seg(bB, x, y, x, y, acc, .01, port ? 10 : 8, 5 * k, 1, 0, 0); fl += I; }
+          if (fl > 0) seg(bB, obs.x, obs.y - obs.r * .15, obs.x, obs.y - obs.r * .15, acc, 0.01, obs.r * .8, Math.min(4, 2.4 * fl) * obs.on, 1, 0, 0);
+          // ── dibujo ──
+          gl.disable(gl.BLEND);
+          gl.useProgram(bgP);
+          gl.bindBuffer(gl.ARRAY_BUFFER, triBuf); SA.forEach((l) => gl.disableVertexAttribArray(l));
+          gl.enableVertexAttribArray(bgA); gl.vertexAttribPointer(bgA, 2, gl.FLOAT, false, 0, 0);
+          gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hzTex);
+          gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, picTex[picI] || blank);
+          gl.uniform1i(UB.Hz, 0); gl.uniform1i(UB.Pic, 1);
+          gl.uniform2f(UB.R, cv.width, cv.height); gl.uniform1f(UB.S, cv.width / W); gl.uniform1f(UB.T, T);
+          const dr = [T * .004, -T * .011];
+          gl.uniform2f(UB.Dr, dr[0], dr[1]);
+          const bx = G.box; gl.uniform4f(UB.Box, bx[0], bx[1], bx[2], bx[3]);
+          const [iw, ih] = picWH[picI], ba = (bx[2] - bx[0]) / (bx[3] - bx[1]), ta = iw / ih;
+          if (ta > ba) { const s = ba / ta; gl.uniform4f(UB.Fit, s, 1, (1 - s) / 2, 0); } else { const s = ta / ba; gl.uniform4f(UB.Fit, 1, s, 0, (1 - s) * (port ? .12 : 0)); }
+          gl.uniform3f(UB.C, acc[0], acc[1], acc[2]);
+          gl.uniform1f(UB.PicA, (.9 + .1 * flick) * (intro ? clamp((eT - 500) / 250, 0, 1) : 1));
+          gl.uniform1f(UB.Scan, clamp((now - scanT0) / scanDur, 0, 1));
+          gl.uniform1f(UB.Strobe, strobe);
+          gl.uniform1f(UB.Pow, pow); gl.uniform1f(UB.Port, port ? 1 : 0);
+          gl.uniform2f(UB.Src, G.sx, G.sy); gl.uniform1f(UB.Fl, G.sy + 6);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.disableVertexAttribArray(bgA);
+          gl.useProgram(sgP);
+          gl.uniform2f(US.V, W, H); gl.uniform1f(US.T, T);
+          gl.uniform1f(US.Fl, G.sy + 6);
+          gl.uniform4f(US.Q3, G.box[0] + 4, G.box[1] + 4, G.box[2] - 4, G.box[3] - 4);
+          if (OB) { const ow = OB.w / 2 + 6, nw = (ON[cur] ? ON[cur].w : 100) / 2 + 6;
+            gl.uniform4f(US.Q1, W / 2 - ow, G.bb - OB.cap - 6, W / 2 + ow, G.bb + 6); gl.uniform4f(US.Q2, W / 2 - nw, G.nb - G.nameCap - 6, W / 2 + nw, G.nb + 22); } gl.uniform1i(US.Hz, 0); gl.uniform2f(US.Dr, dr[0], dr[1]);
+          gl.enable(gl.BLEND); gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE);
+          flush(bA);
+          if (XMAX && bM.n) { gl.blendEquation(XMAX.MAX_EXT); flush(bM); gl.blendEquation(gl.FUNC_ADD); }
+          flush(bB);
+          if (intro && eT > 1300) intro = false;
+          if (!inCase && !document.hidden && (!reduce || cue || obs.on > .01 || obs.onT || Math.abs(dragAT - dragA) > 1e-3)) kick();
+        };
+        const kick = () => { if (!raf && W) raf = requestAnimationFrame(frame); };
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { last = performance.now(); kick(); } });
+
+        // ════════════ case ════════════
+        let kbd = false;
+        addEventListener('keydown', () => { kbd = true; }, true);
+        addEventListener('pointerdown', () => { kbd = false; }, true);
+        const $ = (s) => caseEl.querySelector(s);
+        const fill = (i) => {
+          const p = P[i], nx = P[(i + 1) % N];
+          caseEl.style.setProperty('--acc', p.accent);
+          $('[data-eye]').innerHTML = '';
+          $('[data-eye]').append(p.category + ' · ' + year(p.ended) + ' · ', Object.assign(document.createElement('b'), { textContent: KIND[p.slug] || 'Encargo' }));
+          $('[data-name]').textContent = p.name; $('[data-app]').textContent = p.approach || '';
+          $('[data-services]').textContent = (p.services || []).join(', '); $('[data-stack]').textContent = (p.stack || []).join(', ');
+          for (const a of [$('[data-live]'), q('[data-live2]')]) { if (p.url) { a.href = p.url; a.style.display = ''; } else a.style.display = 'none'; }
+          q('[data-next-name]').textContent = nx.name; q('[data-next-name2]').textContent = nx.name;
+          huella.forEach((b, k) => b.setAttribute('aria-current', k === i ? 'true' : 'false'));
+          kvid.poster = '/img/poster/' + p.slug + (port ? '-m' : '') + '.jpg';
+          kvid.setAttribute('aria-label', 'Video del sitio de ' + p.name);
+          const u = '/video/' + p.slug + (port ? '-m' : coarse ? '-640' : '') + '.mp4';
+          if (reduce) { kvid.removeAttribute('src'); kvid.load(); }
+          else if (kvid.dataset.u !== u) { kvid.dataset.u = u; kvid.src = u; kvid.play().catch(() => {}); }
+          else kvid.play().catch(() => {});
+          document.title = 'blopa — ' + p.name;
+        };
+        const syncInert = () => { bandEl.inert = inCase; scrimEl.inert = inCase; caseEl.inert = !inCase; cbar.inert = !inCase; caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+        // el case sale del telón: el rectángulo se abre a toda la pantalla, con filo rojo/cian
+        const poly = (pts, dx = 0) => 'polygon(' + pts.map(([x, y]) => `${(x + dx).toFixed(1)}px ${y.toFixed(1)}px`).join(',') + ')';
+        const shapes = () => { const [l, t, r, b] = G.box; return [[[l, t], [r, t], [r, b], [l, b]], [[0, 0], [W, 0], [W, H], [0, H]]]; };
+        const FRINGE = [[wR, -6], [wC, 6], [caseEl, 0]];
+        let anims = [];
+        const stopAnims = () => { anims.forEach((a) => a.cancel()); anims = []; };
+        let pushed = false, caseInT = 0;
+        const setURL = (slug, push) => { const url = location.pathname + (slug ? '?p=' + slug : '');
+          if (push && !FRAMED) { history.pushState({ ref: 1 }, '', url); pushed = true; } else history.replaceState(history.state, '', url); };
+
+        const openCase = (i, { instant = false, push = true } = {}) => {
+          if (inCase) { swapCase(i); return; }
+          endIntro(); cue = null; dragA = dragAT = 0;
+          if (cur !== i) switchTo(i, performance.now(), true);
+          caseI = i; inCase = true;
+          fill(i);
+          body.classList.add('in-case'); syncInert();
+          stopAnims(); clearTimeout(caseInT);
+          if (instant || reduce) { body.classList.add('case-in'); }
+          else {
+            const [s0, s2] = shapes();
+            FRINGE.forEach(([el, dx]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: poly(s0, dx) }, { clipPath: el === caseEl ? 'polygon(0px 0px,' + W + 'px 0px,' + W + 'px ' + H + 'px,0px ' + H + 'px)' : poly(s2, dx) }];
+              anims.push(el.animate(kf, { duration: 680, easing: 'cubic-bezier(.7,0,.2,1)', fill: 'forwards' })); });
+            anims[2].onfinish = () => { wR.style.visibility = wC.style.visibility = ''; caseEl.style.clipPath = 'none'; };
+            caseInT = setTimeout(() => body.classList.add('case-in'), 480);
+          }
+          caseEl.scrollTop = 0;
+          if (push) setURL(P[i].slug, true);
+          setTimeout(() => { if (inCase) backEl.focus({ preventScroll: true, focusVisible: kbd }); }, instant || reduce ? 0 : 760);
+        };
+        const swapCase = (i) => {
+          if (i === caseI) return; caseI = i; switchTo(i, performance.now(), true);
+          setURL(P[i].slug, false);
+          if (reduce) { fill(i); return; }
+          caseEl.classList.add('swap');
+          stopAnims();
+          [[wR, 0], [wC, 45]].forEach(([el, dl]) => { el.style.visibility = 'visible'; el.style.zIndex = '11';
+            anims.push(el.animate([{ clipPath: `inset(0px ${W}px 0px -3px)` }, { clipPath: `inset(0px -3px 0px ${W}px)` }],
+              { duration: 460, delay: dl, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'backwards' })); });
+          setTimeout(() => { fill(i); caseEl.scrollTop = 0; caseEl.classList.remove('swap'); }, 200);
+          setTimeout(() => { wR.style.zIndex = wC.style.zIndex = ''; wR.style.visibility = wC.style.visibility = ''; stopAnims(); }, 540);
+        };
+        const doClose = () => {
+          if (!inCase) return; inCase = false; clearTimeout(caseInT);
+          document.title = 'blopa — Pablo Vela';
+          kvid.pause();
+          last = performance.now(); kick();
+          const fin = () => { body.classList.remove('in-case', 'case-in'); stopAnims(); caseEl.style.clipPath = ''; wR.style.visibility = wC.style.visibility = ''; syncInert(); };
+          if (reduce) { fin(); }
+          else {
+            body.classList.remove('case-in');
+            caseEl.scrollTop = 0;
+            const [s0, s2] = shapes();
+            stopAnims(); caseEl.style.clipPath = '';
+            FRINGE.forEach(([el, dx]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: poly(s2, el === caseEl ? 0 : dx) }, { clipPath: poly(s0, dx) }];
+              anims.push(el.animate(kf, { duration: 600, delay: 100, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'both' })); });
+            anims[2].onfinish = fin;
+            // al volver, el proyector redibuja
+            const now = performance.now() + 300; layers = []; addLayers(now, cur, 0, 520, 60, 560); scanT0 = now + 60; scanDur = 520;
+          }
+          scrimEl.inert = false; bandEl.inert = false;
+          setTimeout(() => { if (!inCase && kbd) scrimEl.focus({ preventScroll: true, focusVisible: true }); }, reduce ? 0 : 760);
+          syncHint();
+        };
+        const closeCase = () => {
+          if (!inCase) return;
+          if (pushed && history.state && history.state.ref) { pushed = false; history.back(); return; }
+          setURL('', false); doClose();
+        };
+        const urlSlug = () => new URLSearchParams(location.search).get('p');
+        addEventListener('popstate', () => { const i = P.findIndex((p) => p.slug === urlSlug());
+          if (i >= 0) { if (!inCase) openCase(i, { push: false }); else swapCase(i); } else { pushed = false; doClose(); } });
+
+        backEl.addEventListener('click', () => closeCase());
+        const next = (d) => { if (inCase) swapCase((caseI + d + N) % N); };
+        q('[data-next]').addEventListener('click', () => next(1)); q('[data-next2]').addEventListener('click', () => next(1));
+        huella.forEach((b, k) => b.addEventListener('click', () => swapCase(k)));
+
+        // ════════════ interacción ════════════
+        slots.forEach((el, i) => {
+          el.addEventListener('focus', () => { if (!inCase) go(i); });
+          el.addEventListener('click', () => { if (!inCase) openCase(i); });
+        });
+        scrimEl.addEventListener('click', (ev) => { if (!inCase && ev.detail === 0) openCase(cur); });   // teclado; puntero: abajo
+
+        let down = null;
+        const inScrim = (x, y) => { const r = scrimEl.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
+        const setObs = (x, y, touch) => { obs.x = x; obs.y = y; obs.r = touch ? 26 : 16; obs.onT = 1; kick(); };
+        addEventListener('pointerdown', (ev) => {
+          if (inCase || ev.button > 0) return;
+          if (ev.target.closest && ev.target.closest('a,.nav button')) return;
+          down = { x: ev.clientX, y: ev.clientY, t: performance.now(), ax: 0, lx: ev.clientX, lt: performance.now(), v: 0 };
+          setObs(ev.clientX, ev.clientY, ev.pointerType !== 'mouse');
+        });
+        addEventListener('pointermove', (ev) => {
+          if (inCase) return;
+          const touch = ev.pointerType !== 'mouse';
+          if (!touch || down) setObs(ev.clientX, ev.clientY, touch);
+          if (!touch) cv.classList.toggle('over', !down && inScrim(ev.clientX, ev.clientY));
+          if (!down) return;
+          const dx = ev.clientX - down.x, dy = ev.clientY - down.y;
+          // mantener el dedo quieto y después moverlo = jugar con los haces (no cambia de proyecto)
+          if (!down.ax && Math.hypot(dx, dy) > 9) { down.ax = performance.now() - down.t > 320 ? 'play' : Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'; if (down.ax === 'x') { endIntro(); cv.classList.add('drag'); } }
+          if (down.ax !== 'x') return;
+          const now = performance.now(), dtm = Math.max(1, now - down.lt);
+          down.v = .6 * down.v + .4 * ((ev.clientX - down.lx) / dtm); down.lx = ev.clientX; down.lt = now;
+          if (!cue) dragAT = clamp(dx / W, -.6, .6) * 60 * DEG;
+        });
+        const up = (ev) => {
+          if (!down) return; const d = down; down = null; cv.classList.remove('drag');
+          if (ev.pointerType !== 'mouse') obs.onT = 0;
+          kick();
+          const dx = ev.clientX - d.x, dy = ev.clientY - d.y;
+          if (d.ax === 'x') { dragAT = 0; const v = performance.now() - d.lt > 110 ? 0 : d.v;
+            if (Math.abs(dx) > Math.min(80, W * .18) || Math.abs(v) > .35) change(dx < 0 ? 1 : -1); return; }
+          if (d.ax === 'y') { if (Math.abs(dy) > 40 && performance.now() - d.t < 600) change(dy < 0 ? 1 : -1); return; }
+          if (d.ax === 'play') return;
+          if (performance.now() - d.t < 600 && inScrim(ev.clientX, ev.clientY)) { endIntro(); openCase(cur); }
+        };
+        addEventListener('pointerup', up);
+        addEventListener('pointercancel', () => { down = null; dragAT = 0; obs.onT = 0; cv.classList.remove('drag'); kick(); });
+        document.addEventListener('pointerleave', () => { obs.onT = 0; kick(); });
+        document.documentElement.addEventListener('mouseleave', () => { obs.onT = 0; kick(); });
+
+        let wAcc = 0, wT = 0;
+        addEventListener('wheel', (ev) => {
+          if (inCase) return;
+          wAcc += Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+          const now = performance.now(); if (Math.abs(wAcc) < 40 || now - wT < 520) return;
+          const d = Math.sign(wAcc); wAcc = 0; wT = now; change(d);
+        }, { passive: true });
+
+        addEventListener('keydown', (ev) => {
+          const k = ev.key;
+          if (inCase) {
+            if (k === 'Escape') { ev.preventDefault(); closeCase(); }
+            else if (k === 'ArrowRight') { ev.preventDefault(); next(1); }
+            else if (k === 'ArrowLeft') { ev.preventDefault(); next(-1); }
+            return;
+          }
+          const fwd = k === 'ArrowDown' || k === 'ArrowRight', back = k === 'ArrowUp' || k === 'ArrowLeft';
+          if (fwd || back) { ev.preventDefault(); change(fwd ? 1 : -1); }
+          else if (k === 'Enter' && document.activeElement === body) openCase(cur);
+        });
+
+        // ════════════ leyenda de uso ════════════
+        const hintEl = q('[data-hint]'), hintT = q('[data-hint-t]');
+        let hintKey = '', swapT = 0;
+        const hintFor = () => {
+          if (inCase) return null;
+          if (port || coarse) return { g: 'h', t: 'Deslizá para cambiar · tocá para abrir' };
+          return { g: 'tap', t: 'Clic para abrir ' + P[cur].name };
+        };
+        function syncHint() { const h = hintFor(), key = h ? h.g + '|' + h.t : '';
+          if (key === hintKey) return; const first = !hintKey; hintKey = key;
+          hintEl.classList.toggle('on', !!h); if (!h) return;
+          const put = () => { hintEl.dataset.g = h.g; hintT.textContent = h.t; hintEl.classList.remove('swap'); };
+          clearTimeout(swapT); if (first || reduce) put(); else { hintEl.classList.add('swap'); swapT = setTimeout(put, 200); } }
+
+        // ════════════ arranque ════════════
+        const start = () => {
+          layout();
+          let rT = 0;
+          addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { const was = port; layout(); if (was !== port) { picU.fill(''); P.forEach((_, i) => loadPoster(i)); } kick(); }, 120); });
+          syncInert();
+          const i0 = P.findIndex((p) => p.slug === urlSlug());
+          if (i0 >= 0) { intro = false; introDone = true; switchTo(i0, performance.now(), true); markReady(); openCase(i0, { instant: true, push: false }); kick(); }
+          else { startIntro(performance.now()); kick(); }
+        };
+        const fontsOk = document.fonts && document.fonts.load ? document.fonts.load(FONT(100), 'BLOPA') : Promise.resolve();
+        Promise.race([fontsOk, new Promise((r) => setTimeout(r, 700))]).then(start, start);
+      } catch (err) {
+        console.error(err);
+        root.classList.add('fail');
+      }
+    </script>
+  </body>
+</html>

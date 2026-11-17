@@ -1,0 +1,748 @@
+---
+// VERSIÓN «GANZFELD» — un campo de color sin bordes (James Turrell) filmado con step-printing (Wong Kar-wai / Christopher Doyle).
+// Toda la pantalla es luz del color del proyecto: honda en los bordes, más clara y apenas desaturada hacia un centro que respira.
+// BLOPA flota adentro, enorme y callado. La captura del sitio está en el campo como vista a través de la luz: bordes difusos, bloom.
+// Cambiar (deslizar / arrastrar / rueda / flechas) desliza el campo al color del siguiente; lo que se mueve (BLOPA y la captura)
+// deja copias fantasma a 12 cuadros por segundo, separadas en cian y rojo. Tocar abre el case.
+// Entrada: el campo sube desde negro y hace un cambio automático. Técnica: capas DOM (gradientes y canvas pre-renderizados)
+// movidas sólo con transform/opacity; los fantasmas son un buffer circular de muestras. Sin JS: lista legible.
+import { projects } from '../data/projects';
+
+const hue = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  return h > 330 ? h - 360 : h;
+};
+const orden = [...projects].sort((a, b) => hue(a.accent) - hue(b.accent));
+const year = (e: string) => (e ? e.split('-')[0] : 'En curso');
+const data = JSON.stringify(orden.map((p) => ({ slug: p.slug, name: p.name, category: p.category, ended: p.ended, accent: p.accent, url: p.url,
+  approach: p.approach, services: p.services, stack: p.stack })));
+const K = 4;   // fantasmas por cosa que se mueve
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>blopa — Pablo Vela</title>
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="blopa — Pablo Vela" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" href="/fonts/bebas-neue-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/FragmentMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
+    <script is:inline>(function(){var d=document.documentElement;d.classList.add('js');if(innerHeight>innerWidth||innerWidth<640)d.classList.add('port');})();</script>
+    <style is:global>
+      @font-face { font-family:'Satoshi'; src:url('/fonts/Satoshi-400.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      @font-face { font-family:'Bebas Neue'; src:url('/fonts/bebas-neue-latin-400-normal.woff2') format('woff2'); font-weight:400; font-display:block; }
+      @font-face { font-family:'Fragment Mono'; src:url('/fonts/FragmentMono-Regular.woff2') format('woff2'); font-weight:400; font-display:swap; }
+      :root{ --bg:#07070a; --ink:#f2f3f5; --mid:#9c9ea7; --soft:#7b7d86; --hair:#22222a; --cy:#24e2e8; --rd:#ff3a54;
+        --display:'Bebas Neue',Impact,'Arial Narrow',sans-serif; --body:'Satoshi',-apple-system,sans-serif;
+        --mono:'Fragment Mono',ui-monospace,'SF Mono',Menlo,monospace; --ease:cubic-bezier(.22,1,.36,1); --gut:clamp(1rem,3vw,3rem);
+        --tb:56px; }
+      html.port{--tb:calc(env(safe-area-inset-top,0px) + 52px)}
+      *{box-sizing:border-box;margin:0}
+      html,body{height:100%}
+      body{font-family:var(--body);background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;line-height:1.5;
+        overscroll-behavior:none}
+      html.port body{touch-action:none}
+      a{color:inherit;text-decoration:none}
+      :is(button,a):focus-visible{outline:1px solid var(--ink);outline-offset:4px;border-radius:2px}
+
+      .grain{position:fixed;inset:-60px;z-index:30;pointer-events:none;opacity:.06;mix-blend-mode:overlay;background-size:160px 160px;
+        animation:grain .8s steps(4) infinite}
+      @keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-23px,17px)}50%{transform:translate(31px,-9px)}75%{transform:translate(-11px,-29px)}100%{transform:translate(0,0)}}
+
+      /* el nombre real (lectores de pantalla / sin JS); con JS lo dibuja el campo */
+      .hero{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+      .sab{position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden}
+
+      /* ── barra superior ── */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:12;height:var(--tb);display:flex;align-items:center;gap:1rem;
+        padding:env(safe-area-inset-top,0px) var(--gut) 0;font-family:var(--mono);font-size:.75rem;letter-spacing:.06em;color:rgba(242,243,245,.72)}
+      body.in-case .nav{background:var(--bg);color:var(--mid)}
+      .nav__who{color:var(--ink);white-space:nowrap;animation:up .6s var(--ease) .2s both}
+      body.in-case .nav__who{display:none}
+      .nav__mail{display:inline-flex;align-items:center;min-height:44px;margin-left:auto;white-space:nowrap;transition:color .25s;animation:up .6s var(--ease) .3s both}
+      .nav__mail:hover{color:var(--ink)}
+      .nav__back{appearance:none;background:none;border:1px solid var(--hair);border-radius:999px;color:var(--mid);cursor:pointer;font:inherit;
+        font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;padding:0 1.1rem;min-height:44px;display:none;transition:color .25s,border-color .25s}
+      .nav__back:hover{color:var(--ink);border-color:var(--soft)}
+      .nav__back:focus-visible{border-radius:999px}
+      body.in-case .nav__back{display:inline-flex;align-items:center}
+      @keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+      /* ── el campo: un gradiente por proyecto (se funden por opacidad), un núcleo que respira ── */
+      .scene{position:fixed;inset:0;z-index:3;overflow:hidden;pointer-events:none;contain:strict}
+      .fields{position:absolute;inset:-8%;z-index:0;will-change:transform;animation:breathe 12s ease-in-out infinite alternate}
+      .fld{position:absolute;inset:0;opacity:0;will-change:opacity}
+      .core{position:absolute;left:var(--cx,50%);top:var(--cy,46%);width:150vmax;height:150vmax;margin:-75vmax 0 0 -75vmax;border-radius:50%;
+        background:radial-gradient(closest-side,rgba(255,255,255,.07),rgba(255,255,255,.025) 38%,transparent 70%);
+        z-index:3;will-change:opacity,transform;animation:core 9s ease-in-out infinite alternate}
+      @keyframes breathe{from{transform:scale(1)}to{transform:scale(1.07)}}
+      @keyframes core{from{opacity:.55;transform:scale(.94)}to{opacity:1;transform:scale(1.04)}}
+
+      /* BLOPA: luz blanca y nítida en la zona honda del campo; por encima de todo lo que se mueve */
+      .wd{position:absolute;left:0;top:0;z-index:4;font-family:var(--display);font-weight:400;line-height:1;letter-spacing:.01em;white-space:nowrap;
+        will-change:transform,opacity}
+      .word{z-index:5;color:#fbfaf7;text-shadow:-1px 0 rgba(255,58,84,.35),1px 0 rgba(36,226,232,.35),0 0 .12em rgba(255,255,255,.18)}
+      html:not(.go) .wd{visibility:hidden}
+      .wg{visibility:hidden;mix-blend-mode:screen}
+      .wg--r{color:rgba(255,58,84,.8)} .wg--c{color:rgba(36,226,232,.8)}
+
+      /* la captura y sus fantasmas (canvas pre-renderizados: bordes difusos + bloom ya horneados) */
+      .pl{position:absolute;left:0;top:0;z-index:1;will-change:transform,opacity;opacity:0}
+      .pg{visibility:hidden}
+
+      .black{position:absolute;inset:0;z-index:3;background:var(--bg);pointer-events:none;opacity:0;animation:rise 1.1s cubic-bezier(.4,0,.2,1) .05s backwards}
+      @keyframes rise{from{opacity:1}to{opacity:0}}
+
+      /* ── nombre y categoría: nítidos, fuera del movimiento ── */
+      .labs{position:fixed;left:var(--gut);right:var(--gut);bottom:var(--lb,64px);z-index:6;height:var(--lh,76px);pointer-events:none}
+      .lab{position:absolute;left:0;bottom:0;appearance:none;background:none;border:0;padding:0;margin:0;font:inherit;text-align:left;color:var(--ink);
+        cursor:pointer;opacity:0;pointer-events:none;-webkit-tap-highlight-color:transparent;transition:opacity .14s linear,transform .5s var(--ease);
+        transform:translateY(6px);min-height:44px;max-width:100%}
+      html.port .lab{left:50%;transform:translate(-50%,6px);text-align:center}
+      .lab.on{opacity:1;pointer-events:auto;transform:none;transition:opacity .4s var(--ease) .12s,transform .6s var(--ease) .12s}
+      html.port .lab.on{transform:translate(-50%,0)}
+      html.port .lab{touch-action:none}
+      .lab b{display:block;font-family:var(--display);font-weight:400;font-size:clamp(3rem,4.6vw,4.8rem);line-height:.92;color:#fff;white-space:nowrap;
+        text-shadow:-1.5px 0 rgba(255,58,84,.5),1.5px 0 rgba(36,226,232,.5)}
+      html.port .lab b{font-size:clamp(2.5rem,12vw,3.4rem)}
+      .lab i{display:block;font-style:normal;font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,243,245,.78);
+        margin-top:.35rem;white-space:nowrap}
+      .lab:focus-visible{outline:none}
+      .lab:focus-visible b{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:.12em}
+
+      /* ── leyenda de uso ── */
+      .hint{position:fixed;left:var(--gut);right:var(--gut);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);z-index:6;display:flex;align-items:center;gap:.7rem;
+        font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:rgba(242,243,245,.62);pointer-events:none;opacity:0;transition:opacity .5s var(--ease);
+        min-height:24px}
+      html.port .hint{justify-content:center}
+      body.ready .hint.on{opacity:1}
+      body.in-case .hint{opacity:0!important}
+      .hint.swap .hint__t{opacity:0}
+      .hint__t{transition:opacity .2s var(--ease)}
+      .hint__g{position:relative;flex:none;width:14px;height:14px}
+      .hint__g::before{content:"";position:absolute;inset:0;border:1px solid currentColor;border-radius:50%;opacity:.45}
+      .hint__g::after{content:"";position:absolute;left:4px;top:4px;width:6px;height:6px;border-radius:50%;background:currentColor;animation:tap 1.6s var(--ease) infinite}
+      .hint[data-g="h"] .hint__g{width:22px;height:8px}
+      .hint[data-g="h"] .hint__g::before{border-radius:999px}
+      .hint[data-g="h"] .hint__g::after{left:1px;top:1px;animation:railh 1.8s var(--ease) infinite}
+      @keyframes tap{0%,100%{transform:scale(.6);opacity:.5}45%{transform:scale(1);opacity:1}}
+      @keyframes railh{0%,100%{transform:translateX(0)}50%{transform:translateX(14px)}}
+
+      /* ── el case ── */
+      .wipe{position:fixed;inset:0;z-index:9;pointer-events:none;visibility:hidden}
+      .wipe--r{background:var(--rd)} .wipe--c{background:var(--cy)}
+      .kase{position:fixed;inset:0;z-index:10;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;visibility:hidden;touch-action:pan-y;--acc:#fff}
+      body.in-case .kase{visibility:visible}
+      .kase__flash{position:absolute;left:0;top:0;width:100%;height:100vh;z-index:3;background:var(--acc);pointer-events:none;opacity:1;transition:opacity .45s var(--ease) .04s}
+      body.case-in .kase__flash{opacity:0}
+      .kase__in{min-height:100%;display:grid;grid-template-columns:minmax(18rem,25rem) minmax(0,1fr);gap:clamp(2rem,5vw,5rem);
+        padding:var(--tb) 0 0 var(--gut);transition:opacity .18s}
+      .kase.swap .kase__in{opacity:0}
+      .kase__txt{align-self:center;padding:2.5rem 0}
+      .kase__txt>*{opacity:0;transform:translateY(10px);transition:opacity .5s var(--ease),transform .7s var(--ease)}
+      body.case-in .kase__txt>*{opacity:1;transform:none}
+      body.case-in .kase__txt>:nth-child(2){transition-delay:.05s} body.case-in .kase__txt>:nth-child(3){transition-delay:.1s}
+      body.case-in .kase__txt>:nth-child(4){transition-delay:.15s} body.case-in .kase__txt>:nth-child(5){transition-delay:.2s} body.case-in .kase__txt>:nth-child(6){transition-delay:.25s}
+      /* los campos en miniatura: una luz por proyecto, la abierta encendida */
+      .huella{display:flex;align-items:stretch;gap:6px;margin:0 0 1.3rem;height:44px}
+      .huella button{appearance:none;border:0;background:none;cursor:pointer;width:36px;padding:0;position:relative}
+      .huella button::before{content:"";position:absolute;left:4px;right:4px;top:50%;height:14px;margin-top:-7px;border-radius:3px;
+        background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 60%,#fff),var(--c));opacity:.28;filter:blur(.5px);transition:opacity .3s,box-shadow .3s}
+      .huella button[aria-current="true"]::before{opacity:1;box-shadow:0 0 14px 2px var(--c),-2px 0 6px rgba(255,58,84,.4),2px 0 6px rgba(36,226,232,.4)}
+      .huella button:hover::before{opacity:.7}
+      .kase__eye{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mid)}
+      .kase__eye b{font-weight:400;color:var(--ink)}
+      .kase__name{font-family:var(--display);font-weight:400;font-size:clamp(3.2rem,6vw,5.6rem);line-height:.88;margin:.4rem 0 1.1rem;color:#fff;
+        text-shadow:0 0 18px color-mix(in srgb,var(--acc) 70%,transparent),-2px 0 rgba(255,58,84,.45),2px 0 rgba(36,226,232,.45)}
+      .kase__app{color:#c9cbd2;font-size:.98rem;line-height:1.58;max-width:36ch}
+      .cred{display:grid;grid-template-columns:5.5rem 1fr;margin-top:1.6rem;border-top:1px solid var(--hair)}
+      .cred dt,.cred dd{margin:0;padding:.6rem 0;border-bottom:1px solid var(--hair)}
+      .cred dt{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);padding-top:.72rem}
+      .cred dd{font-size:.88rem} .cred dd.soft{color:var(--mid)}
+      .kase__acts{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1.6rem}
+      .kase__live{display:inline-flex;align-items:center;min-height:44px;font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;
+        border-bottom:1px solid rgba(242,243,245,.35);transition:border-color .25s}
+      .kase__live:hover{border-color:var(--ink)}
+      .kase__next{appearance:none;background:none;border:0;cursor:pointer;color:var(--mid);font-family:var(--mono);font-size:.75rem;letter-spacing:.08em;
+        text-transform:uppercase;min-height:44px;padding:0;transition:color .25s}
+      .kase__next b{font-weight:400;color:var(--ink)} .kase__next:hover{color:var(--ink)}
+      /* el escenario: el mismo campo de luz del proyecto, la obra adentro */
+      .kase__stage{position:relative;display:flex;align-items:center;justify-content:center;padding:clamp(1.5rem,3.5vw,3.5rem);min-height:calc(100vh - var(--tb));overflow:hidden;
+        background:radial-gradient(120% 90% at 50% 50%,color-mix(in srgb,var(--acc) 70%,#fff) 0%,var(--acc) 26%,color-mix(in srgb,var(--acc) 45%,#07070a) 62%,color-mix(in srgb,var(--acc) 12%,#07070a) 100%)}
+      .kase__media{position:relative;margin:0;width:100%;aspect-ratio:16/10;max-height:calc(100vh - var(--tb) - 7rem);background:#000;border-radius:3px;
+        box-shadow:0 0 40px 6px color-mix(in srgb,#fff 30%,transparent),0 0 140px 30px color-mix(in srgb,var(--acc) 50%,transparent),
+          -6px 0 26px rgba(255,58,84,.25),6px 0 26px rgba(36,226,232,.25);
+        opacity:0;transform:scale(.97);transition:opacity .6s var(--ease) .25s,transform .9s var(--ease) .25s}
+      body.case-in .kase__media{opacity:1;transform:none}
+      .kase__media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 0;display:block;background:#000;border-radius:3px}
+      .cbar{display:none}
+
+      html.port .kase__in{grid-template-columns:1fr;gap:0;padding:var(--tb) 0 calc(56px + env(safe-area-inset-bottom,0px))}
+      html.port .kase__txt{padding:1.6rem var(--gut) 2rem}
+      html.port .kase__name{font-size:clamp(3.2rem,15vw,4.8rem)}
+      html.port .kase__app{font-size:.94rem;max-width:none}
+      html.port .kase__stage{min-height:0;padding:2.4rem var(--gut)}
+      html.port .kase__media{aspect-ratio:720/1558;width:min(100%,21rem);max-height:none}
+      html.port .kase__acts{display:none}
+      html.port body.in-case .cbar{display:flex}
+      .cbar{position:fixed;left:0;right:0;bottom:0;z-index:13;gap:1px;background:var(--hair);padding-bottom:env(safe-area-inset-bottom,0px);
+        opacity:0;animation:fade .4s var(--ease) .5s forwards}
+      @keyframes fade{to{opacity:1}}
+      .cbar>*{flex:1;display:flex;align-items:center;justify-content:center;min-height:56px;background:rgba(7,7,10,.97);font-family:var(--mono);font-size:.75rem;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--ink);border:0;appearance:none;cursor:pointer}
+      .cbar__next{color:var(--mid)} .cbar__next b{font-weight:400;color:var(--ink);margin:0 .4em}
+
+      /* ── sin JS o si algo falla: lista legible con links ── */
+      .plain{display:none}
+      html:not(.js) body,html.fail body{overflow:auto;touch-action:auto}
+      html:not(.js) .plain,html.fail .plain{display:block;position:relative;z-index:5;padding:2rem var(--gut) 4rem;max-width:48rem}
+      html:not(.js) :is(.scene,.labs,.hint,.kase,.wipe,.cbar,.black),html.fail :is(.scene,.labs,.hint,.kase,.wipe,.cbar,.black){display:none!important}
+      html:not(.js) .hero,html.fail .hero{position:relative;width:auto;height:auto;overflow:visible;clip-path:none;padding:calc(var(--tb) + 2rem) var(--gut) 0;
+        font-family:var(--display);font-weight:400;line-height:.8;font-size:min(30vw,12rem);color:#fff;text-shadow:0 0 6px var(--cy),0 0 30px var(--cy)}
+      html:not(.js) .nav,html.fail .nav{position:absolute;color:var(--mid)}
+      .plain li{list-style:none;padding:1.1rem 0;border-bottom:1px solid var(--hair)}
+      .plain ul{padding:0}
+      .plain h2{font-family:var(--display);font-weight:400;font-size:clamp(2rem,6vw,3.2rem);line-height:1;color:var(--acc)}
+      .plain p{color:var(--mid);font-size:.92rem;margin-top:.35rem}
+      .plain span{font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+
+      @media (prefers-reduced-motion:reduce){
+        *,*::before,*::after{transition:none!important;animation:none!important}
+        .cbar{opacity:1}
+        .black{display:none}
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grain" data-grain aria-hidden="true"></div>
+    <div class="sab" data-sab aria-hidden="true"></div>
+
+    <h1 class="hero">BLOPA</h1>
+
+    <nav class="nav" aria-label="Contacto">
+      <span class="nav__who">Pablo Vela</span>
+      <button type="button" class="nav__back" data-back>‹ Proyectos</button>
+      <a class="nav__mail" href="mailto:blopave@pm.me">blopave@pm.me ↗</a>
+    </nav>
+
+    <main>
+      <div class="scene" data-scene aria-hidden="true">
+        <div class="fields" data-fields><div class="core" data-core></div></div>
+        <div class="black" aria-hidden="true"></div>
+        {Array.from({ length: K }, (_, k) => (<span class={`wd wg ${k % 2 ? 'wg--c' : 'wg--r'}`} data-wg>BLOPA</span>))}
+        <span class="wd word" data-word>BLOPA</span>
+      </div>
+
+      <nav class="labs" data-band aria-label="Proyectos">
+        {orden.map((p) => (
+          <button type="button" class="lab" data-slot aria-label={`${p.name} — ${p.category}, ${year(p.ended)}. Abrir proyecto`}>
+            <b aria-hidden="true">{p.name}</b><i aria-hidden="true">{p.category} · {year(p.ended)}</i>
+          </button>
+        ))}
+      </nav>
+
+      <div class="wipe wipe--r" data-wr aria-hidden="true"></div>
+      <div class="wipe wipe--c" data-wc aria-hidden="true"></div>
+      <section class="kase" data-case role="dialog" aria-modal="true" aria-labelledby="kase-name" inert>
+        <div class="kase__flash" aria-hidden="true"></div>
+        <div class="kase__in">
+          <div class="kase__txt">
+            <div class="huella" data-huella role="group" aria-label="Proyectos">
+              {orden.map((p) => (<button type="button" style={`--c:${p.accent}`} aria-label={p.name}></button>))}
+            </div>
+            <p class="kase__eye" data-eye></p>
+            <h2 class="kase__name" id="kase-name" data-name></h2>
+            <p class="kase__app" data-app></p>
+            <dl class="cred">
+              <dt>Servicios</dt><dd data-services></dd>
+              <dt>Stack</dt><dd class="soft" data-stack></dd>
+            </dl>
+            <div class="kase__acts">
+              <a class="kase__live" data-live target="_blank" rel="noopener">Ver en vivo ↗</a>
+              <button type="button" class="kase__next" data-next>Siguiente <b data-next-name></b> →</button>
+            </div>
+          </div>
+          <div class="kase__stage">
+            <figure class="kase__media"><video data-kvid muted loop playsinline preload="none" aria-label="Video del sitio"></video></figure>
+          </div>
+        </div>
+      </section>
+      <div class="cbar" data-cbar inert>
+        <a class="cbar__live" data-live2 target="_blank" rel="noopener">Ver en vivo ↗</a>
+        <button type="button" class="cbar__next" data-next2>Siguiente <b data-next-name2></b> →</button>
+      </div>
+
+      <section class="plain" aria-label="Proyectos (lista)">
+        <ul>
+          {orden.map((p) => (
+            <li style={`--acc:${p.accent}`}><span>{p.category} · {year(p.ended)}</span><h2>{p.url ? <a href={p.url}>{p.name} ↗</a> : p.name}</h2><p>{p.approach}</p></li>
+          ))}
+        </ul>
+      </section>
+    </main>
+
+    <p class="hint" data-hint aria-hidden="true"><span class="hint__g"></span><span class="hint__t" data-hint-t></span></p>
+    <script type="application/json" id="gz-data" set:html={data}></script>
+
+    <script>
+      const root = document.documentElement, body = document.body;
+      try {
+        const P = JSON.parse(document.getElementById('gz-data').textContent);
+        const N = P.length;
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const coarse = matchMedia('(pointer: coarse)').matches;
+        const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+        const q = (s) => document.querySelector(s);
+        const sceneEl = q('[data-scene]'), fieldsEl = q('[data-fields]'), coreEl = q('[data-core]'), wordEl = q('[data-word]');
+        const wGhosts = Array.from(document.querySelectorAll('[data-wg]'));
+        const K = wGhosts.length;
+        const bandEl = q('[data-band]'), navEl = q('.nav');
+        const slots = Array.from(document.querySelectorAll('[data-slot]'));
+        const caseEl = q('[data-case]'), wR = q('[data-wr]'), wC = q('[data-wc]'), cbar = q('[data-cbar]'), backEl = q('[data-back]');
+        const huella = Array.from(document.querySelectorAll('[data-huella] button'));
+        const kvid = q('[data-kvid]');
+        const year = (e) => (e ? e.split('-')[0] : 'En curso');
+        const KIND = { pulz: 'Producto propio', basslayer: 'Producto propio' };
+
+        // ── color ──
+        const rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+        const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        const css = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+        const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+        const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+        const mod = (a, n) => ((a % n) + n) % n;
+        const BG = rgb('#07070a'), WHITE = [255, 255, 255];
+        const ACC = P.map((p) => rgb(p.accent));
+        const grey = (c) => { const l = c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114; return [l, l, l]; };
+
+        // ── grano ──
+        (() => { const g = document.createElement('canvas'); g.width = g.height = 160; const gx = g.getContext('2d'); if (!gx) return;
+          const im = gx.createImageData(160, 160); for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+          gx.putImageData(im, 0, 0); q('[data-grain]').style.backgroundImage = `url(${g.toDataURL()})`; })();
+
+        // ════════════ el campo: un gradiente por proyecto ════════════
+        const flds = P.map(() => { const d = document.createElement('div'); d.className = 'fld'; fieldsEl.insertBefore(d, coreEl); return d; });
+        const paintFields = (cxPct, cyPct) => flds.forEach((d, i) => {
+          const a = ACC[i], soft = mix(mix(a, grey(a), 0.25), WHITE, 0.2);
+          d.style.background = `radial-gradient(farthest-corner at ${cxPct.toFixed(1)}% ${cyPct.toFixed(1)}%,${css(soft)} 0%,${css(mix(a, WHITE, 0.05))} 16%,${css(a)} 30%,${css(mix(a, BG, 0.4))} 52%,`
+            + `${css(mix(a, BG, 0.7))} 76%,${css(mix(a, BG, 0.86))} 100%)`;
+        });
+
+        // ════════════ la captura: canvas pre-renderizados por proyecto (normal + fantasma rojo + fantasma cian) ════════════
+        const DPR = Math.min(2, devicePixelRatio || 1);
+        const mkC = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+        const posters = P.map(() => null), plates = P.map(() => null);
+        let PW = 200, PH = 300, PAD = 30;
+        const posterURL = (i) => '/img/poster/' + P[i].slug + (port ? '-m' : '') + '.jpg';
+        const blur = (src, w, h, f) => {   // desenfoque barato: bajar en dos pasos y volver a subir
+          const a = mkC(w / 4, h / 4); a.getContext('2d').drawImage(src, 0, 0, a.width, a.height);
+          const b = mkC(w / f, h / f); b.getContext('2d').drawImage(a, 0, 0, b.width, b.height);
+          const c = mkC(w / 4, h / 4); const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(b, 0, 0, c.width, c.height); return c;
+        };
+        const buildPlate = (i) => {
+          const im = posters[i]; if (!im || !im.complete || !im.naturalWidth) return;
+          const cw = PW + PAD * 2, ch = PH + PAD * 2;
+          // el cuerpo: la portada del sitio recortada al formato, con bordes que se disuelven
+          const bd = mkC(cw * DPR, ch * DPR), g = bd.getContext('2d'); g.scale(DPR, DPR); g.imageSmoothingQuality = 'high';
+          const sa = PW / PH, ia = im.naturalWidth / im.naturalHeight;
+          let sw = im.naturalWidth, sh = im.naturalHeight; if (ia > sa) sw = sh * sa; else sh = sw / sa;
+          g.drawImage(im, (im.naturalWidth - sw) / 2, 0, sw, sh, PAD, PAD, PW, PH);
+          const lt = ACC[i], light = mix(mix(lt, grey(lt), 0.3), WHITE, 0.45);
+          g.globalCompositeOperation = 'source-atop'; g.fillStyle = rgba(light, 0.06); g.fillRect(0, 0, cw, ch);   // vista a través de la luz
+          g.globalCompositeOperation = 'destination-in';
+          const fx = Math.min(PW, PH) * 0.07 / PW, fy = Math.min(PW, PH) * 0.07 / PH;
+          let gr = g.createLinearGradient(PAD, 0, PAD + PW, 0);
+          gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(fx, '#000'); gr.addColorStop(1 - fx, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = gr; g.fillRect(0, 0, cw, ch);
+          gr = g.createLinearGradient(0, PAD, 0, PAD + PH);
+          gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(fy, '#000'); gr.addColorStop(1 - fy, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = gr; g.fillRect(0, 0, cw, ch);
+          // bloom: una copia muy desenfocada sumada como luz
+          const bl = blur(bd, bd.width, bd.height, 22);
+          const out = mkC(cw * DPR, ch * DPR), o = out.getContext('2d'); o.imageSmoothingQuality = 'high';
+          o.drawImage(bd, 0, 0);
+          o.globalCompositeOperation = 'destination-over'; o.globalAlpha = 0.55; o.drawImage(bl, 0, 0, out.width, out.height);   // halo detrás, no encima
+          o.globalCompositeOperation = 'screen'; o.globalAlpha = 0.07; o.drawImage(bl, 0, 0, out.width, out.height);
+          // fantasmas: rojo y cian (multiplicar deja sólo ese canal), a 1x
+          const tint = (col) => { const t = mkC(cw, ch), tg = t.getContext('2d'); tg.drawImage(out, 0, 0, cw, ch);
+            tg.globalCompositeOperation = 'multiply'; tg.fillStyle = col; tg.fillRect(0, 0, cw, ch);
+            tg.globalCompositeOperation = 'destination-in'; tg.drawImage(out, 0, 0, cw, ch); return t; };
+          plates[i] = { v: [out, tint('#ff3a54'), tint('#24e2e8')], key: plateKey, t: plates[i] ? plates[i].t : performance.now() };
+          // los canvas que muestran este proyecto se redibujan
+          views.forEach((vw) => { if (vw.p === i) vw.p = -2; });
+        };
+        let plateKey = '';
+        const loadPosters = () => P.forEach((_, i) => { const u = posterURL(i); if (posters[i] && posters[i].dataset.u === u) { if (!plates[i] || plates[i].key !== plateKey) buildPlate(i); return; }
+          const im = new Image(); im.decoding = 'async'; im.dataset.u = u; im.onload = () => { if (posters[i] === im) buildPlate(i); }; im.onerror = () => {}; im.src = u; posters[i] = im; });
+
+        // vistas: 2 principales (posición par/impar) + K fantasmas de cada una
+        const views = [];
+        const mkView = (variant, ghost) => { const c = document.createElement('canvas'); c.className = 'pl' + (ghost ? ' pg' : ''); c.setAttribute('aria-hidden', 'true');
+          const v = { c, g: c.getContext('2d'), variant, ghost, p: -1, vis: !ghost, o: -1, t: '' }; views.push(v); return v; };
+        const ghostV = [[], []], mainV = [];
+        for (let k = K - 1; k >= 0; k--) for (let s = 0; s < 2; s++) ghostV[s][k] = mkView(k % 2 ? 2 : 1, true);
+        for (let s = 0; s < 2; s++) mainV[s] = mkView(0, false);
+        views.forEach((v) => sceneEl.appendChild(v.c));
+        const sizeViews = () => views.forEach((v) => { const sc = v.ghost ? 1 : DPR;
+          v.c.width = Math.round((PW + PAD * 2) * sc); v.c.height = Math.round((PH + PAD * 2) * sc);
+          v.c.style.width = (PW + PAD * 2) + 'px'; v.c.style.height = (PH + PAD * 2) + 'px'; v.p = -2; });
+        const showP = (v, p, x, y, sc, op) => {
+          const pl = p >= 0 ? plates[p] : null;
+          if (v.p !== p || (pl && v.p === -2)) { v.g.clearRect(0, 0, v.c.width, v.c.height); if (pl) { v.g.drawImage(pl.v[v.variant], 0, 0, v.c.width, v.c.height); v.p = p; } else v.p = -2; }
+          if (!pl) op = 0;
+          const t = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0) scale(${sc.toFixed(4)})`;
+          if (t !== v.t) { v.t = t; v.c.style.transform = t; }
+          const o = op.toFixed(3); if (o !== v.o) { v.o = o; v.c.style.opacity = o; }
+          if (v.ghost) { const vis = op > 0.005; if (vis !== v.vis) { v.vis = vis; v.c.style.visibility = vis ? 'visible' : 'hidden'; } }
+        };
+
+        // ════════════ geometría ════════════
+        let W = 0, H = 0, port = false, TB = 56, SAB = 0;
+        let fs = 200, WR = 2.05, wordX = 0, wordY = 0, capTop = 0, capH = 140;
+        let PCX = 0, PCY = 0, SPAN = 300;
+        const measure = () => {
+          W = innerWidth; H = innerHeight; port = H > W || W < 640; root.classList.toggle('port', port);
+          TB = navEl.getBoundingClientRect().height || 56;
+          SAB = q('[data-sab]').getBoundingClientRect().height || 0;
+          wordEl.style.fontSize = '100px';
+          const wr0 = wordEl.getBoundingClientRect(); WR = (wr0.width / 100) || 2.05;
+          // la línea de Bebas (line-height 1): medir dónde empieza y cuánto mide la mayúscula
+          let CAP = 0.7, CAPOFF = 0.1;
+          try { const cx = document.createElement('canvas').getContext('2d'); cx.font = '400 100px "Bebas Neue"'; const m = cx.measureText('BLOPA');
+            if (m.fontBoundingBoxAscent && m.actualBoundingBoxAscent) { const fA = m.fontBoundingBoxAscent, fD = m.fontBoundingBoxDescent || 0;
+              CAPOFF = ((100 - fA - fD) / 2 + fA - m.actualBoundingBoxAscent) / 100; CAP = m.actualBoundingBoxAscent / 100; } } catch {}
+          let LB, LH;
+          // BLOPA arriba, entero y sin nada encima; la captura debajo (mobile) o abajo a la derecha (desktop), nunca sobre el nombre
+          let left = 0;
+          if (port) {
+            LB = SAB + 50; LH = 74;
+            fs = (W - 24) / WR; capH = fs * CAP;
+            capTop = TB + clamp(H * 0.015, 4, 16);
+            left = (W - fs * WR) / 2;
+            const top = capTop + capH + clamp(H * 0.03, 14, 28), bot = H - LB - LH - 14;
+            PH = Math.min(bot - top, H * 0.6); PW = Math.min(PH * 0.62, W * 0.74); PH = PW / 0.62;
+            PCX = W / 2; PCY = top + (bot - top) / 2;
+            SPAN = W * 0.92;
+          } else {
+            LB = SAB + 52; LH = 96;
+            const G = clamp(W * 0.03, 16, 48);
+            capTop = TB + clamp(H * 0.01, 4, 16);
+            capH = Math.min((H - capTop - 36) * 0.42, (W - G * 2) / WR * CAP); fs = capH / CAP;
+            left = G - fs * 0.012;
+            const top = capTop + capH + clamp(H * 0.04, 20, 44), bot = H - 40;
+            PH = bot - top; PW = Math.min(PH * 1.6, W * 0.5); PH = PW / 1.6;
+            PCX = W - G - PW / 2; PCY = bot - PH / 2;
+            SPAN = W * 0.62;
+          }
+          PAD = Math.round(Math.min(PW, PH) * 0.12);
+          fs = Math.round(fs * 10) / 10;
+          [wordEl, ...wGhosts].forEach((el) => (el.style.fontSize = fs + 'px'));
+          wordX = left; wordY = capTop - fs * CAPOFF;
+          root.style.setProperty('--lb', LB + 'px'); root.style.setProperty('--lh', LH + 'px');
+          const cxP = (PCX + W * 0.08) / (W * 1.16) * 100, cyP = (PCY + H * 0.08) / (H * 1.16) * 100;
+          paintFields(cxP, cyP);
+          coreEl.style.setProperty('--cx', cxP.toFixed(1) + '%'); coreEl.style.setProperty('--cy', cyP.toFixed(1) + '%');
+          plateKey = W + 'x' + H + (port ? 'p' : 'l');
+          sizeViews(); loadPosters();
+        };
+
+        // ════════════ estado del movimiento ════════════
+        let pos = -1, posT = -1, prevPos = -1, vel = 0, dragging = false, inCase = false, caseI = -1;
+        let bxDrag = 0, last = performance.now();
+        const cur = () => mod(Math.round(posT), N);
+        // buffer circular de muestras a 12 fps: la copia «impresa» de cada cuadro retenido
+        const SAMPLE = 1000 / 12;
+        const samples = []; let lastSample = 0;
+        const GO = [0.6, 0.44, 0.3, 0.18];
+        const posterAt = (j, p) => { const d = j - p; return { x: PCX + d * SPAN, op: clamp(1 - Math.abs(d) * 1.15, 0, 1), sc: 1 - Math.min(1, Math.abs(d)) * 0.06 }; };
+        const wordAt = () => clamp(-vel * SPAN * 0.06, -W * 0.16, W * 0.16) + bxDrag;
+
+        let labI = -1;
+        const syncLab = () => { const i = mod(Math.round(pos), N); if (i === labI) return; labI = i;
+          slots.forEach((s, k) => { s.classList.toggle('on', k === i); s.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+          syncHint(); };
+
+        const appear = (i) => { const pl = plates[i]; if (!pl) return 0; const t = (performance.now() - pl.t) / 500; return t >= 1 ? 1 : Math.floor(t * 6) / 6; };
+        const placeMain = () => {
+          const j0 = Math.floor(pos), f = pos - j0;
+          // el campo: el de abajo opaco, el siguiente encima con la fracción
+          const a = mod(j0, N), b = mod(j0 + 1, N);
+          for (let i = 0; i < N; i++) {
+            const o = i === a ? 1 : i === b ? f : 0;
+            const z = i === b ? '2' : i === a ? '1' : '0';
+            const d = flds[i]; if (d._o !== o) { d._o = o; d.style.opacity = o.toFixed(3); } if (d._z !== z) { d._z = z; d.style.zIndex = z; }
+          }
+          // BLOPA
+          const bx = wordAt();
+          wordEl.style.transform = `translate3d(${(wordX + bx).toFixed(1)}px,${wordY.toFixed(1)}px,0)`;
+          // las capturas (posición par / impar)
+          for (const j of [j0, j0 + 1]) { const s = mod(j, 2), pa = posterAt(j, pos);
+            showP(mainV[s], mod(j, N), pa.x - PW / 2 - PAD, PCY - PH / 2 - PAD, pa.sc, pa.op * appear(mod(j, N))); }
+          return bx;
+        };
+        const placeGhosts = (bxNow) => {
+          // BLOPA
+          for (let k = 0; k < K; k++) { const el = wGhosts[k], smp = samples[k];
+            let op = 0, x = wordX;
+            if (smp && !reduce) { x = wordX + smp.bx + (k % 2 ? 3 : -3); op = GO[k] * 0.55 * clamp(Math.abs(smp.bx - bxNow) / 14, 0, 1); }
+            el.style.transform = `translate3d(${x.toFixed(1)}px,${wordY.toFixed(1)}px,0)`;
+            el.style.opacity = op.toFixed(3); el.style.visibility = op > 0.005 ? 'visible' : 'hidden'; }
+          // capturas
+          for (let k = 0; k < K; k++) { const smp = samples[k];
+            for (let s = 0; s < 2; s++) { const v = ghostV[s][k];
+              if (!smp || reduce) { showP(v, v.p, 0, 0, 1, 0); continue; }
+              const j0 = Math.floor(smp.pos); const j = mod(j0, 2) === s ? j0 : j0 + 1;
+              const pa = posterAt(j, smp.pos), now = posterAt(j, pos);
+              const dist = Math.abs(pa.x - now.x);
+              const op = GO[k] * pa.op * clamp(dist / 22, 0, 1);
+              showP(v, mod(j, N), pa.x - PW / 2 - PAD + (k % 2 ? 4 : -4), PCY - PH / 2 - PAD, pa.sc, op); } }
+        };
+
+        // ════════════ bucle ════════════
+        let ready = false, auto = 0;
+        const frame = (now) => {
+          const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000)); last = now;
+          if (!dragging) { const kk = reduce ? 1 : 1 - Math.exp(-dt * 5.2); pos += (posT - pos) * kk; if (Math.abs(posT - pos) < 0.0004) pos = posT;
+            bxDrag *= reduce ? 0 : Math.exp(-dt * 6); }
+          const v = (pos - prevPos) / dt; prevPos = pos;
+          vel += (v - vel) * (reduce ? 1 : 0.22); if (Math.abs(vel) < 0.002) vel = 0;
+          const bx = placeMain(); syncLab();
+          if (now - lastSample >= SAMPLE) { lastSample = now; samples.unshift({ pos, bx }); if (samples.length > K) samples.length = K; placeGhosts(bx); }
+          requestAnimationFrame(frame);
+        };
+
+        // ════════════ case ════════════
+        let kbd = false;
+        addEventListener('keydown', () => { kbd = true; }, true);
+        addEventListener('pointerdown', () => { kbd = false; }, true);
+        const $ = (s) => caseEl.querySelector(s);
+        const fill = (i) => {
+          const p = P[i], nx = P[(i + 1) % N];
+          caseEl.style.setProperty('--acc', p.accent);
+          $('[data-eye]').innerHTML = '';
+          $('[data-eye]').append(p.category + ' · ' + year(p.ended) + ' · ', Object.assign(document.createElement('b'), { textContent: KIND[p.slug] || 'Encargo' }));
+          $('[data-name]').textContent = p.name; $('[data-app]').textContent = p.approach || '';
+          $('[data-services]').textContent = (p.services || []).join(', '); $('[data-stack]').textContent = (p.stack || []).join(', ');
+          for (const a of [$('[data-live]'), q('[data-live2]')]) { if (p.url) { a.href = p.url; a.style.display = ''; } else a.style.display = 'none'; }
+          q('[data-next-name]').textContent = nx.name; q('[data-next-name2]').textContent = nx.name;
+          huella.forEach((b, k) => b.setAttribute('aria-current', k === i ? 'true' : 'false'));
+          kvid.poster = '/img/poster/' + p.slug + (port ? '-m' : '') + '.jpg';
+          kvid.setAttribute('aria-label', 'Video del sitio de ' + p.name);
+          const u = '/video/' + p.slug + (port ? '-m' : coarse ? '-640' : '') + '.mp4';
+          if (reduce) { kvid.removeAttribute('src'); kvid.load(); }
+          else if (kvid.dataset.u !== u) { kvid.dataset.u = u; kvid.src = u; kvid.play().catch(() => {}); }
+          else kvid.play().catch(() => {});
+          document.title = 'blopa — ' + p.name;
+        };
+        const syncInert = () => { bandEl.inert = inCase; caseEl.inert = !inCase; cbar.inert = !inCase; caseEl.setAttribute('aria-hidden', inCase ? 'false' : 'true'); };
+        const slotRect = () => ({ t: PCY - PH / 2, l: PCX - PW / 2, r: PCX + PW / 2, b: PCY + PH / 2 });
+        const ins = (r, dx = 0, dy = 0) => `inset(${(r.t + dy).toFixed(1)}px ${(W - r.r - dx).toFixed(1)}px ${(H - r.b - dy).toFixed(1)}px ${(r.l + dx).toFixed(1)}px)`;
+        const FRINGE = [[wR, -6, 0], [wC, 6, 0], [caseEl, 0, 0]];
+        const FULL = 'inset(0px 0px 0px 0px)';
+        let anims = [];
+        const stopAnims = () => { anims.forEach((a) => a.cancel()); anims = []; };
+        let pushed = false, caseInT = 0;
+        const setURL = (slug, push) => { const url = location.pathname + (slug ? '?p=' + slug : '');
+          if (push && !FRAMED) { history.pushState({ ref: 1 }, '', url); pushed = true; } else history.replaceState(history.state, '', url); };
+        // el destino más cercano (el campo da la vuelta)
+        const nearest = (i) => { const base = Math.round(posT); return base + (((i - mod(base, N)) % N) + N + Math.floor(N / 2)) % N - Math.floor(N / 2); };
+
+        const openCase = (i, { instant = false, push = true } = {}) => {
+          if (inCase) { swapCase(i); return; }
+          endIntro();
+          caseI = i; inCase = true;
+          if (cur() !== i) posT = nearest(i);
+          fill(i);
+          const r = slotRect();
+          body.classList.add('in-case'); syncInert();
+          stopAnims(); clearTimeout(caseInT);
+          if (instant || reduce) { body.classList.add('case-in'); }
+          else {
+            const fl = { t: 0, l: 0, r: W, b: H };
+            // la captura se abre: primero a todo el alto (como una franja de luz), después a todo el ancho, con filo cian/rojo
+            const tall = { t: 0, b: H, l: r.l, r: r.r };
+            FRINGE.forEach(([el, dx, dy]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: ins(r, dx, dy) }, { clipPath: ins(tall, dx, dy), offset: 0.3 }, { clipPath: el === caseEl ? FULL : ins(fl, dx, dy) }];
+              anims.push(el.animate(kf, { duration: 700, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'forwards' })); });
+            anims[2].onfinish = () => { wR.style.visibility = wC.style.visibility = ''; };
+            caseInT = setTimeout(() => body.classList.add('case-in'), 440);
+          }
+          caseEl.scrollTop = 0;
+          if (push) setURL(P[i].slug, true);
+          setTimeout(() => { if (inCase) backEl.focus({ preventScroll: true, focusVisible: kbd }); }, instant || reduce ? 0 : 760);
+        };
+        const swapCase = (i) => {
+          if (i === caseI) return; caseI = i; posT = pos = nearest(i);
+          setURL(P[i].slug, false);
+          if (reduce) { fill(i); return; }
+          caseEl.classList.add('swap');
+          stopAnims();
+          [[wR, 0], [wC, 45]].forEach(([el, dl]) => { el.style.visibility = 'visible'; el.style.zIndex = '11';
+            anims.push(el.animate([{ clipPath: `inset(0px ${W}px 0px -3px)` }, { clipPath: `inset(0px -3px 0px ${W}px)` }],
+              { duration: 460, delay: dl, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'backwards' })); });
+          setTimeout(() => { fill(i); caseEl.scrollTop = 0; caseEl.classList.remove('swap'); }, 200);
+          setTimeout(() => { wR.style.zIndex = wC.style.zIndex = ''; wR.style.visibility = wC.style.visibility = ''; stopAnims(); }, 540);
+        };
+        const doClose = () => {
+          if (!inCase) return; inCase = false; clearTimeout(caseInT);
+          document.title = 'blopa — Pablo Vela';
+          kvid.pause();
+          const fin = () => { body.classList.remove('in-case', 'case-in'); stopAnims(); wR.style.visibility = wC.style.visibility = ''; syncInert(); };
+          if (reduce) { fin(); }
+          else {
+            body.classList.remove('case-in');
+            caseEl.scrollTop = 0;
+            const r = slotRect(), fl = { t: 0, l: 0, r: W, b: H }, tall = { t: 0, b: H, l: r.l, r: r.r };
+            stopAnims();
+            FRINGE.forEach(([el, dx, dy]) => { if (el !== caseEl) el.style.visibility = 'visible';
+              const kf = [{ clipPath: el === caseEl ? FULL : ins(fl, dx, dy) }, { clipPath: ins(tall, dx, dy), offset: 0.7 }, { clipPath: ins(r, dx, dy) }];
+              anims.push(el.animate(kf, { duration: 620, delay: 120, easing: 'cubic-bezier(.65,0,.25,1)', fill: 'both' })); });
+            anims[2].onfinish = fin;
+          }
+          bandEl.inert = false;
+          setTimeout(() => { const el = slots[caseI]; if (el && !inCase) el.focus({ preventScroll: true, focusVisible: kbd }); }, reduce ? 0 : 760);
+          syncHint();
+        };
+        const closeCase = () => {
+          if (!inCase) return;
+          if (pushed && history.state && history.state.ref) { pushed = false; history.back(); return; }
+          setURL('', false); doClose();
+        };
+        const urlSlug = () => new URLSearchParams(location.search).get('p');
+        addEventListener('popstate', () => { const i = P.findIndex((p) => p.slug === urlSlug());
+          if (i >= 0) { if (!inCase) openCase(i, { push: false }); else swapCase(i); } else { pushed = false; doClose(); } });
+
+        backEl.addEventListener('click', () => closeCase());
+        const next = (d) => { if (inCase) swapCase((caseI + d + N) % N); };
+        q('[data-next]').addEventListener('click', () => next(1)); q('[data-next2]').addEventListener('click', () => next(1));
+        huella.forEach((b, k) => b.addEventListener('click', () => swapCase(k)));
+
+        // ════════════ entrada: el campo sube desde negro y hace un cambio ════════════
+        let introT = [], introOn = false;
+        const markReady = () => { if (ready) return; ready = true; body.classList.add('ready'); syncHint(); };
+        const endIntro = () => { if (!introOn) return; introOn = false; introT.forEach(clearTimeout); introT = []; markReady(); };
+        const intro = () => {
+          if (reduce) { pos = posT = prevPos = 0; markReady(); return; }
+          introOn = true; pos = posT = prevPos = 0;
+          bxDrag = port ? -16 : -34;
+          const at = (ms, fn) => introT.push(setTimeout(fn, ms));
+          at(1000, () => { introOn = false; markReady(); });
+        };
+        const step = (d) => { if (inCase) return; endIntro(); posT = Math.round(posT) + d; };
+
+        // ════════════ interacción ════════════
+        slots.forEach((el, i) => {
+          el.addEventListener('focus', () => { if (inCase || !kbd) return; endIntro(); if (cur() !== i) posT = nearest(i); });
+          el.addEventListener('click', (ev) => { if (inCase) return; if (ev.detail === 0) openCase(i); });   // teclado; el puntero lo decide el gesto
+        });
+
+        // arrastrar (dedo o mouse): el campo sigue al dedo 1:1; soltar engancha al vecino; tocar abre
+        let down = null;
+        addEventListener('pointerdown', (ev) => {
+          if (inCase || ev.button > 0) return;
+          if (ev.target.closest && ev.target.closest('a,.nav button,.kase,.cbar')) return;
+          endIntro();
+          down = { x: ev.clientX, y: ev.clientY, p: pos, ax: 0, lt: performance.now(), lx: ev.clientX, ly: ev.clientY, v: 0, type: ev.pointerType };
+        });
+        addEventListener('pointermove', (ev) => {
+          if (!down) return;
+          const dx = ev.clientX - down.x, dy = ev.clientY - down.y;
+          if (!down.ax && Math.hypot(dx, dy) > 8) { down.ax = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y'; dragging = true; }
+          if (!down.ax) return;
+          const d = down.ax === 'x' ? dx : dy * 1.15;
+          pos = down.p - d / SPAN;
+          posT = pos;
+          bxDrag = (down.ax === 'x' ? dx : dy) * 0.08;   // el dedo también arrastra BLOPA (y su estela)
+          const now = performance.now(), dtm = Math.max(1, now - down.lt);
+          const dd = down.ax === 'x' ? ev.clientX - down.lx : ev.clientY - down.ly;
+          down.v = 0.7 * down.v + 0.3 * (-dd / SPAN / (dtm / 1000)); down.lx = ev.clientX; down.ly = ev.clientY; down.lt = now;
+        });
+        const up = (ev) => {
+          if (!down) return; const d = down; down = null;
+          if (d.ax) {
+            dragging = false;
+            const base = Math.round(d.p), moved = pos - d.p;
+            let tgt = base;
+            if (moved > 0.16 || d.v > 0.45) tgt = base + 1; else if (moved < -0.16 || d.v < -0.45) tgt = base - 1;
+            posT = tgt; return;
+          }
+          // toque
+          const x = ev.clientX, y = ev.clientY;
+          if (y < TB) return;
+          if (port || d.type !== 'mouse') { openCase(cur()); return; }
+          const r = slotRect(), lr = slots[cur()].getBoundingClientRect();
+          const inP = x >= r.l && x <= r.r && y >= r.t && y <= r.b, inL = x >= lr.left && x <= lr.right && y >= lr.top && y <= lr.bottom;
+          if (inP || inL) openCase(cur());
+          else step(x > W / 2 ? 1 : -1);
+        };
+        addEventListener('pointerup', up);
+        addEventListener('pointercancel', () => { if (down && down.ax) { dragging = false; posT = Math.round(pos); } down = null; });
+        // cursor: sobre la captura y el nombre, mano. Mover el mouse empuja apenas BLOPA: deja su estela impresa
+        addEventListener('pointermove', (ev) => { if (port || inCase || ev.pointerType !== 'mouse' || down) return;
+          if (!reduce) bxDrag = clamp(bxDrag + (ev.movementX || 0) * 0.35, -W * 0.03, W * 0.03);
+          const r = slotRect(), x = ev.clientX, y = ev.clientY; body.style.cursor = x >= r.l && x <= r.r && y >= r.t && y <= r.b ? 'pointer' : y > TB ? 'grab' : ''; });
+
+        let wAcc = 0, wT = 0;
+        addEventListener('wheel', (ev) => {
+          if (inCase) return;
+          wAcc += Math.abs(ev.deltaY) > Math.abs(ev.deltaX) ? ev.deltaY : ev.deltaX;
+          const now = performance.now(); if (Math.abs(wAcc) < 40 || now - wT < 320) return;
+          const d = Math.sign(wAcc); wAcc = 0; wT = now; step(d);
+        }, { passive: true });
+
+        addEventListener('keydown', (ev) => {
+          const k = ev.key;
+          if (inCase) {
+            if (k === 'Escape') { ev.preventDefault(); closeCase(); }
+            else if (k === 'ArrowRight') { ev.preventDefault(); next(1); }
+            else if (k === 'ArrowLeft') { ev.preventDefault(); next(-1); }
+            return;
+          }
+          const fwd = k === 'ArrowDown' || k === 'ArrowRight', back = k === 'ArrowUp' || k === 'ArrowLeft';
+          if (fwd || back) { ev.preventDefault(); step(fwd ? 1 : -1); slots[cur()].focus({ preventScroll: true, focusVisible: true }); }
+          else if (k === 'Enter' && document.activeElement === body) openCase(cur());
+        });
+
+        // ════════════ leyenda de uso ════════════
+        const hintEl = q('[data-hint]'), hintT = q('[data-hint-t]');
+        let hintKey = '', swapT = 0;
+        const hintFor = () => {
+          if (inCase) return null;
+          if (port || coarse) return { g: 'h', t: 'Deslizá para cambiar · tocá para abrir' };
+          return { g: 'tap', t: 'Clic para abrir ' + P[cur()].name };
+        };
+        function syncHint() { const h = hintFor(), key = h ? h.g + '|' + h.t : '';
+          if (key === hintKey) return; const first = !hintKey; hintKey = key;
+          hintEl.classList.toggle('on', !!h); if (!h) return;
+          const put = () => { hintEl.dataset.g = h.g; hintT.textContent = h.t; hintEl.classList.remove('swap'); };
+          clearTimeout(swapT); if (first || reduce) put(); else { hintEl.classList.add('swap'); swapT = setTimeout(put, 200); } }
+
+        // ════════════ arranque ════════════
+        let started = false;
+        const start = () => {
+          if (started) return; started = true;
+          measure(); root.classList.add('go');
+          let rT = 0;
+          addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(measure, 120); });
+          syncInert();
+          const i0 = P.findIndex((p) => p.slug === urlSlug());
+          if (i0 >= 0) { pos = posT = prevPos = i0; markReady(); q('.black').style.display = 'none'; openCase(i0, { instant: true, push: false }); }
+          else intro();
+          last = performance.now();
+          requestAnimationFrame(frame);
+        };
+        const fontsOk = document.fonts && document.fonts.load ? document.fonts.load('400 100px "Bebas Neue"', 'BLOPA') : Promise.resolve();
+        Promise.race([fontsOk, new Promise((r) => setTimeout(r, 700))]).then(start, start);
+      } catch (err) {
+        console.error(err);
+        root.classList.add('fail');
+      }
+    </script>
+  </body>
+</html>

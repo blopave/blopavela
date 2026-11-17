@@ -69,8 +69,8 @@ const targets = [
     </div>
     <div class="vers" data-vers>
       <span class="lbl">Versión</span>
-      {versiones.map((v) => (
-        <button type="button" data-ver={v.href} data-desc={v.desc}>{v.label}</button>
+      {versiones.map((v, i) => (
+        <button type="button" data-ver={v.href} data-desc={v.desc}>{i + 1}. {v.label}</button>
       ))}
       <span class="desc" data-desc-out></span>
     </div>
